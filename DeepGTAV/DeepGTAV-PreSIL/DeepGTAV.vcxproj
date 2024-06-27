@@ -1,0 +1,113 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="DataExport.cpp" />
+    <ClCompile Include="lib\base64.cpp" />
+    <ClCompile Include="ObjectDet\LiDAR.cpp" />
+    <ClCompile Include="ObjectDet\lodepng.cpp" />
+    <ClCompile Include="ObjectDet\ObjectDetection.cpp" />
+    <ClCompile Include="Rewarders\GeneralRewarder.cpp" />
+    <ClCompile Include="Rewarders\LaneRewarder.cpp" />
+    <ClCompile Include="lib\main.cpp" />
+    <ClCompile Include="Scenario.cpp" />
+    <ClCompile Include="ScreenCapturer.cpp" />
+    <ClCompile Include="script.cpp" />
+    <ClCompile Include="Rewarders\SpeedRewarder.cpp" />
+    <ClCompile Include="Server.cpp" />
+    <ClCompile Include="lib\tinyxml2.cpp" />
+    <ClCompile Include="lib\utils.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="AreaRoaming.h" />
+    <ClInclude Include="DataExport.h" />
+    <ClInclude Include="defaults.h" />
+    <ClInclude Include="lib\base64.h" />
+    <ClInclude Include="ObjectDetIncludes.h" />
+    <ClInclude Include="ObjectDet\CamParams.h" />
+    <ClInclude Include="ObjectDet\Constants.h" />
+    <ClInclude Include="ObjectDet\FrameObjectInfo.h" />
+    <ClInclude Include="ObjectDet\Functions.h" />
+    <ClInclude Include="ObjectDet\LiDAR.h" />
+    <ClInclude Include="ObjectDet\lodepng.h" />
+    <ClInclude Include="ObjectDet\ObjectDetection.h" />
+    <ClInclude Include="Rewarders\Rewarder.h" />
+    <ClInclude Include="Rewarders\GeneralRewarder.h" />
+    <ClInclude Include="Rewarders\LaneRewarder.h" />
+    <ClInclude Include="Scenario.h" />
+    <ClInclude Include="lib\script.h" />
+    <ClInclude Include="Rewarders\SpeedRewarder.h" />
+    <ClInclude Include="ScreenCapturer.h" />
+    <ClInclude Include="Server.h" />
+    <ClInclude Include="lib\tinyxml2.h" />
+    <ClInclude Include="lib\utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ObjectDet\vehicle_labels.csv" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{8D82F34A-1D64-465B-84B1-37F89AD3D20B}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>DeepGTAV</RootNamespace>
+    <ProjectName>DeepGTAV</ProjectName>
+    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <TargetExt>.asi</TargetExt>
+    <OutDir>bin\$(Configuration)\</OutDir>
+    <IntDir>tmp\$(Configuration)\</IntDir>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(EIGEN_DIR)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>_WINSOCKAPI_;WIN32;NDEBUG;_WINDOWS;_USRDLL;NativeSpeedo_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <FloatingPointModel>Fast</FloatingPointModel>
+      <AdditionalIncludeDirectories>ObjectDet;..\eigen-3.3.7;..\opencv\build\include;..\boost_1_73_0;..\GTAVisionExport-DepthExtractor\native\;..\GTAVisionExport-DepthExtractor\native\build\src;lib;..\zeromq-4.3.3\include;..\cppzmq-4.7.1</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalOptions>lib\ScriptHookV.lib lib\libMinHook-x64-v141-mt.lib %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>..\GTAVisionExport-DepthExtractor\native\build\src\Release\GTAVisionNative.lib;%(AdditionalDependencies);..\opencv\build\x64\vc15\lib\opencv_world343.lib;..\zeromq-4.3.3\build\lib\Debug\libzmq-v141-mt-gd-4_3_3.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(GTAVisionLib);%(AdditionalLibraryDirectories);$(OpenCV_DIR)x64\vc15\lib</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>opencv_world343.dll</DelayLoadDLLs>
+    </Link>
+    <PostBuildEvent>
+      <Command>copy /Y "..\zeromq-4.3.3\build\bin\Debug\libzmq-v141-mt-gd-4_3_3.dll" "$(OutDir)"
+copy "bin\Release\DeepGTAV*" "$(GTAV_INSTALL_DIR)"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

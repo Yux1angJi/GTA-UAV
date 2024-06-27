@@ -1,0 +1,16 @@
+version: '3'
+services:
+    db:
+        image: mdillon/postgis:9.6-alpine
+        ports:
+            - 5432:5432
+        volumes:
+            - gtav-postgresql:/var/lib/postgresql/data
+    adminer:
+        image: adminer
+        ports:
+            - 8081:8080
+
+volumes:
+    gtav-postgresql:
+        external: true

@@ -1,0 +1,14 @@
+stages:
+ - build
+ 
+ job:
+  stage: build
+  script:
+   - echo "Restoring nuget packages..."
+   - '"c:\nuget\nuget.exe" restore GTAVisionExport.sln"'
+   - ''
+   - echo "release build..."
+   - c:\Windows\Microsoft.NET\Framework64\v4.0.30319\msbuild.exe /consoleloggerparameters:ErrorsOnly /maxcpucount /nologo /property:Configuration=Release /verbosity:quiet "GTAVisionExport.sln"
+   tags:
+   except:
+    - tags
