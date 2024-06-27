@@ -1,0 +1,9 @@
+tmp/
+bin/Release/paths.xml
+/.vs/DeepGTAV/v15/.suo
+/.vs/DeepGTAV/v15/Browse.VC.db
+*.ipch
+*.suo
+/.vs/DeepGTAV/v16/Browse.VC.db
+/.vs
+.vs/
