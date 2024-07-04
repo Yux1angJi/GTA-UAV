@@ -9,7 +9,7 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from transformers import get_constant_schedule_with_warmup, get_polynomial_decay_schedule_with_warmup, get_cosine_schedule_with_warmup
 
-from sample4geo.dataset.gta import GTADatasetEval, GTADatasetTrain, get_transforms
+from sample4geo.dataset.visloc import VisLocDatasetEval, VisLocDatasetTrain, get_transforms
 from sample4geo.utils import setup_system, Logger
 from sample4geo.trainer import train, train_with_weight
 from sample4geo.evaluate.gta import evaluate
@@ -27,10 +27,10 @@ class Configuration:
     img_size: int = 384
 
     num_chunks: int = 1
- 
+
     ### GTA setting
     
-    train_with_weight: bool = True
+    train_with_weight: bool = False
     
     # Training 
     mixed_precision: bool = True
@@ -65,16 +65,16 @@ class Configuration:
     prob_flip: float = 0.5              # flipping the sat image and drone image simultaneously
     
     # Savepath for model checkpoints
-    model_path: str = "./work_dir/gta"
+    model_path: str = "./work_dir/visloc"
 
-    dataset: str= "GTA-D2S"
+    dataset: str= "VisLoc-D2S"
     
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
-    # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
+    # checkpoint_start = "pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
 
 
     # set num_workers to 0 if on Windows
@@ -96,11 +96,11 @@ class Configuration:
 
 config = Configuration() 
 
-if config.dataset == 'GTA-D2S':
-    config.train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable/train_pair_meta_h200300.pkl'
-    config.test_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable/test_pair_meta_h200300.pkl'
-    config.sate_img_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable/satellite'
-
+if config.dataset == 'VisLoc-D2S':
+    config.train_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/train_pair_meta.pkl'
+    config.test_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/test_pair_meta.pkl'
+    # config.data_root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_1_2/test/satellite'
+    config.data_root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
 
 
 if __name__ == '__main__':
@@ -154,8 +154,8 @@ if __name__ == '__main__':
     print("GPUs available:", torch.cuda.device_count())  
     if torch.cuda.device_count() > 1 and len(config.gpu_ids) > 1:
         model = torch.nn.DataParallel(model, device_ids=config.gpu_ids)
-            
-    # Model to device   
+    
+    # Model to device
     model = model.to(config.device)
 
     print("\nImage Size Query:", img_size)
@@ -172,7 +172,7 @@ if __name__ == '__main__':
     val_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
                                                                                                                                  
     # Train
-    train_dataset = GTADatasetTrain(pairs_meta_file=config.train_pairs_meta_file,
+    train_dataset = VisLocDatasetTrain(pairs_meta_file=config.train_pairs_meta_file,
                                       transforms_query=train_sat_transforms,
                                       transforms_gallery=train_drone_transforms,
                                       prob_flip=config.prob_flip,
@@ -186,11 +186,11 @@ if __name__ == '__main__':
                                   pin_memory=True)
     
     # Test query
-    query_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
+    query_dataset_test = VisLocDatasetEval(pairs_meta_file=config.test_pairs_meta_file,
                                         mode="drone",
                                         transforms=val_transforms,
                                         )
-    query_img_list = query_dataset_test.images_name
+    query_img_list = query_dataset_test.images
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
     
     query_dataloader_test = DataLoader(query_dataset_test,
@@ -200,11 +200,12 @@ if __name__ == '__main__':
                                        pin_memory=True)
     
     # Test gallery
-    gallery_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
+    gallery_dataset_test = VisLocDatasetEval(pairs_meta_file=config.test_pairs_meta_file,
                                                mode="sate",
                                                transforms=val_transforms,
+                                               data_root_dir=config.data_root_dir,
                                                )
-    gallery_img_list = gallery_dataset_test.images_name
+    gallery_img_list = gallery_dataset_test.images
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
                                        batch_size=config.batch_size_eval,

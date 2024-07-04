@@ -19,16 +19,27 @@ import math
 from multiprocessing import Pool, cpu_count
 import csv
 import pickle
+import random
 
 
 Image.MAX_IMAGE_PIXELS = None
 FOV_V = 48.44
 FOV_H = 33.48
 
-OK_LIST = [1, 2, 3, 4, 8, 11]
+TRAIN_LIST = [1,2,3,4]
+TEST_LIST = []
 # OK_LIST = [1]
 
 TILE_SIZE = 256
+
+
+def is_point_in_rectangle(point_lat, point_lon, rect_top_left_lat, rect_top_left_lon, rect_bottom_right_lat, rect_bottom_right_lon):
+    # 判断点是否在长方形区域内
+    if (rect_top_left_lat >= point_lat >= rect_bottom_right_lat) and (rect_top_left_lon <= point_lon <= rect_bottom_right_lon):
+        return True
+    else:
+        return False
+
 
 def order_points(points):
     hull = ConvexHull(points)
@@ -45,7 +56,7 @@ def calc_intersect_area(poly1, poly2):
 
 
 def process_tile(args):
-    scaled_image, zoom_dir, x, y, tile_size = args
+    scaled_image, str_i, zoom_dir, zoom, x, y, tile_size = args
     box = (x, y, min(x + tile_size, scaled_image.width), min(y + tile_size, scaled_image.height))
     tile = scaled_image.crop(box)
     
@@ -55,13 +66,15 @@ def process_tile(args):
     # 将裁剪后的瓦片粘贴到透明背景中
     transparent_tile.paste(tile, (0, 0))
     
-    transparent_tile.save(os.path.join(zoom_dir, f'{x // tile_size:03}_{y // tile_size:03}.png'))
+    transparent_tile.save(os.path.join(zoom_dir, f'{str_i}_{zoom}_{x // tile_size:03}_{y // tile_size:03}.png'))
 
 
 def tile_satellite():
     root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset'
     
-    for i in range(10, 12):
+    for i in range(1, 12):
+        if i == 9:
+            continue
         file_dir = os.path.join(root_dir, f'{i:02}')
         tile_dir = os.path.join(file_dir, 'tile')
         os.makedirs(tile_dir, exist_ok=True)
@@ -94,7 +107,7 @@ def tile_satellite():
 
             for x in range(0, scaled_width, tile_size):
                 for y in range(0, scaled_height, tile_size):
-                    tasks.append((scaled_image, zoom_dir, x, y, tile_size))
+                    tasks.append((scaled_image, f'{i:02}', zoom_dir, zoom, x, y, tile_size))
 
             with Pool(cpu_count()) as pool:
                 pool.map(process_tile, tasks)
@@ -110,6 +123,24 @@ def tile_satellite():
             #         transparent_tile.save(os.path.join(zoom_dir, f'{x // tile_size}_{y // tile_size}.png'))
 
     print('瓦片切分完成')
+
+
+def copy_png_files(src_path, dst_path):
+    # 创建目标文件夹
+    if not os.path.exists(dst_path):
+        os.makedirs(dst_path)
+
+    for root, dirs, files in os.walk(src_path):
+        for file_name in files:
+            # 检查文件是否为 .png 文件
+            if file_name.endswith('.png'):
+                # 构建完整的文件路径
+                full_file_name = os.path.join(root, file_name)
+                if os.path.isfile(full_file_name):
+                    # 复制文件到目标文件夹
+                    shutil.copy(full_file_name, dst_path)
+
+    print(f"所有 .png 文件已复制到 {dst_path}")
 
 
 def geo_to_image_coords(lat, lon, lat1, lon1, lat2, lon2, H, W):
@@ -192,19 +223,27 @@ def calculate_coverage_endpoints(heading_angle, height, cur_lat, cur_lon, fov_ho
     }
 
 
-def tile_expand(cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, debug=False):
+def tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_x_max, tile_y_max, debug=False):
     tile_area = TILE_SIZE ** 2
 
     tile_u = max(0, cur_tile_y - 5)
-    tile_d = cur_tile_y + 5
+    tile_d = min(cur_tile_y + 5, tile_y_max)
     tile_l = max(0, cur_tile_x - 5)
-    tile_r = cur_tile_x + 5
+    tile_r = min(cur_tile_x + 5, tile_x_max)
 
     p_img_xy_scale_order = order_points(p_img_xy_scale)
     poly_p = Polygon(p_img_xy_scale_order)
     poly_p_area = poly_p.area
 
-    tile_expand_list = [f'{zoom_level}/{cur_tile_x:03}_{cur_tile_y:03}.png']
+    tile_tmp = [((cur_tile_x    ) * TILE_SIZE, (cur_tile_y    ) * TILE_SIZE), 
+                ((cur_tile_x + 1) * TILE_SIZE, (cur_tile_y    ) * TILE_SIZE), 
+                ((cur_tile_x    ) * TILE_SIZE, (cur_tile_y + 1) * TILE_SIZE), 
+                ((cur_tile_x + 1) * TILE_SIZE, (cur_tile_y + 1) * TILE_SIZE)]
+    intersect_area = calc_intersect_area(poly_p, tile_tmp)
+    max_rate = max(intersect_area/tile_area, intersect_area/poly_p_area)
+
+    tile_expand_list = [f'{str_i}_{zoom_level}_{cur_tile_x:03}_{cur_tile_y:03}.png']
+    tile_expand_weight_list = [max_rate]
 
     for tile_x_i in range(tile_l, tile_r + 1):
         for tile_y_i in range(tile_u, tile_d + 1):
@@ -219,15 +258,17 @@ def tile_expand(cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, debug=False)
                 print('zoom=', zoom_level, cur_tile_x, cur_tile_y)
                 print(tile_x_i, tile_y_i)
                 print(intersect_area, tile_area, poly_p_area, intersect_area/tile_area, intersect_area/poly_p_area)
-            if intersect_area / tile_area > 0.4 or intersect_area / poly_p_area > 0.4:
-                tile_expand_list.append(f'{zoom_level}/{tile_x_i:03}_{tile_y_i:03}.png')
-    return tile_expand_list
-            
+            max_rate = max(intersect_area/tile_area, intersect_area/poly_p_area)
+            if max_rate > 0.4:
+                tile_expand_list.append(f'{str_i}_{zoom_level}_{tile_x_i:03}_{tile_y_i:03}.png')
+                tile_expand_weight_list.append(max_rate)
+    return tile_expand_list, tile_expand_weight_list
+
 
 def process_per_image(drone_meta_data):
-    file_dir, str_i, drone_img_path, lat, lon, height, phi, sate_lt_lat, sate_lt_lon, sate_rb_lat, sate_rb_lon, sate_pix_h, sate_pix_w = drone_meta_data
+    file_dir, str_i, drone_img, lat, lon, height, phi, sate_lt_lat, sate_lt_lon, sate_rb_lat, sate_rb_lon, sate_pix_h, sate_pix_w = drone_meta_data
 
-    # debug = (drone_img_path == '01_0015.JPG')
+    # debug = (drone_img == '01_0015.JPG')
     debug = False
 
     p_latlon = calculate_coverage_endpoints(heading_angle=phi, height=height, cur_lat=lat, cur_lon=lon, debug=debug)
@@ -238,7 +279,8 @@ def process_per_image(drone_meta_data):
     zoom_list = os.listdir(os.path.join(file_dir, 'tile'))
     zoom_list = [int(x) for x in zoom_list]
     zoom_list.sort()
-    zoom_list = zoom_list[-3:]
+    zoom_max = zoom_list[-1]
+    zoom_list = zoom_list[-3:-1]
 
     cur_img_x, cur_img_y = geo_to_image_coords(lat, lon, sate_lt_lat, sate_lt_lon, sate_rb_lat, sate_rb_lon, sate_pix_h, sate_pix_w)
     p_img_xy = [
@@ -249,18 +291,23 @@ def process_per_image(drone_meta_data):
         print('p_img_xy', p_img_xy)
 
     result = {
-        "file_dir": file_dir,
         "str_i": str_i,
-        "drone_img": drone_img_path,
+        "drone_img_dir": os.path.join(file_dir, 'drone'),
+        "drone_img": drone_img,
         "lat": lat,
         "lon": lon,
-        "pair_tile_img_list": []
+        "sate_img_dir": os.path.join(file_dir, 'satellite'),
+        "pair_sate_img_list": [],
+        "pair_sate_weight_list": [],
     }
 
     for zoom_level in zoom_list:
-        scale = 2 ** (int(zoom_list[-1]) - zoom_level)
+        scale = 2 ** (zoom_max - zoom_level)
         sate_pix_w_scale = math.ceil(sate_pix_w / scale)
         sate_pix_h_scale = math.ceil(sate_pix_h / scale)
+        
+        tile_x_max = sate_pix_w_scale // TILE_SIZE
+        tile_y_max = sate_pix_h_scale // TILE_SIZE
 
         cur_img_x_scale = math.ceil(cur_img_x / scale)
         cur_img_y_scale = math.ceil(cur_img_y / scale)
@@ -273,19 +320,67 @@ def process_per_image(drone_meta_data):
         cur_tile_x = cur_img_x_scale // TILE_SIZE
         cur_tile_y = cur_img_y_scale // TILE_SIZE
 
-        tile_expand_list = tile_expand(cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, debug)
+        tile_expand_list, tile_expand_weight_list = tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_x_max, tile_y_max, debug)
 
-        result["pair_tile_img_list"].extend(tile_expand_list)
+        result["pair_sate_img_list"].extend(tile_expand_list)
+        result["pair_sate_weight_list"].extend(tile_expand_weight_list)
     
-    if drone_img_path == '01_0015.JPG':
+    if debug:
         print(result)
     
     return result
 
 
+def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
+    pairs_sate2drone_dict = {}
+    pairs_drone2sate_dict = {}
+    
+    drone_save_dir = os.path.join(pair_save_dir, 'drone')
+    sate_save_dir = os.path.join(pair_save_dir, 'satellite')
+    os.makedirs(drone_save_dir, exist_ok=True)
+    os.makedirs(sate_save_dir, exist_ok=True)
+
+    for pairs_drone2sate in pairs_drone2sate_list:
+        
+        str_i = pairs_drone2sate['str_i']
+        pair_sate_img_list = pairs_drone2sate["pair_sate_img_list"]
+        drone_img = pairs_drone2sate["drone_img"]
+        drone_img_dir = pairs_drone2sate["drone_img_dir"]
+        drone_img_name = drone_img.replace('.JPG', '')
+        sate_img_dir = pairs_drone2sate["sate_img_dir"]
+
+        drone_save_path = os.path.join(drone_save_dir, drone_img_name)
+        os.makedirs(drone_save_path, exist_ok=True)
+        sate_save_path = os.path.join(sate_save_dir, drone_img_name)
+        os.makedirs(sate_save_path, exist_ok=True)
+
+        shutil.copy(os.path.join(drone_img_dir, drone_img), drone_save_path)
+        for sate_img in pair_sate_img_list:
+            pairs_drone2sate_dict.setdefault(drone_img, []).append(f'{sate_img}')
+            pairs_sate2drone_dict.setdefault(f'{sate_img}', []).append(f'{drone_img}')
+            shutil.copy(os.path.join(sate_img_dir, sate_img), sate_save_path)
+
+    pairs_match_set = set()
+    for sate_img, tile2drone in pairs_sate2drone_dict.items():
+        pairs_sate2drone_dict[sate_img] = list(set(tile2drone))
+    for drone_img, drone2tile in pairs_drone2sate_dict.items():
+        pairs_drone2sate_dict[drone_img] = list(set(drone2tile))
+        for sate_img in pairs_drone2sate_dict[drone_img]:
+            pairs_match_set.add((drone_img, f'{sate_img}'))
+
+    with open(pkl_save_path, 'wb') as f:
+        pickle.dump({
+            "pairs_drone2sate_list": pairs_drone2sate_list,
+            "pairs_sate2drone_dict": pairs_sate2drone_dict,
+            "pairs_drone2sate_dict": pairs_drone2sate_dict,
+            "pairs_match_set": pairs_match_set,
+        }, f)
+
 
 def process_visloc_data(root, save_root):
-    processed_data = []
+    processed_data_train = []
+    processed_data_test = []
+
     if not os.path.exists(save_root):
         os.mkdir(save_root)
 
@@ -301,16 +396,24 @@ def process_visloc_data(root, save_root):
                 "LT_lon": float(row[2]),
                 "RB_lat": float(row[3]),
                 "RB_lon": float(row[4]),
+                "rect_1_LT_lat": float(row[6]),
+                "rect_1_LT_lon": float(row[7]),
+                "rect_1_RB_lat": float(row[8]),
+                "rect_1_RB_lon": float(row[9]),
+                "rect_2_LT_lat": float(row[10]),
+                "rect_2_LT_lon": float(row[11]),
+                "rect_2_RB_lat": float(row[12]),
+                "rect_2_RB_lon": float(row[13]),
             }
 
+    drone_meta_data_list = []
     for i in range(1, 12):
-        if i not in OK_LIST:
+        if i not in TRAIN_LIST and i not in TEST_LIST:
             continue
         str_i = f'{i:02}'
         file_dir = os.path.join(root, str_i)
 
         drone_meta_file = os.path.join(file_dir, f'{str_i}.csv')
-        drone_meta_data_list = []
 
         sate_img = cv2.imread(os.path.join(file_dir, f'satellite{str_i}.tif'))
         sate_pix_h, sate_pix_w, _ = sate_img.shape
@@ -321,6 +424,8 @@ def process_visloc_data(root, save_root):
             header = next(csvreader)
             # 逐行读取文件
             for row in csvreader:
+                cur_lat = float(row[3])
+                cur_lon = float(row[4])
                 tmp_meta_data = (
                     file_dir,
                     str_i,
@@ -336,23 +441,347 @@ def process_visloc_data(root, save_root):
                     sate_pix_h,
                     sate_pix_w,
                 )
-                drone_meta_data_list.append(tmp_meta_data)
+                if is_point_in_rectangle(
+                    cur_lat, cur_lon, 
+                    sate_meta_data[str_i]["rect_1_LT_lat"],
+                    sate_meta_data[str_i]["rect_1_LT_lon"],
+                    sate_meta_data[str_i]["rect_1_RB_lat"],
+                    sate_meta_data[str_i]["rect_1_RB_lon"],
+                ) or is_point_in_rectangle(
+                    cur_lat, cur_lon, 
+                    sate_meta_data[str_i]["rect_2_LT_lat"],
+                    sate_meta_data[str_i]["rect_2_LT_lon"],
+                    sate_meta_data[str_i]["rect_2_RB_lat"],
+                    sate_meta_data[str_i]["rect_2_RB_lon"],
+                ):
+                    drone_meta_data_list.append(tmp_meta_data)
+
+    random.shuffle(drone_meta_data_list)
+    train_num = len(drone_meta_data_list) * 4 // 5
+    drone_meta_data_train_list = drone_meta_data_list[: train_num]
+    drone_meta_data_test_list = drone_meta_data_list[train_num: ]
+
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        for result in tqdm(executor.map(process_per_image, drone_meta_data_train_list), total=len(drone_meta_data_train_list)):
+            # 将每个返回值添加到结果列表中
+                processed_data_train.append(result)
+
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        for result in tqdm(executor.map(process_per_image, drone_meta_data_test_list), total=len(drone_meta_data_test_list)):
+            # 将每个返回值添加到结果列表中
+                processed_data_test.append(result)
+
+    train_pkl_save_path = os.path.join(save_root, 'train_pair_meta.pkl')
+    train_data_save_dir = os.path.join(save_root, 'train')
+    save_pairs_meta_data(processed_data_train, train_pkl_save_path, train_data_save_dir)
+
+    test_pkl_save_path = os.path.join(save_root, 'test_pair_meta.pkl')
+    test_data_save_dir = os.path.join(save_root, 'test')
+    save_pairs_meta_data(processed_data_test, test_pkl_save_path, test_data_save_dir)
+
+
+def get_sate_data(root_dir):
+    sate_img_dir_list = []
+    sate_img_list = []
+    for root, dirs, files in os.walk(root_dir):
+        for file in files:
+            sate_img_dir_list.append(root)
+            sate_img_list.append(file)
+    return sate_img_dir_list, sate_img_list
+
+
+class VisLocDatasetTrain(Dataset):
+    
+    def __init__(self,
+                 pairs_meta_file,
+                 drone2sate=True,
+                 transforms_query=None,
+                 transforms_gallery=None,
+                 prob_flip=0.5,
+                 shuffle_batch_size=128):
+        super().__init__()
+        
+        with open(pairs_meta_file, 'rb') as f:
+            pairs_meta_data = pickle.load(f)
+
+        self.pairs = []
+        pairs_drone2sate_list = pairs_meta_data['pairs_drone2sate_list']
+        self.pairs_sate2drone_dict = pairs_meta_data['pairs_sate2drone_dict']
+        self.pairs_drone2sate_dict = pairs_meta_data['pairs_drone2sate_dict']
+        self.pairs_match_set = pairs_meta_data['pairs_match_set']
+
+        self.drone2sate = drone2sate
+        if drone2sate:
+            for pairs_drone2sate in pairs_drone2sate_list:
+                drone_img_dir = pairs_drone2sate['drone_img_dir']
+                drone_img = pairs_drone2sate['drone_img']
+                sate_img_dir = pairs_drone2sate['sate_img_dir']
+                pair_sate_img_list = pairs_drone2sate['pair_sate_img_list']
+                pair_sate_weight_list = pairs_drone2sate['pair_sate_weight_list']
+                str_i = pairs_drone2sate['str_i']
+                drone_img_file = f'{drone_img_dir}/{drone_img}'
             
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            for result in tqdm(executor.map(process_per_image, drone_meta_data_list), total=len(drone_meta_data_list)):
-                # 将每个返回值添加到结果列表中
-                    processed_data.append(result)
+                for pair_sate_img, pair_sate_weight in zip(pair_sate_img_list, pair_sate_weight_list):
+                    sate_img_file = f'{sate_img_dir}/{pair_sate_img}'  
+                    self.pairs.append((drone_img_file, sate_img_file, pair_sate_weight))
 
-    pkl_save_path = os.path.join(save_root, 'processed_data_list.pkl')
-    with open(pkl_save_path, 'wb') as f:
-        pickle.dump(processed_data, f)
+        self.transforms_query = transforms_query
+        self.transforms_gallery = transforms_gallery
+        self.prob_flip = prob_flip
+        self.shuffle_batch_size = shuffle_batch_size
+
+        self.samples = copy.deepcopy(self.pairs)
+    
+    def __getitem__(self, index):
+        
+        query_img_path, gallery_img_path, positive_weight = self.samples[index]
+        
+        # for query there is only one file in folder
+        query_img = cv2.imread(query_img_path)
+        query_img = cv2.cvtColor(query_img, cv2.COLOR_BGR2RGB)
+        
+        gallery_img = cv2.imread(gallery_img_path)
+        gallery_img = cv2.cvtColor(gallery_img, cv2.COLOR_BGR2RGB)
+        
+        if np.random.random() < self.prob_flip:
+            query_img = cv2.flip(query_img, 1)
+            gallery_img = cv2.flip(gallery_img, 1) 
+        
+        # image transforms
+        if self.transforms_query is not None:
+            query_img = self.transforms_query(image=query_img)['image']
+            
+        if self.transforms_gallery is not None:
+            gallery_img = self.transforms_gallery(image=gallery_img)['image']
+        
+        return query_img, gallery_img, positive_weight
+
+    def __len__(self):
+        return len(self.samples)
+    
+    
+    def shuffle(self, ):
+
+            '''
+            custom shuffle function for unique class_id sampling in batch
+            '''
+            
+            print("\nShuffle Dataset:")
+            
+            pair_pool = copy.deepcopy(self.pairs)
+              
+            # Shuffle pairs order
+            random.shuffle(pair_pool)
+           
+            sate_batch = set()
+            drone_batch = set()
+            
+            # Lookup if already used in epoch
+            pairs_epoch = set()   
+
+            # buckets
+            batches = []
+            current_batch = []
+            
+            # counter
+            break_counter = 0
+            
+            # progressbar
+            pbar = tqdm()
+
+            while True:
+                
+                pbar.update()
+                
+                if len(pair_pool) > 0:
+                    pair = pair_pool.pop(0)
+                    
+                    drone_img, sate_img, _ = pair
+
+                    drone_img_name = drone_img.split('/')[-1]
+                    sate_img_name = sate_img.split('/')[-1]
+
+                    # print(drone_img_name, sate_img_name)
+
+                    pair_name = (drone_img_name, sate_img_name)
+
+                    if drone_img_name not in drone_batch and sate_img_name not in sate_batch and pair_name not in pairs_epoch:
+
+                        current_batch.append(pair)
+                        pairs_epoch.add(pair_name)
+                        
+                        pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name]
+                        for sate in pairs_drone2sate:
+                            sate_batch.add(sate)
+                        pairs_sate2drone = self.pairs_sate2drone_dict[sate_img_name]
+                        for drone in pairs_sate2drone:
+                            drone_batch.add(drone)
+                        
+                        break_counter = 0
+                        
+                    else:
+                        # if pair fits not in batch and is not already used in epoch -> back to pool
+                        if pair_name not in pairs_epoch:
+                            pair_pool.append(pair)
+                            
+                        break_counter += 1
+                        
+                    if break_counter >= 16384:
+                        break
+                else:
+                    break
+
+                if len(current_batch) >= self.shuffle_batch_size:
+                    # empty current_batch bucket to batches
+                    batches.extend(current_batch)
+                    sate_batch = set()
+                    drone_batch = set()
+                    current_batch = []
+        
+            pbar.close()
+            
+            # wait before closing progress bar
+            time.sleep(0.3)
+            
+            self.samples = batches
+            
+            print("Original Length: {} - Length after Shuffle: {}".format(len(self.pairs), len(self.samples))) 
+            print("Break Counter:", break_counter)
+            print("Pairs left out of last batch to avoid creating noise:", len(self.pairs) - len(self.samples))
+            print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][0], self.samples[-1][0]))  
+            print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][1], self.samples[-1][1]))  
+
+class VisLocDatasetEval(Dataset):
+    
+    def __init__(self,
+                 pairs_meta_file,
+                 mode,
+                 data_root_dir='',
+                 transforms=None,
+                 ):
+        super().__init__()
+        
+        with open(pairs_meta_file, 'rb') as f:
+            pairs_meta_data = pickle.load(f)         
+
+        self.images = []
+        self.images_path = []
+
+        if mode == 'drone':
+            pairs_drone2sate_list = pairs_meta_data['pairs_drone2sate_list']
+            self.pairs_sate2drone_dict = pairs_meta_data['pairs_sate2drone_dict']
+            self.pairs_drone2sate_dict = pairs_meta_data['pairs_drone2sate_dict']
+            self.pairs_match_set = pairs_meta_data['pairs_match_set']
+            for pairs_drone2sate in pairs_drone2sate_list:
+                self.images_path.append(os.path.join(pairs_drone2sate['drone_img_dir'], pairs_drone2sate['drone_img']))
+                self.images.append(pairs_drone2sate['drone_img'])
+        elif mode == 'sate':
+            sate_img_dir_list, sate_img_list = get_sate_data(root_dir=data_root_dir)
+            # print('???????', sate_datas['sate_img'])
+            for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
+                self.images_path.append(os.path.join(sate_img_dir, sate_img))
+                self.images.append(sate_img)
+
+        self.transforms = transforms
 
 
+    def __getitem__(self, index):
+        
+        img_path = self.images_path[index]
+        
+        img = cv2.imread(img_path)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        
+        #if self.mode == "sat":
+        
+        #    img90 = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+        #    img180 = cv2.rotate(img90, cv2.ROTATE_90_CLOCKWISE)
+        #    img270 = cv2.rotate(img180, cv2.ROTATE_90_CLOCKWISE)
+            
+        #    img_0_90 = np.concatenate([img, img90], axis=1)
+        #    img_180_270 = np.concatenate([img180, img270], axis=1)
+            
+        #    img = np.concatenate([img_0_90, img_180_270], axis=0)
+        
+        # image transforms
+        if self.transforms is not None:
+            img = self.transforms(image=img)['image']
+        
+        return img
 
+    def __len__(self):
+        return len(self.images)
+    
+    def get_sample_ids(self):
+        return set(self.sample_ids)
+
+    
+def get_transforms(img_size,
+                   mean=[0.485, 0.456, 0.406],
+                   std=[0.229, 0.224, 0.225]):
+    
+
+    val_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                A.Normalize(mean, std),
+                                ToTensorV2(),
+                                ])
+                                
+                             
+    train_sat_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
+                                      A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                      A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.15, always_apply=False, p=0.5),
+                                      A.OneOf([
+                                               A.AdvancedBlur(p=1.0),
+                                               A.Sharpen(p=1.0),
+                                              ], p=0.3),
+                                      A.OneOf([
+                                               A.GridDropout(ratio=0.4, p=1.0),
+                                               A.CoarseDropout(max_holes=25,
+                                                               max_height=int(0.2*img_size[0]),
+                                                               max_width=int(0.2*img_size[0]),
+                                                               min_holes=10,
+                                                               min_height=int(0.1*img_size[0]),
+                                                               min_width=int(0.1*img_size[0]),
+                                                               p=1.0),
+                                              ], p=0.3),
+                                      A.RandomRotate90(p=1.0),
+                                      A.Normalize(mean, std),
+                                      ToTensorV2(),
+                                      ])
+    
+    train_drone_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
+                                        A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                        A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.15, always_apply=False, p=0.5),
+                                        A.OneOf([
+                                                 A.AdvancedBlur(p=1.0),
+                                                 A.Sharpen(p=1.0),
+                                              ], p=0.3),
+                                        A.OneOf([
+                                                 A.GridDropout(ratio=0.4, p=1.0),
+                                                 A.CoarseDropout(max_holes=25,
+                                                                 max_height=int(0.2*img_size[0]),
+                                                                 max_width=int(0.2*img_size[0]),
+                                                                 min_holes=10,
+                                                                 min_height=int(0.1*img_size[0]),
+                                                                 min_width=int(0.1*img_size[0]),
+                                                                 p=1.0),
+                                              ], p=0.3),
+                                        A.Normalize(mean, std),
+                                        ToTensorV2(),
+                                        ])
+    
+    return val_transforms, train_sat_transforms, train_drone_transforms
 
 
 
 if __name__ == '__main__':
     root = '/home/xmuairmud/data/UAV_VisLoc_dataset'
-    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/preprocess'
+    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z31'
     process_visloc_data(root, save_root)
+
+    # tile_satellite()
+
+    # src_path = '/home/xmuairmud/data/UAV_VisLoc_dataset/04/tile'
+    # dst_path = '/home/xmuairmud/data/UAV_VisLoc_dataset/04/satellite'
+    # copy_png_files(src_path, dst_path)

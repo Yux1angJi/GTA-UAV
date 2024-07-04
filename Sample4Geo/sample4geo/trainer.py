@@ -35,7 +35,6 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
         
         if scaler:
             with autocast():
-            
                 # data (batches) to device   
                 query = query.to(train_config.device)
                 reference = reference.to(train_config.device)

@@ -81,7 +81,7 @@ def evaluate(config,
     query_num = img_features_query.shape[0]
 
     all_ap = []
-    cmc = np.zeros(query_num)
+    cmc = np.zeros(len(gallery_list))
 
     for i in range(query_num):
         score = img_features_gallery @ img_features_query[i].unsqueeze(-1)
