@@ -156,13 +156,12 @@ def process_per_drone_image(file_data):
     # if not debug:  
     tile_expand_list = tile_expand(tile_xy_list, p_xy_sate_list, debug)
 
-    save_drone_dir = os.path.join(save_root, 'drone', ids)
-    save_sate_dir = os.path.join(save_root, 'satellite', ids)
-    os.makedirs(save_drone_dir, exist_ok=True)
-    os.makedirs(save_sate_dir, exist_ok=True)
+    # save_drone_dir = os.path.join(save_root, 'drone', ids)
+    # save_sate_dir = os.path.join(save_root, 'satellite', ids)
 
     drone_img = os.path.join(dir_img, img_file)
     result = {
+        "h": h,
         "drone_img_dir": dir_img,
         "drone_img": img_file,
         "sate_img_dir": dir_satellite,
@@ -171,12 +170,10 @@ def process_per_drone_image(file_data):
     }
     for tile_x, tile_y, zoom_level, weight in tile_expand_list:
         tile_img = os.path.join(dir_satellite, f'level_{zoom_level}/{zoom_level}_{tile_x}_{tile_y}.png')
-        save_drone_img = os.path.join(save_drone_dir, f'{h}_{img_file}')
-        save_sate_img = os.path.join(save_sate_dir, f'{h}_{zoom_level}_{tile_x}_{tile_y}.png')
+        # save_drone_img = os.path.join(save_drone_dir, f'{h}_{img_file}')
+        # save_sate_img = os.path.join(save_sate_dir, f'{h}_{zoom_level}_{tile_x}_{tile_y}.png')
         result["pair_sate_img_list"].append(f'level_{zoom_level}/{zoom_level}_{tile_x}_{tile_y}.png')
         result["pair_sate_weight_list"].append(weight)
-        # shutil.copy(drone_img, save_drone_img)
-        # shutil.copy(tile_img, save_sate_img)
 
     if debug:
         print(p_xy_sate_list)
@@ -187,19 +184,36 @@ def process_per_drone_image(file_data):
     return result
 
 
-def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path):
+def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
     pairs_sate2drone_dict = {}
     pairs_drone2sate_dict = {}
+
+    drone_save_dir = os.path.join(pair_save_dir, 'drone')
+    sate_save_dir = os.path.join(pair_save_dir, 'satellite')
+    os.makedirs(drone_save_dir, exist_ok=True)
+    os.makedirs(sate_save_dir, exist_ok=True)
+
     for pairs_drone2sate in pairs_drone2sate_list:
-        
-        pair_tile_img_list = pairs_drone2sate["pair_sate_img_list"]
+        h = pairs_drone2sate["h"]
+        pair_sate_img_list = pairs_drone2sate["pair_sate_img_list"]
         drone_img = pairs_drone2sate["drone_img"]
-        for tile_img in pair_tile_img_list:
-            pairs_drone2sate_dict.setdefault(drone_img, []).append(tile_img)
-            pairs_sate2drone_dict.setdefault(tile_img, []).append(drone_img)
+        drone_img_dir = pairs_drone2sate["drone_img_dir"]
+        sate_img_dir = pairs_drone2sate["sate_img_dir"]
+
+        drone_img_name = drone_img.replace('.png', '')
+        drone_img_name = f'{h}_{drone_img_name}'
+        drone_save_path = os.path.join(drone_save_dir, drone_img_name)
+        os.makedirs(drone_save_path, exist_ok=True)
+        sate_save_path = os.path.join(sate_save_dir, drone_img_name)
+        os.makedirs(sate_save_path, exist_ok=True)
+
+        shutil.copy(os.path.join(drone_img_dir, drone_img), drone_save_path)
+        for sate_img in pair_sate_img_list:
+            pairs_drone2sate_dict.setdefault(drone_img, []).append(sate_img)
+            pairs_sate2drone_dict.setdefault(sate_img, []).append(drone_img)
+            shutil.copy(os.path.join(sate_img_dir, sate_img), sate_save_path)
 
     pairs_match_set = set()
-
     for tile_img, tile2drone in pairs_sate2drone_dict.items():
         pairs_sate2drone_dict[tile_img] = list(set(tile2drone))
     for drone_img, drone2tile in pairs_drone2sate_dict.items():
@@ -217,12 +231,14 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path):
 
 
 
-def process_gta_data(root, save_root, h_list=[100, 200, 300], zoom_list=[5, 6, 7]):
+def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7]):
     start_x = -1702
     start_y = -2587.6817
 
-    pairs_drone2sate_list_train = []
-    pairs_drone2sate_list_test = []
+    processed_data_train = []
+    processed_data_test = []
+
+    file_data_list = []
 
     for h in h_list:
         path_h = root + f'/drone/H={h}'
@@ -233,28 +249,29 @@ def process_gta_data(root, save_root, h_list=[100, 200, 300], zoom_list=[5, 6, 7
             dir_satellite = os.path.join(root, 'satellite')
 
             files = [f for f in os.listdir(dir_img)]
-            files_num = len(files)
-            files_train = files[: files_num//5*4]
-            files_test = files[files_num//5*4: ]
 
+            file_data_list.extend([(img_file, dir_img, dir_meta, dir_satellite, h, step, start_x, start_y, root, save_root, zoom_list)for img_file in files])
 
-            file_data_list_train = [(img_file, dir_img, dir_meta, dir_satellite, h, step, start_x, start_y, root, save_root, zoom_list) for img_file in files_train]
-            file_data_list_test = [(img_file, dir_img, dir_meta, dir_satellite, h, step, start_x, start_y, root, save_root, zoom_list) for img_file in files_test]
+    random.shuffle(file_data_list)
+    data_num = len(file_data_list)
+    file_data_list_train = file_data_list[: data_num//5*4]
+    file_data_list_test = file_data_list[data_num//5*4: ]
 
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        for result in tqdm(executor.map(process_per_drone_image, file_data_list_train), total=len(file_data_list_train)):
+            processed_data_train.append(result)
 
-            with concurrent.futures.ProcessPoolExecutor() as executor:
-                for result in tqdm(executor.map(process_per_drone_image, file_data_list_train), total=len(file_data_list_train)):
-                    pairs_drone2sate_list_train.append(result)
-
-            with concurrent.futures.ProcessPoolExecutor() as executor:
-                for result in tqdm(executor.map(process_per_drone_image, file_data_list_test), total=len(file_data_list_test)):
-                    pairs_drone2sate_list_test.append(result)
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        for result in tqdm(executor.map(process_per_drone_image, file_data_list_test), total=len(file_data_list_test)):
+            processed_data_test.append(result)
     
-    pkl_save_path = os.path.join(root, 'train_pair_meta_h200300.pkl')
-    save_pairs_meta_data(pairs_drone2sate_list_train, pkl_save_path)
-    pkl_save_path = os.path.join(root, 'test_pair_meta_h200300.pkl')
-    save_pairs_meta_data(pairs_drone2sate_list_test, pkl_save_path)
+    train_pkl_save_path = os.path.join(save_root, 'train_pair_meta.pkl')
+    train_data_save_dir = os.path.join(save_root, 'train')
+    save_pairs_meta_data(processed_data_train, train_pkl_save_path, train_data_save_dir)
 
+    test_pkl_save_path = os.path.join(save_root, 'test_pair_meta.pkl')
+    test_data_save_dir = os.path.join(save_root, 'test')
+    save_pairs_meta_data(processed_data_test, test_pkl_save_path, test_data_save_dir)
 
 
 def get_data(path):
@@ -266,16 +283,15 @@ def get_data(path):
                 data[name]["files"] = files
     return data
 
-def get_sate_data(path, level_list=[5, 6, 7]):
-    data = {
-        "sate_img_dir": path,
-        "sate_img": [],
-    }
-    for zoom_level in level_list:
-        sate_img_list = os.listdir(os.path.join(path, f'level_{zoom_level}'))
-        sate_img_list = [f'level_{zoom_level}/{sate_img}' for sate_img in sate_img_list]
-        data["sate_img"].extend(sate_img_list)
-    return data
+
+def get_sate_data(root_dir):
+    sate_img_dir_list = []
+    sate_img_list = []
+    for root, dirs, files in os.walk(root_dir):
+        for file in files:
+            sate_img_dir_list.append(root)
+            sate_img_list.append(file)
+    return sate_img_dir_list, sate_img_list
 
 
 class GTADatasetTrain(Dataset):
@@ -386,7 +402,7 @@ class GTADatasetTrain(Dataset):
                     
                     drone_img, sate_img, _ = pair
                     drone_img_name = drone_img.split('/')[-1]
-                    sate_img_name = sate_img.split('satellite')[-1][1:]
+                    sate_img_name = sate_img.split('/')[-1]
                     # print(sate_img_name)
 
                     pair_name = (drone_img_name, sate_img_name)
@@ -435,7 +451,8 @@ class GTADatasetTrain(Dataset):
             print("Break Counter:", break_counter)
             print("Pairs left out of last batch to avoid creating noise:", len(self.pairs) - len(self.samples))
             print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][0], self.samples[-1][0]))  
-
+            print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][1], self.samples[-1][1]))  
+            
 
 class GTADatasetEval(Dataset):
     
@@ -450,7 +467,7 @@ class GTADatasetEval(Dataset):
         with open(pairs_meta_file, 'rb') as f:
             pairs_meta_data = pickle.load(f)         
 
-        self.images_name = []
+        self.images_path = []
         self.images = []
 
         if mode == 'drone':
@@ -459,21 +476,20 @@ class GTADatasetEval(Dataset):
             self.pairs_drone2sate_dict = pairs_meta_data['pairs_drone2sate_dict']
             self.pairs_match_set = pairs_meta_data['pairs_match_set']
             for pairs_drone2sate in pairs_drone2sate_list:
-                self.images.append(os.path.join(pairs_drone2sate['drone_img_dir'], pairs_drone2sate['drone_img']))
-                self.images_name.append(pairs_drone2sate['drone_img'])
+                self.images_path.append(os.path.join(pairs_drone2sate['drone_img_dir'], pairs_drone2sate['drone_img']))
+                self.images.append(pairs_drone2sate['drone_img'])
         elif mode == 'sate':
-            sate_datas = get_sate_data(path=sate_img_dir)
+            sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
             # print('???????', sate_datas['sate_img'])
-            for sate_img in sate_datas['sate_img']:
-                self.images.append(os.path.join(sate_datas['sate_img_dir'], sate_img))
-                self.images_name.append(sate_img)
+            for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
+                self.images_path.append(os.path.join(sate_img_dir, sate_img))
+                self.images.append(sate_img)
 
         self.transforms = transforms
 
-
     def __getitem__(self, index):
         
-        img_path = self.images[index]
+        img_path = self.images_path[index]
         
         img = cv2.imread(img_path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -577,7 +593,6 @@ def move_file():
         for y in range(20, 33):
             directory_name = f"{x}_{y}"
             source_path = os.path.join(source_directory, directory_name)
-            
             # 检查目录是否存在
             if os.path.exists(source_path) and os.path.isdir(source_path):
                 # 移动目录到目标目录
@@ -587,10 +602,9 @@ def move_file():
     print("All directories moved successfully.")
 
 
-
 if __name__ == "__main__":
     root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5/train_h200300'
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable/train_h200300'
     process_gta_data(root, save_root, h_list=[200, 300])
 
     # x = -100

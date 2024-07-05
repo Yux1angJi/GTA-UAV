@@ -36,7 +36,7 @@ class Configuration:
     mixed_precision: bool = True
     custom_sampling: bool = True         # use custom sampling instead of random
     seed = 1
-    epochs: int = 1
+    epochs: int = 5
     batch_size: int = 64                # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
     gpu_ids: tuple = (0)           # GPU ids for training
@@ -60,7 +60,7 @@ class Configuration:
     scheduler: str = "cosine"           # "polynomial" | "cosine" | "constant" | None
     warmup_epochs: int = 0.1
     lr_end: float = 0.0001               #  only for "polynomial"
-        
+    
     # Augment Images
     prob_flip: float = 0.5              # flipping the sat image and drone image simultaneously
     
@@ -75,7 +75,7 @@ class Configuration:
     # Checkpoint to start from
     checkpoint_start = None
     # checkpoint_start = "pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
-
+    # checkpoint_start = 'work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0703171314/weights_end.pth'
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -358,7 +358,6 @@ if __name__ == '__main__':
                 else:
                     torch.save(model.state_dict(), '{}/weights_e{}_{:.4f}.pth'.format(model_path, epoch, r1_test))
                 
-
         if config.custom_sampling:
             train_dataloader.dataset.shuffle()
                 
