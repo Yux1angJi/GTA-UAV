@@ -72,12 +72,42 @@ class ContrastiveLoss(nn.Module):
     
 
 class GroupInfoNCE(nn.Module):
-    def __init__(self, group_len, label_smoothing, device='cuda' if torch.cuda.is_available() else 'cpu'):
+    def __init__(self, group_len=2, device='cuda' if torch.cuda.is_available() else 'cpu'):
         super().__init__()
         
-        self.loss_function = BCEWithLogitsLossWithLabelSmoothing(label_smoothing)
         self.group_len = group_len
         self.device = device
+
+
+    def loss_part(self, similarity_matrix, G, N):
+        total_loss = 0.0
+        for g in range(G):
+            g_l = g * N
+            g_r = g_l + N
+
+            g_pos_matrix = similarity_matrix[g_l: g_r, g_l: g_r]
+            g_all_matrix = similarity_matrix[g_l: g_r, :].flatten()
+
+            total_loss +=  -1. / N / N * g_pos_matrix.sum() + torch.logsumexp(g_all_matrix, dim=0)
+        total_loss /= G
+        return total_loss
+    
+    def loss_whole(self, similarity_matrix, G, N):
+        total_loss = 0.0
+        for g in range(G):
+            g_l = g * N
+            g_r = g_l + N
+
+            g_pos_matrix = similarity_matrix[g_l: g_r, g_l: g_r].flatten()
+            g_all_matrix = similarity_matrix[g_l: g_r, :].flatten()
+
+            pos_logsumexp = torch.logsumexp(g_pos_matrix, dim=0)
+            all_logsumexp = torch.logsumexp(g_all_matrix, dim=0)
+
+            total_loss += -1. * (pos_logsumexp - all_logsumexp)
+        total_loss /= G
+        return total_loss
+        
 
     def forward(self, image_features1, image_features2, logit_scale):
         ## G*N, D
@@ -88,16 +118,29 @@ class GroupInfoNCE(nn.Module):
         G = self.group_len
         N = GN // G
 
-        I_g = torch.eye(G)
-        # 创建一个 n x n 的单位矩阵
-        I_n = torch.ones(N, N)
-        # 使用 Kronecker 积生成目标矩阵
-        labels = torch.kron(I_g, I_n).to(device=self.device)
+        # I_g = torch.eye(G)
+        # # 创建一个 n x n 的单位矩阵
+        # I_n = torch.ones(N, N)
+        # # 使用 Kronecker 积生成目标矩阵
+        # labels = torch.kron(I_g, I_n).to(device=self.device)
         
         logits_per_image1 = logit_scale * image_features1 @ image_features2.T
         
         logits_per_image2 = logits_per_image1.T
+
+        loss = (self.loss_part(logits_per_image1, G, N) + self.loss_part(logits_per_image2, G, N))/2 
         
-        loss = (self.loss_function(logits_per_image1, labels) + self.loss_function(logits_per_image2, labels))/2
+        # loss += (self.loss_whole(logits_per_image1, G, N) + self.loss_whole(logits_per_image2, G, N))/2
+        # loss /= 2
 
         return loss  
+    
+
+if __name__ == '__main__':
+    loss = GroupInfoNCE()
+
+    a = torch.rand(8, 8)
+    loss1 = loss.loss_part(a, 4, 2)
+    loss2 = loss.loss_whole(a, 4, 2)
+
+    print(loss1, loss2)
