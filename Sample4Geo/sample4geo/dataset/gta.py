@@ -620,8 +620,8 @@ def move_file():
 
 if __name__ == "__main__":
     root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h2_z56'
-    process_gta_data(root, save_root, h_list=[200], zoom_list=[5, 6])
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h56_z56'
+    process_gta_data(root, save_root, h_list=[500, 600], zoom_list=[5, 6])
 
     # src_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
     # dst_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456/all_satellite'

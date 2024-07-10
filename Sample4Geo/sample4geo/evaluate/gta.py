@@ -57,11 +57,26 @@ def evaluate(config,
                 ranks_list=[1, 5, 10],
                 step_size=1000,
                 cleanup=True):
-    print("Extract Features:")
+    print("Extract Features and Compute Scores:")
     img_features_query = predict(config, model, query_loader)
-    img_features_gallery = predict(config, model, gallery_loader)
+    # img_features_gallery = predict(config, model, gallery_loader)
 
-    print("Compute Scores:")
+    all_scores = []
+    model.eval()
+    with torch.no_grad():
+        for gallery_batch in gallery_loader:
+            with autocast():
+                gallery_batch = gallery_batch.to(device=config.device)
+                gallery_features_batch = model(gallery_batch)
+                if config.normalize_features:
+                    gallery_features_batch = F.normalize(gallery_features_batch, dim=-1)
+
+            scores_batch = img_features_query @ gallery_features_batch.T
+            all_scores.append(scores_batch.cpu())
+    
+    all_scores = torch.cat(all_scores, dim=1).numpy()
+    # print('jyxjyxjyx', all_scores.shape)
+
     ap = 0.0
 
     gallery_idx = {}
@@ -83,14 +98,11 @@ def evaluate(config,
     all_ap = []
     cmc = np.zeros(len(gallery_list))
 
+
     for i in range(query_num):
-        score = img_features_gallery @ img_features_query[i].unsqueeze(-1)
-    
-        score = score.squeeze().cpu().numpy()
-    
+        score = all_scores[i]    
         # predict index
-        index = np.argsort(score)  #from small to large
-        index = index[::-1]
+        index = np.argsort(score)[::-1]
 
         good_index_i = np.isin(index, matches_tensor[i]) 
         
@@ -124,7 +136,7 @@ def evaluate(config,
     
     # cleanup and free memory on GPU
     if cleanup:
-        del img_features_query, img_features_gallery, score
+        del img_features_query, gallery_features_batch, scores_batch
         gc.collect()
         #torch.cuda.empty_cache()
     

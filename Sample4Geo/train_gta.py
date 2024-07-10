@@ -36,10 +36,10 @@ class Configuration:
     mixed_precision: bool = True
     custom_sampling: bool = True         # use custom sampling instead of random
     seed = 1
-    epochs: int = 5
-    batch_size: int = 64                # keep in mind real_batch_size = 2 * batch_size
+    epochs: int = 1
+    batch_size: int = 40                # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
-    gpu_ids: tuple = (0)           # GPU ids for training
+    gpu_ids: tuple = (0,1)           # GPU ids for training
     
     # Eval
     batch_size_eval: int = 128
@@ -97,9 +97,9 @@ class Configuration:
 config = Configuration() 
 
 if config.dataset == 'GTA-D2S':
-    config.train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
-    config.test_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/test_pair_meta.pkl'
-    config.sate_img_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/all_satellite'
+    config.train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23_z56/train_pair_meta.pkl'
+    config.test_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23_z56/test_pair_meta.pkl'
+    config.sate_img_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
 
 
 if __name__ == '__main__':
