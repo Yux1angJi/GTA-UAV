@@ -115,8 +115,8 @@ class GroupInfoNCE(nn.Module):
         image_features2 = F.normalize(image_features2, dim=-1)
 
         GN, D = image_features1.shape
-        G = self.group_len
-        N = GN // G
+        N = self.group_len
+        G = GN // N
 
         # I_g = torch.eye(G)
         # # 创建一个 n x n 的单位矩阵
