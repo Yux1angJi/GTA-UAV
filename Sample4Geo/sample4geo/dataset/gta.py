@@ -172,7 +172,7 @@ def process_per_drone_image(file_data):
         tile_img = os.path.join(dir_satellite, f'level_{zoom_level}/{zoom_level}_{tile_x}_{tile_y}.png')
         # save_drone_img = os.path.join(save_drone_dir, f'{h}_{img_file}')
         # save_sate_img = os.path.join(save_sate_dir, f'{h}_{zoom_level}_{tile_x}_{tile_y}.png')
-        result["pair_sate_img_list"].append(f'level_{zoom_level}/{zoom_level}_{tile_x}_{tile_y}.png')
+        result["pair_sate_img_list"].append(f'{zoom_level}_{tile_x}_{tile_y}.png')
         result["pair_sate_weight_list"].append(weight)
 
     if debug:
@@ -230,6 +230,24 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
         }, f)
 
 
+def copy_png_files(src_path, dst_path):
+    # 创建目标文件夹
+    if not os.path.exists(dst_path):
+        os.makedirs(dst_path)
+
+    for root, dirs, files in os.walk(src_path):
+        for file_name in files:
+            # 检查文件是否为 .png 文件
+            if file_name.endswith('.png'):
+                # 构建完整的文件路径
+                full_file_name = os.path.join(root, file_name)
+                if os.path.isfile(full_file_name):
+                    # 复制文件到目标文件夹
+                    shutil.copy(full_file_name, dst_path)
+
+    print(f"所有 .png 文件已复制到 {dst_path}")
+
+
 
 def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7]):
     start_x = -1702
@@ -247,9 +265,7 @@ def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7
             dir_img = os.path.join(path_h, step, 'images')
             dir_meta = os.path.join(path_h, step, 'meta_data')
             dir_satellite = os.path.join(root, 'satellite')
-
             files = [f for f in os.listdir(dir_img)]
-
             file_data_list.extend([(img_file, dir_img, dir_meta, dir_satellite, h, step, start_x, start_y, root, save_root, zoom_list)for img_file in files])
 
     random.shuffle(file_data_list)
@@ -391,11 +407,11 @@ class GTADatasetTrain(Dataset):
             break_counter = 0
             
             # progressbar
-            pbar = tqdm()
+            # pbar = tqdm()
 
             while True:
                 
-                pbar.update()
+                # pbar.update()
                 
                 if len(pair_pool) > 0:
                     pair = pair_pool.pop(0)
@@ -440,7 +456,7 @@ class GTADatasetTrain(Dataset):
                     drone_batch = set()
                     current_batch = []
        
-            pbar.close()
+            # pbar.close()
             
             # wait before closing progress bar
             time.sleep(0.3)
@@ -459,7 +475,7 @@ class GTADatasetEval(Dataset):
     def __init__(self,
                  pairs_meta_file,
                  mode,
-                 sate_img_dir='/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable/satellite',
+                 sate_img_dir='',
                  transforms=None,
                  ):
         super().__init__()
@@ -603,9 +619,14 @@ def move_file():
 
 
 if __name__ == "__main__":
-    root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable/train_h200300'
-    process_gta_data(root, save_root, h_list=[200, 300])
+    root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable'
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h2_z56'
+    process_gta_data(root, save_root, h_list=[200], zoom_list=[5, 6])
+
+    # src_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
+    # dst_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456/all_satellite'
+    # copy_png_files(src_path, dst_path)
+
 
     # x = -100
     # y = 314

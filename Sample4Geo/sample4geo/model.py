@@ -33,7 +33,7 @@ class TimmModel(nn.Module):
         self.model.set_grad_checkpointing(enable)
 
         
-    def forward(self, img1, img2=None, forward_features=False):
+    def forward(self, img1, img2=None, forward_features=True):
         n = img1.shape[0]
 
         if img2 is not None:

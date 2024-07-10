@@ -10,10 +10,12 @@ from torch.utils.data import DataLoader
 from transformers import get_constant_schedule_with_warmup, get_polynomial_decay_schedule_with_warmup, get_cosine_schedule_with_warmup
 
 from sample4geo.dataset.visloc import VisLocDatasetEval, VisLocDatasetTrain, get_transforms
+from sample4geo.dataset.gta import GTADatasetTrain
+from sample4geo.dataset.mix_data import MixDatasetTrain
 from sample4geo.utils import setup_system, Logger
 from sample4geo.trainer import train, train_with_weight
 from sample4geo.evaluate.gta import evaluate
-from sample4geo.loss import InfoNCE, ContrastiveLoss
+from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE
 from sample4geo.model import TimmModel
 
 
@@ -31,12 +33,17 @@ class Configuration:
     ### GTA setting
     
     train_with_weight: bool = False
+
+    train_in_group: bool = False
+    group_len = 2
+
+    train_with_mix_data: bool = True
     
     # Training 
     mixed_precision: bool = True
     custom_sampling: bool = True         # use custom sampling instead of random
     seed = 1
-    epochs: int = 5
+    epochs: int = 1
     batch_size: int = 64                # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
     gpu_ids: tuple = (0)           # GPU ids for training
@@ -75,7 +82,7 @@ class Configuration:
     # Checkpoint to start from
     checkpoint_start = None
     # checkpoint_start = "pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
-    # checkpoint_start = 'work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0703171314/weights_end.pth'
+    # checkpoint_start = 'work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0708211147/weights_end.pth'
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -100,7 +107,9 @@ if config.dataset == 'VisLoc-D2S':
     config.train_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/train_pair_meta.pkl'
     config.test_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/test_pair_meta.pkl'
     # config.data_root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_1_2/test/satellite'
-    config.data_root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
+    config.sate_img_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
+
+    config.extra_train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
 
 
 if __name__ == '__main__':
@@ -175,6 +184,7 @@ if __name__ == '__main__':
     train_dataset = VisLocDatasetTrain(pairs_meta_file=config.train_pairs_meta_file,
                                       transforms_query=train_sat_transforms,
                                       transforms_gallery=train_drone_transforms,
+                                      group_len=config.group_len,
                                       prob_flip=config.prob_flip,
                                       shuffle_batch_size=config.batch_size,
                                       )
@@ -185,6 +195,26 @@ if __name__ == '__main__':
                                   shuffle=not config.custom_sampling,
                                   pin_memory=True)
     
+    if config.train_with_mix_data:
+        train_dataset_extra = GTADatasetTrain(pairs_meta_file=config.extra_train_pairs_meta_file,
+                                      transforms_query=train_sat_transforms,
+                                      transforms_gallery=train_drone_transforms,
+                                      prob_flip=config.prob_flip,
+                                      shuffle_batch_size=config.batch_size,
+                                      )
+        train_dataset_mix = MixDatasetTrain(batch_size=config.batch_size,
+                                            transforms_query=train_sat_transforms,
+                                            transforms_gallery=train_drone_transforms,
+                                            prob_flip=config.prob_flip,
+                                            )
+        train_dataset_mix.update([train_dataset.samples, train_dataset_extra.samples])
+        train_dataloader = DataLoader(train_dataset_mix,
+                                        batch_size=config.batch_size,
+                                        num_workers=config.num_workers,
+                                        shuffle=not config.custom_sampling,
+                                        pin_memory=True)
+        
+
     # Test query
     query_dataset_test = VisLocDatasetEval(pairs_meta_file=config.test_pairs_meta_file,
                                         mode="drone",
@@ -203,7 +233,7 @@ if __name__ == '__main__':
     gallery_dataset_test = VisLocDatasetEval(pairs_meta_file=config.test_pairs_meta_file,
                                                mode="sate",
                                                transforms=val_transforms,
-                                               data_root_dir=config.data_root_dir,
+                                               sate_img_dir=config.sate_img_dir,
                                                )
     gallery_img_list = gallery_dataset_test.images
     
@@ -220,10 +250,18 @@ if __name__ == '__main__':
     # Loss                                                                        #
     #-----------------------------------------------------------------------------#
 
-    loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
-    loss_function = ContrastiveLoss(loss_function=loss_fn,
-                            device=config.device,
-                            )
+    if config.train_in_group:
+        loss_function = GroupInfoNCE(
+            group_len=config.group_len,
+            label_smoothing=config.label_smoothing,
+            device=config.device,
+        )
+    else:
+        loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
+        loss_function = ContrastiveLoss(
+            loss_function=loss_fn,
+            device=config.device,
+        )
 
     if config.mixed_precision:
         scaler = GradScaler(init_scale=2.**10)
@@ -249,8 +287,36 @@ if __name__ == '__main__':
         ]
         optimizer = torch.optim.AdamW(optimizer_parameters, lr=config.lr)
     else:
-        optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr)        
+        
+    #-----------------------------------------------------------------------------#
+    # Zero Shot                                                                   #
+    #-----------------------------------------------------------------------------#
+    if config.zero_shot:
+        print("\n{}[{}]{}".format(30*"-", "Zero Shot", 30*"-"))  
 
+        r1_test = evaluate(config=config,
+                           model=model,
+                           query_loader=query_dataloader_test,
+                           gallery_loader=gallery_dataloader_test, 
+                           query_list=query_img_list,
+                           gallery_list=gallery_img_list,
+                           pairs_dict=pairs_drone2sate_dict,
+                           ranks_list=[1, 5, 10],
+                           step_size=1000,
+                           cleanup=True)
+
+    #-----------------------------------------------------------------------------#
+    # Shuffle                                                                     #
+    #-----------------------------------------------------------------------------#
+    if config.train_with_mix_data:  
+        train_dataset.shuffle()
+        train_dataset_extra.shuffle()
+        train_dataloader.dataset.update([train_dataset.samples, train_dataset_extra.samples])          
+    elif config.train_in_group:
+        train_dataloader.dataset.shuffle_group()
+    else:
+        train_dataloader.dataset.shuffle()
 
     #-----------------------------------------------------------------------------#
     # Scheduler                                                                   #
@@ -258,7 +324,7 @@ if __name__ == '__main__':
 
     train_steps = len(train_dataloader) * config.epochs
     warmup_steps = len(train_dataloader) * config.warmup_epochs
-       
+
     if config.scheduler == "polynomial":
         print("\nScheduler: polynomial - max LR: {} - end LR: {}".format(config.lr, config.lr_end))  
         scheduler = get_polynomial_decay_schedule_with_warmup(optimizer,
@@ -283,30 +349,6 @@ if __name__ == '__main__':
         
     print("Warmup Epochs: {} - Warmup Steps: {}".format(str(config.warmup_epochs).ljust(2), warmup_steps))
     print("Train Epochs:  {} - Train Steps:  {}".format(config.epochs, train_steps))
-        
-        
-    #-----------------------------------------------------------------------------#
-    # Zero Shot                                                                   #
-    #-----------------------------------------------------------------------------#
-    if config.zero_shot:
-        print("\n{}[{}]{}".format(30*"-", "Zero Shot", 30*"-"))  
-
-        r1_test = evaluate(config=config,
-                           model=model,
-                           query_loader=query_dataloader_test,
-                           gallery_loader=gallery_dataloader_test, 
-                           query_list=query_img_list,
-                           gallery_list=gallery_img_list,
-                           pairs_dict=pairs_drone2sate_dict,
-                           ranks_list=[1, 5, 10],
-                           step_size=1000,
-                           cleanup=True)
-
-    #-----------------------------------------------------------------------------#
-    # Shuffle                                                                     #
-    #-----------------------------------------------------------------------------#            
-    if config.custom_sampling:
-        train_dataloader.dataset.shuffle()
             
     #-----------------------------------------------------------------------------#
     # Train                                                                       #
@@ -358,7 +400,13 @@ if __name__ == '__main__':
                 else:
                     torch.save(model.state_dict(), '{}/weights_e{}_{:.4f}.pth'.format(model_path, epoch, r1_test))
                 
-        if config.custom_sampling:
+        if config.train_with_mix_data:  
+            train_dataset.shuffle()
+            train_dataset_extra.shuffle()
+            train_dataloader.dataset.update([train_dataset.samples, train_dataset_extra.samples])          
+        elif config.train_in_group:
+            train_dataloader.dataset.shuffle_group()
+        else:
             train_dataloader.dataset.shuffle()
                 
     if torch.cuda.device_count() > 1 and len(config.gpu_ids) > 1:

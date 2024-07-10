@@ -30,13 +30,13 @@ class Configuration:
  
     ### GTA setting
     
-    train_with_weight: bool = True
+    train_with_weight: bool = False
     
     # Training 
     mixed_precision: bool = True
     custom_sampling: bool = True         # use custom sampling instead of random
     seed = 1
-    epochs: int = 1
+    epochs: int = 5
     batch_size: int = 64                # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
     gpu_ids: tuple = (0)           # GPU ids for training
@@ -60,7 +60,7 @@ class Configuration:
     scheduler: str = "cosine"           # "polynomial" | "cosine" | "constant" | None
     warmup_epochs: int = 0.1
     lr_end: float = 0.0001               #  only for "polynomial"
-        
+
     # Augment Images
     prob_flip: float = 0.5              # flipping the sat image and drone image simultaneously
     
@@ -97,10 +97,9 @@ class Configuration:
 config = Configuration() 
 
 if config.dataset == 'GTA-D2S':
-    config.train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable/train_pair_meta_h200300.pkl'
-    config.test_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable/test_pair_meta_h200300.pkl'
-    config.sate_img_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std5_stable/satellite'
-
+    config.train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
+    config.test_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/test_pair_meta.pkl'
+    config.sate_img_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/all_satellite'
 
 
 if __name__ == '__main__':
@@ -190,7 +189,7 @@ if __name__ == '__main__':
                                         mode="drone",
                                         transforms=val_transforms,
                                         )
-    query_img_list = query_dataset_test.images_name
+    query_img_list = query_dataset_test.images
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
     
     query_dataloader_test = DataLoader(query_dataset_test,
@@ -203,8 +202,9 @@ if __name__ == '__main__':
     gallery_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
                                                mode="sate",
                                                transforms=val_transforms,
+                                               sate_img_dir=config.sate_img_dir,
                                                )
-    gallery_img_list = gallery_dataset_test.images_name
+    gallery_img_list = gallery_dataset_test.images
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
                                        batch_size=config.batch_size_eval,

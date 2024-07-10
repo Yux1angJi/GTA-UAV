@@ -490,6 +490,17 @@ def get_sate_data(root_dir):
     return sate_img_dir_list, sate_img_list
 
 
+def get_subset(s, group_len):
+    # 返回集合 s 的所有子集
+    x = len(s)
+    subset_len = []
+    for i in range(1 << x):
+        subset = {s[j] for j in range(x) if (i & (1 << j))}
+        if len(subset) == group_len:
+            subset_len.append(subset)
+    return subset_len
+
+
 class VisLocDatasetTrain(Dataset):
     
     def __init__(self,
@@ -497,6 +508,7 @@ class VisLocDatasetTrain(Dataset):
                  drone2sate=True,
                  transforms_query=None,
                  transforms_gallery=None,
+                 group_len=2,
                  prob_flip=0.5,
                  shuffle_batch_size=128):
         super().__init__()
@@ -504,7 +516,10 @@ class VisLocDatasetTrain(Dataset):
         with open(pairs_meta_file, 'rb') as f:
             pairs_meta_data = pickle.load(f)
 
+        self.group_len = group_len
+
         self.pairs = []
+
         pairs_drone2sate_list = pairs_meta_data['pairs_drone2sate_list']
         self.pairs_sate2drone_dict = pairs_meta_data['pairs_sate2drone_dict']
         self.pairs_drone2sate_dict = pairs_meta_data['pairs_drone2sate_dict']
@@ -558,7 +573,147 @@ class VisLocDatasetTrain(Dataset):
 
     def __len__(self):
         return len(self.samples)
+
+
+    def shuffle_group(self, ):
+        '''
+        custom shuffle function for unique class_id sampling in batch
+        '''
+        print("\nShuffle Dataset in Groups:")
+        
+        pair_pool = copy.deepcopy(self.pairs)
+        # Shuffle pairs order
+        random.shuffle(pair_pool)
+        
+        sate_batch = set()
+        drone_batch = set()
+        
+        # Lookup if already used in epoch
+        pairs_epoch = set()   
+
+        # buckets
+        batches = []
+        current_batch = []
+        
+        # counter
+        break_counter = 0
+        
+        # progressbar
+        pbar = tqdm()
+
+        while True:
+            pbar.update()
+            # print(break_counter)
+            if len(pair_pool) > 0:
+                pair = pair_pool.pop(0)
+                
+                drone_img_path, sate_img_path, _ = pair
+                drone_img_dir = os.path.dirname(drone_img_path)
+                sate_img_dir = os.path.dirname(sate_img_path)
+
+                drone_img_name_i = drone_img_path.split('/')[-1]
+                sate_img_name_i = sate_img_path.split('/')[-1]
+
+                pair_name = (drone_img_name_i, sate_img_name_i)
+
+                if drone_img_name_i in drone_batch or pair_name in pairs_epoch:
+                    if pair_name not in pairs_epoch:
+                            pair_pool.append(pair)
+                    break_counter += 1
+                    continue
+
+                pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name_i]
+                random.shuffle(pairs_drone2sate)
+
+                subset_sate_len = get_subset(pairs_drone2sate, self.group_len)
+                
+                subset_drone = None
+                subset_sate = None
+                for subset_sate_i in subset_sate_len:
+                    flag = True
+                    sate2drone_inter_set = None
+
+                    #### Check for sate
+                    for sate_img in subset_sate_i:
+                        if sate_img in sate_batch:
+                            flag = False
+                            break
+                        
+                        if sate2drone_inter_set == None:
+                            sate2drone_inter_set = set(self.pairs_sate2drone_dict[sate_img])
+                        else:
+                            sate2drone_inter_set = sate2drone_inter_set.intersection(self.pairs_sate2drone_dict[sate_img])
+                    
+                        
+                    if not flag or sate2drone_inter_set == None or len(sate2drone_inter_set) < self.group_len:
+                        continue
+
+                    sate2drone_inter_set = list(sate2drone_inter_set)
+                    random.shuffle(sate2drone_inter_set)
+                    #### Check for drone
+                    for subset_drone_i in get_subset(sate2drone_inter_set, self.group_len):
+                        if drone_img_name_i not in subset_drone_i:
+                            continue
+                        flag = True
+                        for drone_img in subset_drone_i:
+                            if drone_img in drone_batch or flag == False:
+                                flag = False
+                                break
+                            for sate_img in subset_sate_i:
+                                pair_tmp = (drone_img, sate_img)
+                                if pair_tmp in pairs_epoch:
+                                    flag = False
+                                    break
+                        if flag:
+                            subset_drone = subset_drone_i
+                            subset_sate = subset_sate_i
+                            break
+                
+                if subset_drone != None and subset_sate != None:
+                    # random.shuffle(subset_drone)
+                    # random.shuffle(subset_sate)
+                    for drone_img_name, sate_img_name in zip(subset_drone, subset_sate):
+                        drone_img_path = os.path.join(drone_img_dir, drone_img_name)
+                        sate_img_path = os.path.join(sate_img_dir, sate_img_name)
+                        current_batch.append((drone_img_path, sate_img_path, 1.0))
+                        pairs_epoch.add((drone_img_name, sate_img_name))
+                    for drone_img in subset_drone:
+                        pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name]
+                        for sate in pairs_drone2sate:
+                            sate_batch.add(sate)
+                    for sate_img in subset_sate:
+                        pairs_sate2drone = self.pairs_sate2drone_dict[sate_img_name]
+                        for drone in pairs_sate2drone:
+                            drone_batch.add(drone)
+                else:
+                    if pair_name not in pairs_epoch:
+                            pair_pool.append(pair)        
+                    break_counter += 1
+
+                if break_counter >= 16384:
+                    break
+            else:
+                break
+            if len(current_batch) >= self.shuffle_batch_size:
+                # empty current_batch bucket to batches
+                batches.extend(current_batch)
+                sate_batch = set()
+                drone_batch = set()
+                current_batch = []
     
+        pbar.close()
+        
+        # wait before closing progress bar
+        time.sleep(0.3)
+        
+        self.samples = batches
+        
+        print("Original Length: {} - Length after Shuffle: {}".format(len(self.pairs), len(self.samples))) 
+        print("Break Counter:", break_counter)
+        print("Pairs left out of last batch to avoid creating noise:", len(self.pairs) - len(self.samples))
+        print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][0], self.samples[-1][0]))  
+        print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][1], self.samples[-1][1]))  
+
     
     def shuffle(self, ):
 
@@ -656,7 +811,7 @@ class VisLocDatasetEval(Dataset):
     def __init__(self,
                  pairs_meta_file,
                  mode,
-                 data_root_dir='',
+                 sate_img_dir='',
                  transforms=None,
                  ):
         super().__init__()
@@ -676,7 +831,7 @@ class VisLocDatasetEval(Dataset):
                 self.images_path.append(os.path.join(pairs_drone2sate['drone_img_dir'], pairs_drone2sate['drone_img']))
                 self.images.append(pairs_drone2sate['drone_img'])
         elif mode == 'sate':
-            sate_img_dir_list, sate_img_list = get_sate_data(root_dir=data_root_dir)
+            sate_img_dir_list, sate_img_list = get_sate_data(root_dir=sate_img_dir)
             # print('???????', sate_datas['sate_img'])
             for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
                 self.images_path.append(os.path.join(sate_img_dir, sate_img))
