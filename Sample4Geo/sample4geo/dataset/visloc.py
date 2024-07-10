@@ -20,6 +20,7 @@ from multiprocessing import Pool, cpu_count
 import csv
 import pickle
 import random
+import itertools
 
 
 Image.MAX_IMAGE_PIXELS = None
@@ -605,6 +606,9 @@ class VisLocDatasetTrain(Dataset):
             pbar.update()
             # print(break_counter)
             if len(pair_pool) > 0:
+                if break_counter >= 16384:
+                    break
+
                 pair = pair_pool.pop(0)
                 
                 drone_img_path, sate_img_path, _ = pair
@@ -625,7 +629,7 @@ class VisLocDatasetTrain(Dataset):
                 pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name_i]
                 random.shuffle(pairs_drone2sate)
 
-                subset_sate_len = get_subset(pairs_drone2sate, self.group_len)
+                subset_sate_len = itertools.combinations(pairs_drone2sate, self.group_len)
                 
                 subset_drone = None
                 subset_sate = None
@@ -650,8 +654,9 @@ class VisLocDatasetTrain(Dataset):
 
                     sate2drone_inter_set = list(sate2drone_inter_set)
                     random.shuffle(sate2drone_inter_set)
+                    subset_drone_len = itertools.combinations(sate2drone_inter_set, self.group_len)
                     #### Check for drone
-                    for subset_drone_i in get_subset(sate2drone_inter_set, self.group_len):
+                    for subset_drone_i in subset_drone_len:
                         if drone_img_name_i not in subset_drone_i:
                             continue
                         flag = True
