@@ -156,6 +156,8 @@ def train_script(config):
     
     print("training save in path: {}".format(model_path))
 
+    print("training start from", config.checkpoint_start)
+
     #-----------------------------------------------------------------------------#
     # Model                                                                       #
     #-----------------------------------------------------------------------------#
@@ -280,6 +282,8 @@ def train_script(config):
             loss_type=config.loss_type,
             device=config.device,
         )
+        print("Label Smoothing", config.label_smoothing)
+        print("Loss type", config.loss_type)
     else:
         loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
         loss_function = ContrastiveLoss(
