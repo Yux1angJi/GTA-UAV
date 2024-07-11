@@ -34,16 +34,18 @@ class Configuration:
     
     train_with_weight: bool = False
 
-    train_in_group: bool = False
-    group_len = 2
+    train_in_group: bool = True
+    group_len = 4
 
-    train_with_mix_data: bool = True
+    loss_type = ["part_slice"]
+
+    train_with_mix_data: bool = False
     
     # Training 
     mixed_precision: bool = True
     custom_sampling: bool = True         # use custom sampling instead of random
     seed = 1
-    epochs: int = 1
+    epochs: int = 5
     batch_size: int = 64                # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
     gpu_ids: tuple = (0)           # GPU ids for training
@@ -60,7 +62,7 @@ class Configuration:
     grad_checkpointing: bool = False     # Gradient Checkpointing
     
     # Loss
-    label_smoothing: float = 0.1
+    label_smoothing: float = 0.0
     
     # Learning Rate
     lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
@@ -254,6 +256,7 @@ if __name__ == '__main__':
         loss_function = GroupInfoNCE(
             group_len=config.group_len,
             label_smoothing=config.label_smoothing,
+            loss_type=config.loss_type,
             device=config.device,
         )
     else:
