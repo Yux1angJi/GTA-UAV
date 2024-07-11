@@ -96,8 +96,8 @@ class GroupInfoNCE(nn.Module):
             pos_matrix = all_matrix * y_i
 
             # print((-1. * y_i * pos_matrix.sum()).shape)
-            total_loss += (1 - eps) * ((-1. * y_i * pos_matrix).sum() + torch.logsumexp(all_matrix, dim=0))
-            total_loss += eps * (-1. / G / N * all_matrix.sum() + torch.logsumexp(all_matrix, dim=0))
+            total_loss += (1 - eps) * ((-1. * y_i * pos_matrix).sum() + y_i.sum() * torch.logsumexp(all_matrix, dim=0))
+            total_loss += eps * (-1. / G * all_matrix.sum() + torch.logsumexp(all_matrix, dim=0))
         return total_loss / G / N
     
     def loss_whole_slice(self, similarity_matrix, G, N):
