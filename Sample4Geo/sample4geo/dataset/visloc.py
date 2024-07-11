@@ -600,10 +600,10 @@ class VisLocDatasetTrain(Dataset):
         break_counter = 0
         
         # progressbar
-        pbar = tqdm()
+        # pbar = tqdm()
 
         while True:
-            pbar.update()
+            # pbar.update()
             # print(break_counter)
             if len(pair_pool) > 0:
                 if break_counter >= 16384:
@@ -706,7 +706,7 @@ class VisLocDatasetTrain(Dataset):
                 drone_batch = set()
                 current_batch = []
     
-        pbar.close()
+        # pbar.close()
         
         # wait before closing progress bar
         time.sleep(0.3)

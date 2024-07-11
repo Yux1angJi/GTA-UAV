@@ -3,7 +3,9 @@ import time
 import math
 import shutil
 import sys
+import gc
 import torch
+import argparse
 from dataclasses import dataclass
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
@@ -19,8 +21,16 @@ from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE
 from sample4geo.model import TimmModel
 
 
+def parse_tuple(s):
+    try:
+        return tuple(map(int, s.split(',')))
+    except ValueError:
+        raise argparse.ArgumentTypeError("Tuple must be integers separated by commas")
+
+
 @dataclass
 class Configuration:
+    log_path: str = './nohup_train_visloc_1234z3_group2_lpws_bs40_e5.out'
     
     # Model
     model: str = 'convnext_base.fb_in22k_ft_in1k_384'
@@ -35,9 +45,9 @@ class Configuration:
     train_with_weight: bool = False
 
     train_in_group: bool = True
-    group_len = 4
+    group_len = 2
 
-    loss_type = ["part_slice"]
+    loss_type = ["whole_slice", "part_slice"]
 
     train_with_mix_data: bool = False
     
@@ -46,9 +56,9 @@ class Configuration:
     custom_sampling: bool = True         # use custom sampling instead of random
     seed = 1
     epochs: int = 5
-    batch_size: int = 64                # keep in mind real_batch_size = 2 * batch_size
+    batch_size: int = 40                # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
-    gpu_ids: tuple = (0)           # GPU ids for training
+    gpu_ids: tuple = (0,1)           # GPU ids for training
     
     # Eval
     batch_size_eval: int = 128
@@ -98,23 +108,35 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
+    train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/train_pair_meta.pkl'
+    test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/test_pair_meta.pkl'
+    sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
+
+    extra_train_pairs_meta_file: str = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
+
 
 #-----------------------------------------------------------------------------#
 # Train Config                                                                #
 #-----------------------------------------------------------------------------#
 
-config = Configuration() 
+# config = Configuration() 
 
-if config.dataset == 'VisLoc-D2S':
-    config.train_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/train_pair_meta.pkl'
-    config.test_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/test_pair_meta.pkl'
-    # config.data_root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_1_2/test/satellite'
-    config.sate_img_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
+def config_init(config):
+    if config.dataset == 'VisLoc-D2S':
+        config.train_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/train_pair_meta.pkl'
+        config.test_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/test_pair_meta.pkl'
+        # config.data_root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_1_2/test/satellite'
+        config.sate_img_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
 
-    config.extra_train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
+        config.extra_train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
+    return config
+    
 
+def train_script(config):
 
-if __name__ == '__main__':
+    # 打开文件并重定向sys.stdout到这个文件
+    f = open(config.log_path, 'w')
+    sys.stdout = f
 
     save_time = "{}".format(time.strftime("%m%d%H%M%S"))
     model_path = "{}/{}/{}".format(config.model_path,
@@ -137,9 +159,8 @@ if __name__ == '__main__':
     #-----------------------------------------------------------------------------#
     # Model                                                                       #
     #-----------------------------------------------------------------------------#
-        
-    print("\nModel: {}".format(config.model))
 
+    print("\nModel: {}".format(config.model))
 
     model = TimmModel(config.model,
                           pretrained=True,
@@ -416,3 +437,65 @@ if __name__ == '__main__':
         torch.save(model.module.state_dict(), '{}/weights_end.pth'.format(model_path))
     else:
         torch.save(model.state_dict(), '{}/weights_end.pth'.format(model_path))            
+
+    del model, optimizer
+    del train_dataloader, train_dataset
+    del query_dataloader_test, query_dataset_test
+    del gallery_dataloader_test, gallery_dataset_test
+
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    f.close()
+    sys.stdout = sys.__stdout__
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Training script for visloc.")
+
+    parser.add_argument('log_path', type=str, help='Log file saving path')
+
+    parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
+
+    parser.add_argument('--batch_size', type=int, default=40, help='Batch size')
+
+    parser.add_argument('--train_in_group', action='store_true', help='Train in group')
+    
+    parser.add_argument('--group_len', type=int, default=2, help='Group length')
+
+    parser.add_argument('--train_with_mix_data', action='store_true', help='Train with mix data')
+
+    parser.add_argument('--loss_type', type=str, nargs='+', default=['part_slice', 'whole_slice'], help='Loss type for group train')
+
+    parser.add_argument('--label_smoothing', type=float, default=0.0, help='Label smoothing value for loss')
+    
+    args = parser.parse_args()
+    return args
+
+
+
+if __name__ == '__main__':
+    args = parse_args()
+
+    # loss_type_list = [ 
+    #                   # ["whole_slice", "part_slice", "whole_block"], 
+    #                   ["whole_slice", "part_slice", "whole_block", "part_block"],
+    #                   ["whole_block", "part_block", "whole_slice"],
+    #                   ["whole_block", "part_block", "part_slice"]]
+    # log_path_list = [
+    #             # './nohup_train_visloc_1234z3_group2_lpws_wb_bs40_e5.out',
+    #             './nohup_train_visloc_1234z3_group2_lpws_wpb_bs40_e5.out',
+    #             './nohup_train_visloc_1234z3_group2_lpwb_ws_bs40_e5.out',
+    #             './nohup_train_visloc_1234z3_group2_lpwb_ps_bs40_e5.out']
+
+    config = Configuration()
+    config.log_path = args.log_path
+    config.batch_size = args.batch_size
+    config.train_in_group = args.train_in_group
+    config.group_len = args.group_len
+    config.train_with_mix_data = args.train_with_mix_data
+    config.loss_type = args.loss_type
+    config.gpu_ids = args.gpu_ids
+    config.label_smoothing = args.label_smoothing
+
+    train_script(config)
