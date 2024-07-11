@@ -95,7 +95,6 @@ class GroupInfoNCE(nn.Module):
 
             pos_matrix = all_matrix * y_i
 
-            # print((-1. * y_i * pos_matrix.sum()).shape)
             total_loss += (1 - eps) * ((-1. * y_i * pos_matrix).sum() + y_i.sum() * torch.logsumexp(all_matrix, dim=0))
             total_loss += eps * (-1. / G * all_matrix.sum() + torch.logsumexp(all_matrix, dim=0))
         return total_loss / G / N
@@ -104,17 +103,13 @@ class GroupInfoNCE(nn.Module):
         total_loss = 0.0
         eps = self.label_smoothing
 
-        I_g = torch.eye(G)
-        # 创建一个 n x n 的单位矩阵
-        I_n = torch.ones(N, N)
-        # 使用 Kronecker 积生成目标矩阵
-        labels = torch.kron(I_g, I_n).to(device=self.device)
-
         for i in range(G * N):
             all_matrix = similarity_matrix[i, :]
-            y_i = labels[i]
 
-            pos_matrix = all_matrix * y_i
+            g = i // N
+            g_l = g * N
+            g_r = g_l + N
+            pos_matrix = all_matrix[g_l: g_r]
             all_logsumexp = torch.logsumexp(all_matrix, dim=0)
 
             total_loss += (1 - eps) * (-1. * torch.logsumexp(pos_matrix, dim=0) + all_logsumexp)
@@ -156,13 +151,13 @@ class GroupInfoNCE(nn.Module):
             pos_logsumexp = torch.logsumexp(g_pos_matrix, dim=0)
             all_logsumexp = torch.logsumexp(g_all_matrix, dim=0)
 
-            total_loss += (1 - eps) * -1. * (pos_logsumexp - all_logsumexp)
+            total_loss += (1 - eps) * (-1.) * (pos_logsumexp - all_logsumexp)
 
             for g_2 in range(G):
                 g_l_2 = g_2 * N
                 g_r_2 = g_l_2 + N
                 g_tmp_matrix = similarity_matrix[g_l: g_r, g_l_2: g_r_2].flatten()
-                total_loss += eps / G * -1. * (torch.logsumexp(g_tmp_matrix, dim=0) - all_logsumexp)
+                total_loss += eps / G * (-1.) * (torch.logsumexp(g_tmp_matrix, dim=0) - all_logsumexp)
 
         total_loss /= G
         return total_loss
