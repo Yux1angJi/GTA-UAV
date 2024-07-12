@@ -459,9 +459,13 @@ def parse_args():
 
     parser.add_argument('log_path', type=str, help='Log file saving path')
 
+    parser.add_argument('--epochs', type=int, default=5, help='Epochs')
+
     parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
 
     parser.add_argument('--batch_size', type=int, default=40, help='Batch size')
+
+    parser.add_argument('--checkpoint_start', type=str, default=None, help='Training from checkpoint')
 
     parser.add_argument('--train_in_group', action='store_true', help='Train in group')
     
@@ -494,6 +498,7 @@ if __name__ == '__main__':
 
     config = Configuration()
     config.log_path = args.log_path
+    config.epochs = args.epochs
     config.batch_size = args.batch_size
     config.train_in_group = args.train_in_group
     config.group_len = args.group_len
@@ -501,5 +506,6 @@ if __name__ == '__main__':
     config.loss_type = args.loss_type
     config.gpu_ids = args.gpu_ids
     config.label_smoothing = args.label_smoothing
+    conifg.checkpoint_start = args.checkpoint_start
 
     train_script(config)
