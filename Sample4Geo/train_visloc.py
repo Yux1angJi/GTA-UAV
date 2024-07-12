@@ -29,9 +29,7 @@ def parse_tuple(s):
 
 
 @dataclass
-class Configuration:
-    log_path: str = './nohup_train_visloc_1234z3_group2_lpws_bs40_e5.out'
-    
+class Configuration:    
     # Model
     model: str = 'convnext_base.fb_in22k_ft_in1k_384'
     
@@ -113,29 +111,25 @@ class Configuration:
     sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
 
     extra_train_pairs_meta_file: str = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
-
-
-#-----------------------------------------------------------------------------#
-# Train Config                                                                #
-#-----------------------------------------------------------------------------#
-
-# config = Configuration() 
-
-def config_init(config):
-    if config.dataset == 'VisLoc-D2S':
-        config.train_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/train_pair_meta.pkl'
-        config.test_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/test_pair_meta.pkl'
-        # config.data_root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_1_2/test/satellite'
-        config.sate_img_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
-
-        config.extra_train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
-    return config
-    
+  
 
 def train_script(config):
 
-    # 打开文件并重定向sys.stdout到这个文件
-    f = open(config.log_path, 'w')
+    loss_type_str = ""
+    for loss_type in config.loss_type:
+        if loss_type == 'part_block':
+            loss_type_str += 'pb'
+        elif loss_type == 'part_slice':
+            loss_type_str += 'ps'
+        elif loss_type == 'whole_block':
+            loss_type_str += 'wb'
+        elif loss_type == 'whole_slice':
+            loss_type_str += 'ws'
+        elif loss_type == 'contrastive_slice':
+            loss_type_str += 'cs'
+    
+    log_path = f"nohup_train_visloc_1234z3_group{config.group_len}_l{loss_type_str}_bs{config.batch_size}_e{config.epochs}.out"
+    f = open(log_path, 'w')
     sys.stdout = f
 
     save_time = "{}".format(time.strftime("%m%d%H%M%S"))
@@ -457,8 +451,6 @@ def train_script(config):
 def parse_args():
     parser = argparse.ArgumentParser(description="Training script for visloc.")
 
-    parser.add_argument('log_path', type=str, help='Log file saving path')
-
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
 
     parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
@@ -481,7 +473,6 @@ def parse_args():
     return args
 
 
-
 if __name__ == '__main__':
     args = parse_args()
 
@@ -497,7 +488,6 @@ if __name__ == '__main__':
     #             './nohup_train_visloc_1234z3_group2_lpwb_ps_bs40_e5.out']
 
     config = Configuration()
-    config.log_path = args.log_path
     config.epochs = args.epochs
     config.batch_size = args.batch_size
     config.train_in_group = args.train_in_group
@@ -506,6 +496,6 @@ if __name__ == '__main__':
     config.loss_type = args.loss_type
     config.gpu_ids = args.gpu_ids
     config.label_smoothing = args.label_smoothing
-    conifg.checkpoint_start = args.checkpoint_start
+    config.checkpoint_start = args.checkpoint_start
 
     train_script(config)

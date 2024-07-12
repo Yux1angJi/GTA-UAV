@@ -78,6 +78,17 @@ class GroupInfoNCE(nn.Module):
         self.group_len = group_len
         self.device = device
         self.loss_type = loss_type
+        self.ce_loss = torch.nn.CrossEntropyLoss(label_smoothing=0.1)
+
+    def loss_contrastive_slice(self, similarity_matrix, G, N):
+        total_loss = 0.0
+        labels = torch.arange(G, dtype=torch.long, device=self.device)
+        for i in range(N):
+            for j in range(N):
+                similarity_tmp = similarity_matrix[i::N, j::N]
+                total_loss += self.ce_loss(similarity_tmp, labels)
+        total_loss /= N * N
+        return total_loss
 
     def loss_part_slice(self, similarity_matrix, G, N):
         total_loss = 0.0
@@ -192,7 +203,8 @@ class GroupInfoNCE(nn.Module):
                 loss += (self.loss_part_block(logits_per_image1, G, N) + self.loss_part_block(logits_per_image2, G, N))/2 
             elif loss_type == 'whole_block':
                 loss += (self.loss_whole_block(logits_per_image1, G, N) + self.loss_whole_block(logits_per_image2, G, N))/2 
-
+            elif loss_type == 'contrastive_slice':
+                loss += (self.loss_contrastive_slice(logits_per_image1, G, N) + self.loss_contrastive_slice(logits_per_image2, G, N))/2 
         # loss = (self.loss_part(logits_per_image1, G, N) + self.loss_part(logits_per_image2, G, N))/2 
         
         # loss += (self.loss_whole_block(logits_per_image1, G, N) + self.loss_whole_block(logits_per_image2, G, N))/2
