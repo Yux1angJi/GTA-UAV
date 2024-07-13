@@ -39,34 +39,34 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
                 query = query.to(train_config.device)
                 reference = reference.to(train_config.device)
                 weight = weight.to(train_config.device)
-
-                query_chunks = torch.chunk(query, num_chunks)
-                reference_chunks = torch.chunk(reference, num_chunks)
-                features1_all = []
-                features2_all = []
             
                 # # Forward pass
-                features1, features2 = model(query, reference)
+                loss = {}
 
-                if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
-                    if with_weight:
-                        loss = loss_function(features1, features2, model.module.logit_scale.exp(), weight)
-                    else:
-                        loss = loss_function(features1, features2, model.module.logit_scale.exp())
-                else:
-                    if with_weight:
-                        loss = loss_function(features1, features2, model.logit_scale.exp(), weight)
-                    else: 
-                        loss = loss_function(features1, features2, model.logit_scale.exp()) 
-                
                 if train_with_recon:
-                    features1_recon, features2_recon = model(query, reference, forward_features=True)
+                    features1, features1_recon, features2, features2_recon = model(query, reference, forward_features=True)
                     img1_recon = model.decode(features1_recon)
                     img2_recon = model.decode(features2_recon)
                     loss_recon1 = loss_recon(img1_recon, query)
                     loss_recon2 = loss_recon(img2_recon, reference)
-                    loss_recon = {"recon": recon_weight * (loss_recon1["recon"] + loss_recon2["recon"])}
-                    loss.update(loss_recon)
+                    loss_recon_value = {"recon": recon_weight * (loss_recon1["recon"] + loss_recon2["recon"])}
+                    loss.update(loss_recon_value)
+
+                else:
+                    features1, features2 = model(query, reference)
+
+                if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
+                    if with_weight:
+                        loss_sim = loss_function(features1, features2, model.module.logit_scale.exp(), weight)
+                    else:
+                        loss_sim = loss_function(features1, features2, model.module.logit_scale.exp())
+                else:
+                    if with_weight:
+                        loss_sim = loss_function(features1, features2, model.logit_scale.exp(), weight)
+                    else: 
+                        loss_sim = loss_function(features1, features2, model.logit_scale.exp()) 
+                
+                loss.update(loss_sim)
                 
                 loss_total = sum(loss.values())
                 losses.update(loss_total.item())

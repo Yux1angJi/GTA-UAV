@@ -71,19 +71,21 @@ class TimmModel(nn.Module):
 
         if img2 is not None:
             if forward_features:
-                image_features1 = self.model.forward_features(img1)
-                image_features2 = self.model.forward_features(img2)
+                x1, x1_feature = self.model.forward_with_feature(img1)
+                x2, x2_feature = self.model.forward_with_feature(img2)
+                return x1, x1_feature, x2, x2_feature
             else:
                 image_features1 = self.model(img1)     
                 image_features2 = self.model(img2)
-            return image_features1, image_features2            
+                return image_features1, image_features2            
               
         else:
             if forward_features:
-                image_features = self.model.forward_features(img1)
+                x1, x1_feature = self.model.forward_with_feature(img1)
+                return x1, x1_feature
             else:
                 image_features = self.model(img1)
-            return image_features
+                return image_features
     
     def decode(self, img_feature):
         x = self.decoder(img_feature)
