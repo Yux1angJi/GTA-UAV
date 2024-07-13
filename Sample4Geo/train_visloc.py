@@ -40,7 +40,7 @@ class Configuration:
 
     num_chunks: int = 1
 
-    ### GTA setting
+    share_weights: bool = True
     
     train_with_weight: bool = False
 
@@ -166,11 +166,13 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
 
     print("\nModel: {}".format(config.model))
+    print("Sharing weights? {}".format(config.share_weights))
 
     model = TimmModel(config.model,
-                          pretrained=True,
-                          img_size=config.img_size,
-                          train_with_recon=config.train_with_recon)
+                        pretrained=True,
+                        img_size=config.img_size,
+                        share_weights=config.share_weights,
+                        train_with_recon=config.train_with_recon)
                           
     data_config = model.get_config()
     print(data_config)
@@ -472,6 +474,8 @@ def parse_args():
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
+    parser.add_argument('--share_weights', type=bool, default=True, help='Train without sharing wieghts')
+
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
 
     parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
@@ -526,5 +530,6 @@ if __name__ == '__main__':
     config.gpu_ids = args.gpu_ids
     config.label_smoothing = args.label_smoothing
     config.checkpoint_start = args.checkpoint_start
+    config.share_weights = args.share_weights
 
     train_script(config)
