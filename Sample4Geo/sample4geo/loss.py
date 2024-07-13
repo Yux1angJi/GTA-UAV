@@ -68,7 +68,7 @@ class ContrastiveLoss(nn.Module):
         loss2 = self.loss_function(logits_per_image2, labels)
         loss = (loss1 + loss2) / 2
 
-        return loss
+        return {"contrastive": loss}
     
 
 class GroupInfoNCE(nn.Module):
@@ -192,27 +192,39 @@ class GroupInfoNCE(nn.Module):
         
         logits_per_image2 = logits_per_image1.T
 
-        loss = 0.0
+        loss = {}
 
         for loss_type in self.loss_type:
             if loss_type == 'part_slice':
-                loss += (self.loss_part_slice(logits_per_image1, G, N) + self.loss_part_slice(logits_per_image2, G, N))/2 
+                loss[loss_type] = (self.loss_part_slice(logits_per_image1, G, N) + self.loss_part_slice(logits_per_image2, G, N))/2 
             elif loss_type == 'whole_slice':
-                loss += (self.loss_whole_slice(logits_per_image1, G, N) + self.loss_whole_slice(logits_per_image2, G, N))/2 
+                loss[loss_type] = (self.loss_whole_slice(logits_per_image1, G, N) + self.loss_whole_slice(logits_per_image2, G, N))/2 
             elif loss_type == 'part_block':
-                loss += (self.loss_part_block(logits_per_image1, G, N) + self.loss_part_block(logits_per_image2, G, N))/2 
+                loss[loss_type] = (self.loss_part_block(logits_per_image1, G, N) + self.loss_part_block(logits_per_image2, G, N))/2 
             elif loss_type == 'whole_block':
-                loss += (self.loss_whole_block(logits_per_image1, G, N) + self.loss_whole_block(logits_per_image2, G, N))/2 
+                loss[loss_type] = (self.loss_whole_block(logits_per_image1, G, N) + self.loss_whole_block(logits_per_image2, G, N))/2 
             elif loss_type == 'contrastive_slice':
-                loss += (self.loss_contrastive_slice(logits_per_image1, G, N) + self.loss_contrastive_slice(logits_per_image2, G, N))/2 
+                loss[loss_type] = (self.loss_contrastive_slice(logits_per_image1, G, N) + self.loss_contrastive_slice(logits_per_image2, G, N))/2 
         # loss = (self.loss_part(logits_per_image1, G, N) + self.loss_part(logits_per_image2, G, N))/2 
         
         # loss += (self.loss_whole_block(logits_per_image1, G, N) + self.loss_whole_block(logits_per_image2, G, N))/2
         # loss /= 2
-        loss /= 1. * len(self.loss_type)
+        for k, v in loss.items():
+            loss[k] /= 1. * len(self.loss_type)
 
-        return loss  
-    
+        return loss
+
+
+class ReconstructionLoss(nn.Module):
+    def __init__(self, device='cuda' if torch.cuda.is_available() else 'cpu'):
+        super().__init__()
+        self.device = device
+        self.criterion = nn.MSELoss()
+
+    def forward(self, recon_img, ori_img):
+        x = self.criterion(recon_img, ori_img)
+        return {"recon": x}
+
 
 if __name__ == '__main__':
     loss = GroupInfoNCE(group_len=2, label_smoothing=0.00)

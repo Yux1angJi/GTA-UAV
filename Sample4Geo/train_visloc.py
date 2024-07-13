@@ -17,7 +17,7 @@ from sample4geo.dataset.mix_data import MixDatasetTrain
 from sample4geo.utils import setup_system, Logger
 from sample4geo.trainer import train, train_with_weight
 from sample4geo.evaluate.gta import evaluate
-from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE
+from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE, ReconstructionLoss
 from sample4geo.model import TimmModel
 
 
@@ -48,6 +48,9 @@ class Configuration:
     loss_type = ["whole_slice", "part_slice"]
 
     train_with_mix_data: bool = False
+
+    train_with_recon: bool = False
+    recon_weight: float = 0.1
     
     # Training 
     mixed_precision: bool = True
@@ -128,9 +131,12 @@ def train_script(config):
         elif loss_type == 'contrastive_slice':
             loss_type_str += 'cs'
     
-    log_path = f"nohup_train_visloc_1234z3_group{config.group_len}_l{loss_type_str}_bs{config.batch_size}_e{config.epochs}.out"
+    smooth_str = "{:.1f}".format(config.label_smoothing)
+    
+    log_path = f"nohup_train_visloc_1234z3_group{config.group_len}_l{loss_type_str}_s{smooth_str}_bs{config.batch_size}_e{config.epochs}.out"
     f = open(log_path, 'w')
-    sys.stdout = f
+    if config.log_to_file:
+        sys.stdout = f
 
     save_time = "{}".format(time.strftime("%m%d%H%M%S"))
     model_path = "{}/{}/{}".format(config.model_path,
@@ -160,7 +166,8 @@ def train_script(config):
 
     model = TimmModel(config.model,
                           pretrained=True,
-                          img_size=config.img_size)
+                          img_size=config.img_size,
+                          train_with_recon=config.train_with_recon)
                           
     data_config = model.get_config()
     print(data_config)
@@ -284,6 +291,10 @@ def train_script(config):
             loss_function=loss_fn,
             device=config.device,
         )
+    if config.train_with_recon:
+        loss_recon = ReconstructionLoss()
+    else:
+        loss_recon = None
 
     if config.mixed_precision:
         scaler = GradScaler(init_scale=2.**10)
@@ -391,6 +402,9 @@ def train_script(config):
                            scheduler=scheduler,
                            scaler=scaler,
                            num_chunks=config.num_chunks,
+                           train_with_recon=config.train_with_recon,
+                           loss_recon=loss_recon,
+                           recon_weight=config.recon_weight,
                            with_weight=config.train_with_weight)
         
         print("Epoch: {}, Train Loss = {:.3f}, Lr = {:.6f}".format(epoch,
@@ -451,6 +465,8 @@ def train_script(config):
 def parse_args():
     parser = argparse.ArgumentParser(description="Training script for visloc.")
 
+    parser.add_argument('--log_to_file', action='store_true', help='Log saving to file')
+
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
 
     parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
@@ -458,6 +474,10 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=40, help='Batch size')
 
     parser.add_argument('--checkpoint_start', type=str, default=None, help='Training from checkpoint')
+
+    parser.add_argument('--train_with_recon', action='store_true', help='Train with reconstruction')
+
+    parser.add_argument('--recon_weight', type=float, default=0.1, help='Loss weight for reconstruction')
 
     parser.add_argument('--train_in_group', action='store_true', help='Train in group')
     
@@ -488,9 +508,12 @@ if __name__ == '__main__':
     #             './nohup_train_visloc_1234z3_group2_lpwb_ps_bs40_e5.out']
 
     config = Configuration()
+    config.log_to_file = args.log_to_file
     config.epochs = args.epochs
     config.batch_size = args.batch_size
     config.train_in_group = args.train_in_group
+    config.train_with_recon = args.train_with_recon
+    config.recon_weight = args.recon_weight
     config.group_len = args.group_len
     config.train_with_mix_data = args.train_with_mix_data
     config.loss_type = args.loss_type

@@ -6,7 +6,7 @@ from torch.cuda.amp import autocast
 import torch.nn.functional as F
 
 
-def train_with_weight(train_config, model, dataloader, loss_function, optimizer, scheduler=None, scaler=None, num_chunks=1, with_weight=False):
+def train_with_weight(train_config, model, dataloader, loss_function, optimizer, scheduler=None, scaler=None, num_chunks=1, recon_weight=0.1, loss_recon=None, train_with_recon=False, with_weight=False):
 
     # set model train mode
     model.train()
@@ -44,17 +44,9 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
                 reference_chunks = torch.chunk(reference, num_chunks)
                 features1_all = []
                 features2_all = []
-
-                for (query, reference) in zip(query_chunks, reference_chunks):
-                    features1, features2 = model(query, reference)
-                    features1_all.append(features1)
-                    features2_all.append(features2)
-                    # print(features1.shape, features2.shape)
-                features1 = torch.cat(features1_all, dim=0)
-                features2 = torch.cat(features2_all, dim=0)
             
                 # # Forward pass
-                # features1, features2 = model(query, reference)
+                features1, features2 = model(query, reference)
 
                 if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
                     if with_weight:
@@ -66,9 +58,20 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
                         loss = loss_function(features1, features2, model.logit_scale.exp(), weight)
                     else: 
                         loss = loss_function(features1, features2, model.logit_scale.exp()) 
-                losses.update(loss.item())
+                
+                if train_with_recon:
+                    features1_recon, features2_recon = model(query, reference, forward_features=True)
+                    img1_recon = model.decode(features1_recon)
+                    img2_recon = model.decode(features2_recon)
+                    loss_recon1 = loss_recon(img1_recon, query)
+                    loss_recon2 = loss_recon(img2_recon, reference)
+                    loss_recon = {"recon": recon_weight * (loss_recon1["recon"] + loss_recon2["recon"])}
+                    loss.update(loss_recon)
+                
+                loss_total = sum(loss.values())
+                losses.update(loss_total.item())
             
-            scaler.scale(loss).backward()
+            scaler.scale(loss_total).backward()
             
             # Gradient clipping 
             if train_config.clip_grad:
@@ -116,13 +119,13 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
             if train_config.scheduler == "polynomial" or train_config.scheduler == "cosine" or train_config.scheduler ==  "constant":
                 scheduler.step()
         
-        
-        
         if train_config.verbose:
             
-            monitor = {"loss": "{:.4f}".format(loss.item()),
+            monitor = {"loss": "{:.4f}".format(loss_total.item()),
                        "loss_avg": "{:.4f}".format(losses.avg),
                        "lr" : "{:.6f}".format(optimizer.param_groups[0]['lr'])}
+            loss = {k: "{:.4f}".format(v) for k,v in loss.items()}
+            monitor.update(loss)
             
             bar.set_postfix(ordered_dict=monitor)
         
@@ -132,11 +135,15 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
             elapsed_time = end_time - start_training_time
             eta = (elapsed_time / step) * (total_step - step)
 
-            loss = "{:.4f}".format(loss.item())
+            loss_value = "{:.4f}".format(loss_total.item())
             loss_avg = "{:.4f}".format(losses.avg),
             lr = "{:.6f}".format(optimizer.param_groups[0]['lr'])
 
-            print(f"Iteration {step}/{total_step} took {iter_time:.4f} s, ETA: {eta:.2f} s, loss: {loss}, loss_avg: {loss_avg}, lr: {lr}", flush=True)
+            print_log = f"Iteration {step}/{total_step} took {iter_time:.4f} s, ETA: {eta:.2f} s, loss: {loss_value}, loss_avg: {loss_avg}, lr: {lr}, "
+            for k, v in loss.items():
+                print_log += "{}: {:.4f}, ".format(k, v)
+
+            print(print_log, flush=True)
         
         step += 1
 
