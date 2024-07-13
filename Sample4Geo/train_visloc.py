@@ -30,6 +30,8 @@ def parse_tuple(s):
 
 @dataclass
 class Configuration:    
+    log_path: str = None
+
     # Model
     model: str = 'convnext_base.fb_in22k_ft_in1k_384'
     
@@ -109,9 +111,9 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
-    train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/train_pair_meta.pkl'
-    test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/test_pair_meta.pkl'
-    sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
+    train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z31/train_pair_meta.pkl'
+    test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z31/test_pair_meta.pkl'
+    sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z31/all_satellite'
 
     extra_train_pairs_meta_file: str = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
   
@@ -133,8 +135,9 @@ def train_script(config):
     
     smooth_str = "{:.1f}".format(config.label_smoothing)
     
-    log_path = f"nohup_train_visloc_1234z3_group{config.group_len}_l{loss_type_str}_s{smooth_str}_bs{config.batch_size}_e{config.epochs}.out"
-    f = open(log_path, 'w')
+    if config.log_path == None:
+        config.log_path = f"nohup_train_visloc_1234z31_group{config.group_len}_l{loss_type_str}_s{smooth_str}_bs{config.batch_size}_e{config.epochs}.out"
+    f = open(config.log_path, 'w')
     if config.log_to_file:
         sys.stdout = f
 
@@ -467,6 +470,8 @@ def parse_args():
 
     parser.add_argument('--log_to_file', action='store_true', help='Log saving to file')
 
+    parser.add_argument('--log_path', type=str, default=None, help='Log file path')
+
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
 
     parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
@@ -509,6 +514,7 @@ if __name__ == '__main__':
 
     config = Configuration()
     config.log_to_file = args.log_to_file
+    config.log_path = args.log_path
     config.epochs = args.epochs
     config.batch_size = args.batch_size
     config.train_in_group = args.train_in_group
