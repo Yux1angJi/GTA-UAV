@@ -45,7 +45,7 @@ class TimmModel(nn.Module):
         super(TimmModel, self).__init__()
         
         self.img_size = img_size
-        if not share_weights:
+        if share_weights:
             if "vit" in model_name:
                 # automatically change interpolate pos-encoding to img_size
                 self.model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
