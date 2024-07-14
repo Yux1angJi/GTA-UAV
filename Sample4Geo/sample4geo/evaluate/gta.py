@@ -130,7 +130,7 @@ def evaluate(config,
         string.append('Recall@{}: {:.4f}'.format(i, cmc[i-1]*100))
         
     string.append('Recall@top1: {:.4f}'.format(cmc[top1]*100))
-    string.append('AP: {:.4f}'.format(mAP))             
+    string.append('AP: {:.4f}'.format(mAP*100))          
         
     print(' - '.join(string)) 
     

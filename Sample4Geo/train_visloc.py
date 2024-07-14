@@ -38,8 +38,6 @@ class Configuration:
     # Override model image size
     img_size: int = 384
 
-    num_chunks: int = 1
-
     share_weights: bool = True
     
     train_with_weight: bool = False
@@ -111,9 +109,9 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
-    train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/train_pair_meta.pkl'
-    test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/test_pair_meta.pkl'
-    sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
+    train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z31/train_pair_meta.pkl'
+    test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z31/test_pair_meta.pkl'
+    sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z31/all_satellite'
 
     extra_train_pairs_meta_file: str = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
   
@@ -141,7 +139,7 @@ def train_script(config):
         share_str = 'wos'
 
     if config.log_path == None:
-        config.log_path = f"nohup_train_visloc_1234z3_group{config.group_len}_{share_str}_l{loss_type_str}_s{smooth_str}_bs{config.batch_size}_e{config.epochs}.out"
+        config.log_path = f"nohup_train_visloc_1234z31_group{config.group_len}_{share_str}_l{loss_type_str}_s{smooth_str}_bs{config.batch_size}_e{config.epochs}_g2.out"
     f = open(config.log_path, 'w')
     if config.log_to_file:
         sys.stdout = f
@@ -287,7 +285,7 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
 
     if config.train_in_group:
-        loss_function = GroupInfoNCE(
+        loss_function_group = GroupInfoNCE(
             group_len=config.group_len,
             label_smoothing=config.label_smoothing,
             loss_type=config.loss_type,
@@ -295,12 +293,12 @@ def train_script(config):
         )
         print("Label Smoothing", config.label_smoothing)
         print("Loss type", config.loss_type)
-    else:
-        loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
-        loss_function = ContrastiveLoss(
-            loss_function=loss_fn,
-            device=config.device,
-        )
+
+    loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
+    loss_function_normal = ContrastiveLoss(
+        loss_function=loss_fn,
+        device=config.device,
+    )
     if config.train_with_recon:
         loss_recon = ReconstructionLoss()
     else:
@@ -353,14 +351,14 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     # Shuffle                                                                     #
     #-----------------------------------------------------------------------------#
-    if config.train_with_mix_data:  
-        train_dataset.shuffle()
-        train_dataset_extra.shuffle()
-        train_dataloader.dataset.update([train_dataset.samples, train_dataset_extra.samples])          
-    elif config.train_in_group:
-        train_dataloader.dataset.shuffle_group()
-    else:
-        train_dataloader.dataset.shuffle()
+    # if config.train_with_mix_data:  
+    #     train_dataset.shuffle()
+    #     train_dataset_extra.shuffle()
+    #     train_dataloader.dataset.update([train_dataset.samples, train_dataset_extra.samples])          
+    # elif config.train_in_group:
+    #     train_dataloader.dataset.shuffle_group()
+    # else:
+    #     train_dataloader.dataset.shuffle()
 
     #-----------------------------------------------------------------------------#
     # Scheduler                                                                   #
@@ -404,6 +402,22 @@ def train_script(config):
     for epoch in range(1, config.epochs+1):
         
         print("\n{}[Epoch: {}]{}".format(30*"-", epoch, 30*"-"))
+
+        if epoch > 2:
+            train_in_group = True
+            loss_function = loss_function_group
+        else:
+            train_in_group = False
+            loss_function = loss_function_normal
+
+        if config.train_with_mix_data:  
+            train_dataset.shuffle()
+            train_dataset_extra.shuffle()
+            train_dataloader.dataset.update([train_dataset.samples, train_dataset_extra.samples])          
+        elif train_in_group:
+            train_dataloader.dataset.shuffle_group()
+        else:
+            train_dataloader.dataset.shuffle()
         
         train_loss = train_with_weight(config,
                            model,
@@ -412,7 +426,6 @@ def train_script(config):
                            optimizer=optimizer,
                            scheduler=scheduler,
                            scaler=scaler,
-                           num_chunks=config.num_chunks,
                            train_with_recon=config.train_with_recon,
                            loss_recon=loss_recon,
                            recon_weight=config.recon_weight,
@@ -446,15 +459,7 @@ def train_script(config):
                     torch.save(model.module.state_dict(), '{}/weights_e{}_{:.4f}.pth'.format(model_path, epoch, r1_test))
                 else:
                     torch.save(model.state_dict(), '{}/weights_e{}_{:.4f}.pth'.format(model_path, epoch, r1_test))
-                
-        if config.train_with_mix_data:  
-            train_dataset.shuffle()
-            train_dataset_extra.shuffle()
-            train_dataloader.dataset.update([train_dataset.samples, train_dataset_extra.samples])          
-        elif config.train_in_group:
-            train_dataloader.dataset.shuffle_group()
-        else:
-            train_dataloader.dataset.shuffle()
+
                 
     if torch.cuda.device_count() > 1 and len(config.gpu_ids) > 1:
         torch.save(model.module.state_dict(), '{}/weights_end.pth'.format(model_path))

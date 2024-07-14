@@ -6,7 +6,7 @@ from torch.cuda.amp import autocast
 import torch.nn.functional as F
 
 
-def train_with_weight(train_config, model, dataloader, loss_function, optimizer, scheduler=None, scaler=None, num_chunks=1, recon_weight=0.1, loss_recon=None, train_with_recon=False, with_weight=False):
+def train_with_weight(train_config, model, dataloader, loss_function, optimizer, scheduler=None, scaler=None, recon_weight=0.1, loss_recon=None, train_with_recon=False, with_weight=False):
 
     # set model train mode
     model.train()
