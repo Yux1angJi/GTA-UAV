@@ -29,7 +29,7 @@ def predict(train_config, model, dataloader):
             with autocast():
             
                 img = img.to(train_config.device)
-                img_feature = model(img)
+                img_feature = model(img1=img)
             
                 # normalize is calculated in fp32
                 if train_config.normalize_features:
@@ -67,7 +67,7 @@ def evaluate(config,
         for gallery_batch in gallery_loader:
             with autocast():
                 gallery_batch = gallery_batch.to(device=config.device)
-                gallery_features_batch = model(gallery_batch)
+                gallery_features_batch = model(img2=gallery_batch)
                 if config.normalize_features:
                     gallery_features_batch = F.normalize(gallery_features_batch, dim=-1)
 

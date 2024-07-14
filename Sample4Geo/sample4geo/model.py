@@ -43,7 +43,7 @@ class TimmModel(nn.Module):
                  train_with_recon=False):
                  
         super(TimmModel, self).__init__()
-        
+        self.share_weights = share_weights
         self.img_size = img_size
         if share_weights:
             if "vit" in model_name:
@@ -51,15 +51,29 @@ class TimmModel(nn.Module):
                 self.model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
             else:
                 self.model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
-        
-        self.logit_scale = torch.nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+        else:
+            if "vit" in model_name:
+                self.model1 = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size)
+                self.model2 = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
+            else:
+                self.model1 = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
+                self.model2 = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
 
         if train_with_recon:
-            self.decoder = SimpleDecoder()
+            if share_weights:
+                self.decoder = SimpleDecoder()
+            else:
+                self.decoder1 = SimpleDecoder()
+                self.decoder2 = SimpleDecoder()
+        
+        self.logit_scale = torch.nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
         
 
     def get_config(self,):
-        data_config = timm.data.resolve_model_data_config(self.model)
+        if self.share_weights:
+            data_config = timm.data.resolve_model_data_config(self.model)
+        else:
+            data_config = timm.data.resolve_model_data_config(self.model1)
         return data_config
     
     
@@ -67,30 +81,65 @@ class TimmModel(nn.Module):
         self.model.set_grad_checkpointing(enable)
 
 
-    def forward(self, img1, img2=None, forward_features=False):
-        n = img1.shape[0]
+    def forward(self, img1=None, img2=None, forward_features=False):
 
-        if img2 is not None:
-            if forward_features:
-                x1, x1_feature = self.model.forward_with_feature(img1)
-                x2, x2_feature = self.model.forward_with_feature(img2)
-                return x1, x1_feature, x2, x2_feature
+        if self.share_weights:
+            if img1 is not None and img2 is not None:
+                if forward_features:
+                    x1, x1_feature = self.model.forward_with_feature(img1)
+                    x2, x2_feature = self.model.forward_with_feature(img2)
+                    return x1, x1_feature, x2, x2_feature
+                else:
+                    image_features1 = self.model(img1)     
+                    image_features2 = self.model(img2)
+                    return image_features1, image_features2            
+            elif img1 is not None:
+                if forward_features:
+                    x1, x1_feature = self.model.forward_with_feature(img1)
+                    return x1, x1_feature
+                else:
+                    image_features = self.model(img1)
+                    return image_features
             else:
-                image_features1 = self.model(img1)     
-                image_features2 = self.model(img2)
-                return image_features1, image_features2            
-              
+                if forward_features:
+                    x2, x2_feature = self.model.forward_with_feature(img1)
+                    return x2, x2_feature
+                else:
+                    image_features = self.model(img2)
+                    return image_features
         else:
-            if forward_features:
-                x1, x1_feature = self.model.forward_with_feature(img1)
-                return x1, x1_feature
+            if img1 is not None and img2 is not None:
+                if forward_features:
+                    x1, x1_feature = self.model1.forward_with_feature(img1)
+                    x2, x2_feature = self.model2.forward_with_feature(img2)
+                    return x1, x1_feature, x2, x2_feature
+                else:
+                    image_features1 = self.model1(img1)     
+                    image_features2 = self.model2(img2)
+                    return image_features1, image_features2            
+            elif img1 is not None:
+                if forward_features:
+                    x1, x1_feature = self.model1.forward_with_feature(img1)
+                    return x1, x1_feature
+                else:
+                    image_features = self.model1(img1)
+                    return image_features
             else:
-                image_features = self.model(img1)
-                return image_features
+                if forward_features:
+                    x2, x2_feature = self.model2.forward_with_feature(img1)
+                    return x2, x2_feature
+                else:
+                    image_features = self.model2(img2)
+                    return image_features
     
-    def decode(self, img_feature):
-        x = self.decoder(img_feature)
-        return x
+    def decode(self, img_feature1, img_feature2):
+        if self.share_weights:
+            x1 = self.decoder(img_feature1)
+            x2 = self.decoder(img_feature2)
+        else:
+            x1 = self.decoder1(img_feature1)
+            x2 = self.decoder2(img_feature2)
+        return x1, x2
 
 
 if __name__ == '__main__':

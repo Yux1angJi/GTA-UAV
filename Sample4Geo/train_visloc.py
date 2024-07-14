@@ -135,8 +135,13 @@ def train_script(config):
     
     smooth_str = "{:.1f}".format(config.label_smoothing)
     
+    if config.share_weights:
+        share_str = 'ws'
+    else:
+        share_str = 'wos'
+
     if config.log_path == None:
-        config.log_path = f"nohup_train_visloc_1234z3_group{config.group_len}_l{loss_type_str}_s{smooth_str}_bs{config.batch_size}_e{config.epochs}.out"
+        config.log_path = f"nohup_train_visloc_1234z3_group{config.group_len}_{share_str}_l{loss_type_str}_s{smooth_str}_bs{config.batch_size}_e{config.epochs}.out"
     f = open(config.log_path, 'w')
     if config.log_to_file:
         sys.stdout = f
@@ -340,6 +345,7 @@ def train_script(config):
                            query_list=query_img_list,
                            gallery_list=gallery_img_list,
                            pairs_dict=pairs_drone2sate_dict,
+                           share_weights=config.share_weights,
                            ranks_list=[1, 5, 10],
                            step_size=1000,
                            cleanup=True)
@@ -474,7 +480,7 @@ def parse_args():
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
-    parser.add_argument('--share_weights', type=bool, default=True, help='Train without sharing wieghts')
+    parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
 
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
 
@@ -530,6 +536,6 @@ if __name__ == '__main__':
     config.gpu_ids = args.gpu_ids
     config.label_smoothing = args.label_smoothing
     config.checkpoint_start = args.checkpoint_start
-    config.share_weights = args.share_weights
+    config.share_weights = not(args.no_share_weights)
 
     train_script(config)
