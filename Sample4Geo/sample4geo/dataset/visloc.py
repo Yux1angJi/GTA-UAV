@@ -49,8 +49,6 @@ def order_points(points):
 
 
 def calc_intersect_area(poly1, poly2):
-    poly2 = order_points(poly2)
-    poly2 = Polygon(poly2)
     # 计算交集
     intersection = poly1.intersection(poly2)
     return intersection.area
@@ -240,11 +238,18 @@ def tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_
                 ((cur_tile_x + 1) * TILE_SIZE, (cur_tile_y    ) * TILE_SIZE), 
                 ((cur_tile_x    ) * TILE_SIZE, (cur_tile_y + 1) * TILE_SIZE), 
                 ((cur_tile_x + 1) * TILE_SIZE, (cur_tile_y + 1) * TILE_SIZE)]
-    intersect_area = calc_intersect_area(poly_p, tile_tmp)
-    max_rate = max(intersect_area/tile_area, intersect_area/poly_p_area)
+    tile_tmp_order = order_points(tile_tmp)
+    poly_tile = Polygon(tile_tmp_order)
+    poly_tile_area = poly_tile.area
+    intersect_area = calc_intersect_area(poly_p, poly_tile)
+    # max_rate = max(intersect_area/tile_area, intersect_area/poly_p_area)
+    iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
 
-    tile_expand_list = [f'{str_i}_{zoom_level}_{cur_tile_x:03}_{cur_tile_y:03}.png']
-    tile_expand_weight_list = [max_rate]
+    tile_expand_list = []
+    tile_expand_weight_list = []
+    if iou > 0.4:
+        tile_expand_list.append(f'{str_i}_{zoom_level}_{cur_tile_x:03}_{cur_tile_y:03}.png')
+        tile_expand_weight_list.append(iou)
 
     for tile_x_i in range(tile_l, tile_r + 1):
         for tile_y_i in range(tile_u, tile_d + 1):
@@ -254,15 +259,19 @@ def tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_
                         ((tile_x_i + 1) * TILE_SIZE, (tile_y_i    ) * TILE_SIZE), 
                         ((tile_x_i    ) * TILE_SIZE, (tile_y_i + 1) * TILE_SIZE), 
                         ((tile_x_i + 1) * TILE_SIZE, (tile_y_i + 1) * TILE_SIZE)]
-            intersect_area = calc_intersect_area(poly_p, tile_tmp)
+            tile_tmp_order = order_points(tile_tmp)
+            poly_tile = Polygon(tile_tmp_order)
+            poly_tile_area = poly_tile.area
+            intersect_area = calc_intersect_area(poly_p, poly_tile)
             if debug:
                 print('zoom=', zoom_level, cur_tile_x, cur_tile_y)
                 print(tile_x_i, tile_y_i)
                 print(intersect_area, tile_area, poly_p_area, intersect_area/tile_area, intersect_area/poly_p_area)
-            max_rate = max(intersect_area/tile_area, intersect_area/poly_p_area)
-            if max_rate > 0.4:
+            # max_rate = max(intersect_area/tile_area, intersect_area/poly_p_area)
+            iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
+            if iou > 0.4:
                 tile_expand_list.append(f'{str_i}_{zoom_level}_{tile_x_i:03}_{tile_y_i:03}.png')
-                tile_expand_weight_list.append(max_rate)
+                tile_expand_weight_list.append(iou)
     return tile_expand_list, tile_expand_weight_list
 
 
@@ -281,7 +290,7 @@ def process_per_image(drone_meta_data):
     zoom_list = [int(x) for x in zoom_list]
     zoom_list.sort()
     zoom_max = zoom_list[-1]
-    zoom_list = zoom_list[-3:]
+    zoom_list = zoom_list[-5:]
 
     cur_img_x, cur_img_y = geo_to_image_coords(lat, lon, sate_lt_lat, sate_lt_lon, sate_rb_lat, sate_rb_lon, sate_pix_h, sate_pix_w)
     p_img_xy = [
@@ -345,6 +354,9 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
         
         str_i = pairs_drone2sate['str_i']
         pair_sate_img_list = pairs_drone2sate["pair_sate_img_list"]
+        if len(pair_sate_img_list) == 0:
+            continue
+
         drone_img = pairs_drone2sate["drone_img"]
         drone_img_dir = pairs_drone2sate["drone_img_dir"]
         drone_img_name = drone_img.replace('.JPG', '')
@@ -442,20 +454,21 @@ def process_visloc_data(root, save_root):
                     sate_pix_h,
                     sate_pix_w,
                 )
-                if is_point_in_rectangle(
-                    cur_lat, cur_lon, 
-                    sate_meta_data[str_i]["rect_1_LT_lat"],
-                    sate_meta_data[str_i]["rect_1_LT_lon"],
-                    sate_meta_data[str_i]["rect_1_RB_lat"],
-                    sate_meta_data[str_i]["rect_1_RB_lon"],
-                ) or is_point_in_rectangle(
-                    cur_lat, cur_lon, 
-                    sate_meta_data[str_i]["rect_2_LT_lat"],
-                    sate_meta_data[str_i]["rect_2_LT_lon"],
-                    sate_meta_data[str_i]["rect_2_RB_lat"],
-                    sate_meta_data[str_i]["rect_2_RB_lon"],
-                ):
-                    drone_meta_data_list.append(tmp_meta_data)
+
+                # if is_point_in_rectangle(
+                #     cur_lat, cur_lon, 
+                #     sate_meta_data[str_i]["rect_1_LT_lat"],
+                #     sate_meta_data[str_i]["rect_1_LT_lon"],
+                #     sate_meta_data[str_i]["rect_1_RB_lat"],
+                #     sate_meta_data[str_i]["rect_1_RB_lon"],
+                # ) or is_point_in_rectangle(
+                #     cur_lat, cur_lon, 
+                #     sate_meta_data[str_i]["rect_2_LT_lat"],
+                #     sate_meta_data[str_i]["rect_2_LT_lon"],
+                #     sate_meta_data[str_i]["rect_2_RB_lat"],
+                #     sate_meta_data[str_i]["rect_2_RB_lon"],
+                # ):
+                drone_meta_data_list.append(tmp_meta_data)
 
     random.shuffle(drone_meta_data_list)
     train_num = len(drone_meta_data_list) * 4 // 5
@@ -937,7 +950,7 @@ def get_transforms(img_size,
 
 if __name__ == '__main__':
     root = '/home/xmuairmud/data/UAV_VisLoc_dataset'
-    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3'
+    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_all_iou4'
     process_visloc_data(root, save_root)
 
     # tile_satellite()
