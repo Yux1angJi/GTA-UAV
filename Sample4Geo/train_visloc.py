@@ -109,9 +109,9 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
-    train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z31/train_pair_meta.pkl'
-    test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z31/test_pair_meta.pkl'
-    sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z31/all_satellite'
+    train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou3/train_pair_meta.pkl'
+    test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou3/test_pair_meta.pkl'
+    sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou3/all_satellite'
 
     extra_train_pairs_meta_file: str = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
   
@@ -403,7 +403,7 @@ def train_script(config):
         
         print("\n{}[Epoch: {}]{}".format(30*"-", epoch, 30*"-"))
 
-        if epoch > 2:
+        if epoch > 2 and config.train_in_group:
             train_in_group = True
             loss_function = loss_function_group
         else:

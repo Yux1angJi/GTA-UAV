@@ -30,8 +30,6 @@ def order_points(points):
 
 
 def calc_intersect_area(poly1, poly2):
-    poly2 = order_points(poly2)
-    poly2 = Polygon(poly2)
     # 计算交集
     intersection = poly1.intersection(poly2)
     return intersection.area
@@ -72,12 +70,17 @@ def tile_expand(tile_xy_list, p_xy_list, debug=False):
                     ((tile_x + 1) * tile_length, (tile_y    ) * tile_length), 
                     ((tile_x    ) * tile_length, (tile_y + 1) * tile_length), 
                     ((tile_x + 1) * tile_length, (tile_y + 1) * tile_length)]
-        intersect_area = calc_intersect_area(poly_p, tile_tmp)
-        max_rate = max(intersect_area / tile_size, intersect_area / poly_p_area)
+        tile_tmp_order = order_points(tile_tmp)
+        poly_tile = Polygon(tile_tmp_order)
+        poly_tile_area = poly_tile.area
+        intersect_area = calc_intersect_area(poly_p, poly_tile)
+        # max_rate = max(intersect_area / tile_size, intersect_area / poly_p_area)
+        iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
 
-        tile_expand_list.append((tile_x, tile_y, zoom_level, max_rate))
+        if iou > 0.3:
+            tile_expand_list.append((tile_x, tile_y, zoom_level, iou))
         if debug:
-            print(tile_x, tile_y, max_rate)
+            print(tile_x, tile_y, iou)
 
         tile_l = max(0, tile_x - 5)
         tile_r = min(tile_x + 5, tile_max_num)
@@ -110,11 +113,19 @@ def tile_expand(tile_xy_list, p_xy_list, debug=False):
                             ((tile_x_i + 1) * tile_length, (tile_y_i    ) * tile_length), 
                             ((tile_x_i    ) * tile_length, (tile_y_i + 1) * tile_length), 
                             ((tile_x_i + 1) * tile_length, (tile_y_i + 1) * tile_length)]
-                intersect_area = calc_intersect_area(poly_p, tile_tmp)
-                max_rate = max(intersect_area / tile_size, intersect_area / poly_p_area)
-                if max_rate > 0.4:
-                    # print('jyxjyx', intersect_area / tile_size, intersect_area / poly_p_area)
-                    tile_expand_list.append((tile_x_i, tile_y_i, zoom_level, max_rate))
+                tile_tmp_order = order_points(tile_tmp)
+                poly_tile = Polygon(tile_tmp_order)
+                poly_tile_area = poly_tile.area
+                intersect_area = calc_intersect_area(poly_p, poly_tile)
+
+                # max_rate = max(intersect_area / tile_size, intersect_area / poly_p_area)
+                # if max_rate > 0.4:
+                #     # print('jyxjyx', intersect_area / tile_size, intersect_area / poly_p_area)
+                #     tile_expand_list.append((tile_x_i, tile_y_i, zoom_level, max_rate))
+                iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
+                if iou > 0.3:
+                    tile_expand_list.append((tile_x_i, tile_y_i, zoom_level, iou))
+
                 # if debug:
                     # print('enumerate')
                     # print(tile_x_i, tile_y_i, intersect_area, tile_size, intersect_area / tile_size, poly_p_area, intersect_area/poly_p_area)
@@ -156,6 +167,9 @@ def process_per_drone_image(file_data):
     # if not debug:  
     tile_expand_list = tile_expand(tile_xy_list, p_xy_sate_list, debug)
 
+    if len(tile_expand_list) == 0:
+        return None
+
     # save_drone_dir = os.path.join(save_root, 'drone', ids)
     # save_sate_dir = os.path.join(save_root, 'satellite', ids)
 
@@ -193,7 +207,11 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
     os.makedirs(drone_save_dir, exist_ok=True)
     os.makedirs(sate_save_dir, exist_ok=True)
 
+    pairs_sate2drone_save = []
     for pairs_drone2sate in pairs_drone2sate_list:
+        if pairs_drone2sate == None:
+            continue
+        pairs_sate2drone_save.append(pairs_drone2sate)
         h = pairs_drone2sate["h"]
         pair_sate_img_list = pairs_drone2sate["pair_sate_img_list"]
         drone_img = pairs_drone2sate["drone_img"]
@@ -223,7 +241,7 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
 
     with open(pkl_save_path, 'wb') as f:
         pickle.dump({
-            "pairs_drone2sate_list": pairs_drone2sate_list,
+            "pairs_drone2sate_list": pairs_sate2drone_save,
             "pairs_sate2drone_dict": pairs_sate2drone_dict,
             "pairs_drone2sate_dict": pairs_drone2sate_dict,
             "pairs_match_set": pairs_match_set,
@@ -253,6 +271,7 @@ def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7
     start_x = -1702
     start_y = -2587.6817
 
+    processed_data = []
     processed_data_train = []
     processed_data_test = []
 
@@ -269,17 +288,19 @@ def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7
             file_data_list.extend([(img_file, dir_img, dir_meta, dir_satellite, h, step, start_x, start_y, root, save_root, zoom_list)for img_file in files])
 
     random.shuffle(file_data_list)
-    data_num = len(file_data_list)
-    file_data_list_train = file_data_list[: data_num//5*4]
-    file_data_list_test = file_data_list[data_num//5*4: ]
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        for result in tqdm(executor.map(process_per_drone_image, file_data_list_train), total=len(file_data_list_train)):
-            processed_data_train.append(result)
+        for result in tqdm(executor.map(process_per_drone_image, file_data_list), total=len(file_data_list)):
+            processed_data.append(result)
+    
+    processed_data_wonone = []
+    for result in processed_data:
+        if result is not None:
+            processed_data_wonone.append(result)
 
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        for result in tqdm(executor.map(process_per_drone_image, file_data_list_test), total=len(file_data_list_test)):
-            processed_data_test.append(result)
+    processed_data_num = len(processed_data_wonone)
+    processed_data_train = processed_data_wonone[:processed_data_num // 5 * 4]
+    processed_data_test = processed_data_wonone[processed_data_num // 5 * 4: ]
     
     train_pkl_save_path = os.path.join(save_root, 'train_pair_meta.pkl')
     train_data_save_dir = os.path.join(save_root, 'train')
@@ -620,8 +641,8 @@ def move_file():
 
 if __name__ == "__main__":
     root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h56_z56'
-    process_gta_data(root, save_root, h_list=[500, 600], zoom_list=[5, 6])
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_iou3'
+    process_gta_data(root, save_root, h_list=[200, 300, 400, 500, 600], zoom_list=[3, 4, 5, 6, 7])
 
     # src_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
     # dst_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456/all_satellite'

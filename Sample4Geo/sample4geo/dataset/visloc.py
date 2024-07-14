@@ -27,7 +27,7 @@ Image.MAX_IMAGE_PIXELS = None
 FOV_V = 48.44
 FOV_H = 33.48
 
-TRAIN_LIST = [1,2,3,4]
+TRAIN_LIST = [1,2,3,4,5,6,7,8]
 TEST_LIST = []
 # OK_LIST = [1]
 
@@ -71,7 +71,7 @@ def process_tile(args):
 def tile_satellite():
     root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset'
     
-    for i in range(5, 9):
+    for i in range(10, 12):
         if i == 9:
             continue
         file_dir = os.path.join(root_dir, f'{i:02}')
@@ -247,7 +247,7 @@ def tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_
 
     tile_expand_list = []
     tile_expand_weight_list = []
-    if iou > 0.4:
+    if iou > 0.3:
         tile_expand_list.append(f'{str_i}_{zoom_level}_{cur_tile_x:03}_{cur_tile_y:03}.png')
         tile_expand_weight_list.append(iou)
 
@@ -269,7 +269,7 @@ def tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_
                 print(intersect_area, tile_area, poly_p_area, intersect_area/tile_area, intersect_area/poly_p_area)
             # max_rate = max(intersect_area/tile_area, intersect_area/poly_p_area)
             iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
-            if iou > 0.4:
+            if iou > 0.3:
                 tile_expand_list.append(f'{str_i}_{zoom_level}_{tile_x_i:03}_{tile_y_i:03}.png')
                 tile_expand_weight_list.append(iou)
     return tile_expand_list, tile_expand_weight_list
@@ -350,6 +350,8 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
     os.makedirs(drone_save_dir, exist_ok=True)
     os.makedirs(sate_save_dir, exist_ok=True)
 
+    pairs_drone2sate_list_save = []
+
     for pairs_drone2sate in pairs_drone2sate_list:
         
         str_i = pairs_drone2sate['str_i']
@@ -367,11 +369,19 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
         sate_save_path = os.path.join(sate_save_dir, drone_img_name)
         os.makedirs(sate_save_path, exist_ok=True)
 
-        shutil.copy(os.path.join(drone_img_dir, drone_img), drone_save_path)
+        flag = False
         for sate_img in pair_sate_img_list:
-            pairs_drone2sate_dict.setdefault(drone_img, []).append(f'{sate_img}')
-            pairs_sate2drone_dict.setdefault(f'{sate_img}', []).append(f'{drone_img}')
-            shutil.copy(os.path.join(sate_img_dir, sate_img), sate_save_path)
+            try:
+                shutil.copy(os.path.join(drone_img_dir, drone_img), drone_save_path)
+                shutil.copy(os.path.join(sate_img_dir, sate_img), sate_save_path)
+                pairs_drone2sate_dict.setdefault(drone_img, []).append(f'{sate_img}')
+                pairs_sate2drone_dict.setdefault(f'{sate_img}', []).append(f'{drone_img}')
+                flag = True
+            except:
+                print(f'Warning!! Can\'t find sate {sate_img} for {drone_img}.')
+        
+        if flag:
+            pairs_drone2sate_list_save.append(pairs_drone2sate)
 
     pairs_match_set = set()
     for sate_img, tile2drone in pairs_sate2drone_dict.items():
@@ -383,7 +393,7 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
 
     with open(pkl_save_path, 'wb') as f:
         pickle.dump({
-            "pairs_drone2sate_list": pairs_drone2sate_list,
+            "pairs_drone2sate_list": pairs_drone2sate_list_save,
             "pairs_sate2drone_dict": pairs_sate2drone_dict,
             "pairs_drone2sate_dict": pairs_drone2sate_dict,
             "pairs_match_set": pairs_match_set,
@@ -492,6 +502,10 @@ def process_visloc_data(root, save_root):
     test_pkl_save_path = os.path.join(save_root, 'test_pair_meta.pkl')
     test_data_save_dir = os.path.join(save_root, 'test')
     save_pairs_meta_data(processed_data_test, test_pkl_save_path, test_data_save_dir)
+
+    os.makedirs(os.path.join(save_root, 'all_satellite'))
+    shutil.copytree(os.path.join(save_root, 'train', 'satellite'), os.path.join(save_root, 'all_satellite'), dirs_exist_ok=True)
+    shutil.copytree(os.path.join(save_root, 'test', 'satellite'), os.path.join(save_root, 'all_satellite'), dirs_exist_ok=True)
 
 
 def get_sate_data(root_dir):
@@ -950,11 +964,11 @@ def get_transforms(img_size,
 
 if __name__ == '__main__':
     root = '/home/xmuairmud/data/UAV_VisLoc_dataset'
-    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_all_iou4'
+    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou3'
     process_visloc_data(root, save_root)
 
     # tile_satellite()
 
-    # src_path = '/home/xmuairmud/data/UAV_VisLoc_dataset/01/tile'
-    # dst_path = '/home/xmuairmud/data/UAV_VisLoc_dataset/01/satellite'
+    # src_path = '/home/xmuairmud/data/UAV_VisLoc_dataset/11/tile'
+    # dst_path = '/home/xmuairmud/data/UAV_VisLoc_dataset/11/satellite'
     # copy_png_files(src_path, dst_path)
