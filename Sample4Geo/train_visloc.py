@@ -4,6 +4,7 @@ import math
 import shutil
 import sys
 import gc
+from attr import frozen
 import torch
 import argparse
 from dataclasses import dataclass
@@ -37,6 +38,10 @@ class Configuration:
     
     # Override model image size
     img_size: int = 384
+
+    freeze_layers: bool = False
+
+    frozen_stages = [0,0,0,0]
 
     share_weights: bool = True
     
@@ -109,9 +114,9 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
-    train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou3/train_pair_meta.pkl'
-    test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou3/test_pair_meta.pkl'
-    sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou3/all_satellite'
+    train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/train_pair_meta.pkl'
+    test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/test_pair_meta.pkl'
+    sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/all_satellite'
 
     extra_train_pairs_meta_file: str = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
   
@@ -191,7 +196,11 @@ def train_script(config):
     if config.checkpoint_start is not None:  
         print("Start from:", config.checkpoint_start)
         model_state_dict = torch.load(config.checkpoint_start)  
-        model.load_state_dict(model_state_dict, strict=False)     
+        model.load_state_dict(model_state_dict, strict=False)   
+
+    print("Freeze model layers:", config.freeze_layers, config.frozen_stages)
+    if config.freeze_layers:
+        model.freeze_layers(config.frozen_stages)  
 
     # Data parallel
     print("GPUs available:", torch.cuda.device_count())  
@@ -487,6 +496,10 @@ def parse_args():
 
     parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
 
+    parser.add_argument('--freeze_layers', action='store_true', help='Freeze layers for training')
+
+    parser.add_argument('--frozen_stages', type=int, nargs='+', default=[0,0,0,0], help='Frozen stages for training')
+
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
 
     parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
@@ -542,5 +555,7 @@ if __name__ == '__main__':
     config.label_smoothing = args.label_smoothing
     config.checkpoint_start = args.checkpoint_start
     config.share_weights = not(args.no_share_weights)
+    config.freeze_layers = args.freeze_layers
+    config.frozen_stages = args.frozen_stages
 
     train_script(config)

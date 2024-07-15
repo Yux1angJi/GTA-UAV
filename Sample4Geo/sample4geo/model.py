@@ -80,6 +80,32 @@ class TimmModel(nn.Module):
     def set_grad_checkpointing(self, enable=True):
         self.model.set_grad_checkpointing(enable)
 
+    def freeze_layers(self, frozen_stages=[0,0,0,0]):
+        if self.share_weights:
+            # stem
+            for param in self.model.stem.parameters():
+                param.requires_grad = True
+            # stage
+            for i in range(len(self.model.stages)):
+                for j in range(frozen_stages[i]):
+                    for param in self.model.stages[i].blocks[j].parameters():
+                        param.requires_grad = False
+        else:
+            # stem
+            for param in self.model1.stem.parameters():
+                param.requires_grad = False
+            for param in self.model2.stem.parameters():
+                param.requires_grad = False
+            # stage
+            for i in range(len(self.model1.stages)):
+                for j in range(frozen_stages[i]):
+                    for param in self.model1.stages[i].blocks[j].parameters():
+                        param.requires_grad = False
+            for i in range(len(self.model2.stages)):
+                for j in range(frozen_stages[i]):
+                    for param in self.model2.stages[i].blocks[j].parameters():
+                        param.requires_grad = False
+
 
     def forward(self, img1=None, img2=None, forward_features=False):
 
@@ -143,8 +169,10 @@ class TimmModel(nn.Module):
 
 
 if __name__ == '__main__':
-    model = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
-    x = torch.rand((1, 3, 384, 384))
-    x = model.forward(x, forward_features=True)
-    x = model.decode(x)
-    print(x.shape)
+    # model = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
+    model = TimmModel(model_name='convnext_tiny', train_with_recon=True, pretrained=False)
+    # x = torch.rand((1, 3, 384, 384))
+    # x = model.forward(x, forward_features=True)
+    # x = model.decode(x)
+    # print(x.shape)
+    print(len(model.model.stages), len(model.model.stages[0].blocks), len(model.model.stages[1].blocks), len(model.model.stages[2].blocks), len(model.model.stages[3].blocks))

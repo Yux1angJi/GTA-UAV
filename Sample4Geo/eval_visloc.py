@@ -28,9 +28,9 @@ class Configuration:
     dataset: str = 'VisLoc-D2S'           # 'U1652-D2S' | 'U1652-S2D'
 
     # Checkpoint to start from
-    # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
-    # checkpoint_start = 'work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0703171314/weights_end.pth'
-    checkpoint_start = None
+    checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
+    # checkpoint_start = 'work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0715005126/weights_end.pth'
+    # checkpoint_start = None
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -47,10 +47,9 @@ config = Configuration()
 
 
 if config.dataset == 'VisLoc-D2S':
-    config.train_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/train_pair_meta.pkl'
-    config.test_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/test_pair_meta.pkl'
-    # config.data_root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_1_2/test/satellite'
-    config.data_root_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data1234_z3/all_satellite'
+    config.train_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/train_pair_meta.pkl'
+    config.test_pairs_meta_file = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/test_pair_meta.pkl'
+    config.sate_img_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/all_satellite'
 
 
 if __name__ == '__main__':
@@ -119,7 +118,7 @@ if __name__ == '__main__':
     gallery_dataset_test = VisLocDatasetEval(pairs_meta_file=config.test_pairs_meta_file,
                                                mode="sate",
                                                transforms=val_transforms,
-                                               data_root_dir=config.data_root_dir,
+                                               sate_img_dir=config.sate_img_dir,
                                                )
     gallery_img_list = gallery_dataset_test.images
     
