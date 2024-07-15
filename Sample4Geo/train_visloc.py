@@ -4,7 +4,6 @@ import math
 import shutil
 import sys
 import gc
-from attr import frozen
 import torch
 import argparse
 from dataclasses import dataclass
@@ -122,6 +121,9 @@ class Configuration:
   
 
 def train_script(config):
+    config.train_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/train_pair_meta.pkl'
+    config.test_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/test_pair_meta.pkl'
+    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/all_satellite'
 
     loss_type_str = ""
     for loss_type in config.loss_type:
@@ -494,6 +496,8 @@ def parse_args():
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
+    parser.add_argument('--data_dir', type=str, default='data_all_iou4', help='Log file path')
+
     parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
 
     parser.add_argument('--freeze_layers', action='store_true', help='Freeze layers for training')
@@ -541,6 +545,7 @@ if __name__ == '__main__':
     #             './nohup_train_visloc_1234z3_group2_lpwb_ps_bs40_e5.out']
 
     config = Configuration()
+    config.data_dir = args.data_dir
     config.log_to_file = args.log_to_file
     config.log_path = args.log_path
     config.epochs = args.epochs
