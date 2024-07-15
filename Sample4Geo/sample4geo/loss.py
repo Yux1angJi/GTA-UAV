@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed.nn
+import numpy as np
 
 
 class BCEWithLogitsLossWithLabelSmoothing(nn.Module):
@@ -39,12 +40,25 @@ class InfoNCE(nn.Module):
 
         return loss  
 
+def f(x):
+    return 0.9 / (1 + np.exp(-5 * x))
 
 class ContrastiveLoss(nn.Module):
-    def __init__(self, loss_function, device='cuda' if torch.cuda.is_available() else 'cpu'):
+    def __init__(self, label_smoothing, k=-5, device='cuda' if torch.cuda.is_available() else 'cpu'):
         super().__init__()
-        self.loss_function = loss_function
+        self.label_smoothing = label_smoothing
         self.device = device
+        self.k = k
+
+    def loss(self, similarity_matrix, eps_all):
+        n = similarity_matrix.shape[0]
+        total_loss = 0.0
+        for i in range(n):
+            eps = eps_all[i]
+            total_loss += (1 - eps) * (-1. * similarity_matrix[i, i] + torch.logsumexp(similarity_matrix[i, :], dim=0))
+            total_loss += eps * (-1. / n * similarity_matrix[i, :].sum() + torch.logsumexp(similarity_matrix[i, :], dim=0))
+        total_loss /= n
+        return total_loss
 
     def forward(self, image_features1, image_features2, logit_scale, positive_weights=None):
         # Normalize the image features
@@ -56,16 +70,20 @@ class ContrastiveLoss(nn.Module):
         
         # Apply positive weights if provided
         if positive_weights is not None:
-            logits_per_image1 = logits_per_image1 * positive_weights.view(-1, 1)
+            eps = 1. - (1. - self.label_smoothing) / (1 + torch.exp(-self.k * positive_weights))
+        else:
+            eps = self.label_smoothing
         
         logits_per_image2 = logits_per_image1.T
         
         # Generate labels
-        labels = torch.arange(len(logits_per_image1), dtype=torch.long, device=self.device)
-        
-        # Compute loss
-        loss1 = self.loss_function(logits_per_image1, labels)
-        loss2 = self.loss_function(logits_per_image2, labels)
+        # labels = torch.arange(len(logits_per_image1), dtype=torch.long, device=self.device)
+
+        loss1 = self.loss(logits_per_image1, eps)
+        loss2 = self.loss(logits_per_image2, eps)
+        # # Compute loss
+        # loss1 = self.loss_function(logits_per_image1, labels)
+        # loss2 = self.loss_function(logits_per_image2, labels)
         loss = (loss1 + loss2) / 2
 
         return {"contrastive": loss}

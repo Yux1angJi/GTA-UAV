@@ -169,8 +169,8 @@ class TimmModel(nn.Module):
 
 
 if __name__ == '__main__':
-    # model = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
-    model = TimmModel(model_name='convnext_tiny', train_with_recon=True, pretrained=False)
+    model = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
+    # model = TimmModel(model_name='convnext_tiny', train_with_recon=True, pretrained=False)
     # x = torch.rand((1, 3, 384, 384))
     # x = model.forward(x, forward_features=True)
     # x = model.decode(x)

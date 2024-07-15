@@ -44,7 +44,7 @@ class Configuration:
 
     share_weights: bool = True
     
-    train_with_weight: bool = False
+    train_with_weight: bool = True
 
     train_in_group: bool = True
     group_len = 2
@@ -78,6 +78,7 @@ class Configuration:
     
     # Loss
     label_smoothing: float = 0.0
+    k: float = 5
     
     # Learning Rate
     lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
@@ -305,10 +306,11 @@ def train_script(config):
         print("Label Smoothing", config.label_smoothing)
         print("Loss type", config.loss_type)
 
-    loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
+    # loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
     loss_function_normal = ContrastiveLoss(
-        loss_function=loss_fn,
         device=config.device,
+        label_smoothing=config.label_smoothing,
+        k=config.k,
     )
     if config.train_with_recon:
         loss_recon = ReconstructionLoss()
@@ -525,6 +527,8 @@ def parse_args():
     parser.add_argument('--loss_type', type=str, nargs='+', default=['part_slice', 'whole_slice'], help='Loss type for group train')
 
     parser.add_argument('--label_smoothing', type=float, default=0.0, help='Label smoothing value for loss')
+
+    parser.add_argument('--k', type=float, default=5, help='weighted k')
     
     args = parser.parse_args()
     return args
@@ -558,6 +562,7 @@ if __name__ == '__main__':
     config.loss_type = args.loss_type
     config.gpu_ids = args.gpu_ids
     config.label_smoothing = args.label_smoothing
+    config.k = args.k
     config.checkpoint_start = args.checkpoint_start
     config.share_weights = not(args.no_share_weights)
     config.freeze_layers = args.freeze_layers
