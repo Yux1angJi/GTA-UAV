@@ -84,7 +84,7 @@ class TimmModel(nn.Module):
         if self.share_weights:
             # stem
             for param in self.model.stem.parameters():
-                param.requires_grad = True
+                param.requires_grad = False
             # stage
             for i in range(len(self.model.stages)):
                 for j in range(frozen_stages[i]):
