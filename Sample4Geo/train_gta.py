@@ -25,21 +25,34 @@ class Configuration:
     
     # Override model image size
     img_size: int = 384
-
-    num_chunks: int = 1
  
-    ### GTA setting
+    freeze_layers: bool = False
+
+    frozen_stages = [0,0,0,0]
+
+    share_weights: bool = True
     
-    train_with_weight: bool = False
+    train_with_weight: bool = True
+
+    train_in_group: bool = True
+    group_len = 2
+
+    loss_type = ["whole_slice", "part_slice"]
+
+    train_with_mix_data: bool = False
+
+    train_with_recon: bool = False
+    recon_weight: float = 0.1
+    
     
     # Training 
     mixed_precision: bool = True
     custom_sampling: bool = True         # use custom sampling instead of random
     seed = 1
     epochs: int = 10
-    batch_size: int = 64                # keep in mind real_batch_size = 2 * batch_size
+    batch_size: int = 40                # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
-    gpu_ids: tuple = (0)           # GPU ids for training
+    gpu_ids: tuple = (0,1)           # GPU ids for training
 
     # Eval
     batch_size_eval: int = 128
@@ -54,6 +67,7 @@ class Configuration:
     
     # Loss
     label_smoothing: float = 0.1
+    k: float = 3
     
     # Learning Rate
     lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
@@ -73,7 +87,7 @@ class Configuration:
     zero_shot: bool = False
     
     # Checkpoint to start from
-    # checkpoint_start = None
+    checkpoint_start = None
     # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
 
 
@@ -89,20 +103,24 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
+    train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_iou4/train_pair_meta.pkl'
+    test_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_iou4/test_pair_meta.pkl'
+    sate_img_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
+
 
 #-----------------------------------------------------------------------------#
 # Train Config                                                                #
 #-----------------------------------------------------------------------------#
 
-config = Configuration() 
+def train_script(config):
 
-if config.dataset == 'GTA-D2S':
-    config.train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_iou4/train_pair_meta.pkl'
-    config.test_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_iou4/test_pair_meta.pkl'
-    config.sate_img_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
+    config.train_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/train_pair_meta.pkl'
+    config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/test_pair_meta.pkl'
+    config.sate_img_dir = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
 
-
-if __name__ == '__main__':
+    f = open(config.log_path, 'w')
+    if config.log_to_file:
+        sys.stdout = f
 
     save_time = "{}".format(time.strftime("%m%d%H%M%S"))
     model_path = "{}/{}/{}".format(config.model_path,
@@ -148,6 +166,10 @@ if __name__ == '__main__':
         print("Start from:", config.checkpoint_start)
         model_state_dict = torch.load(config.checkpoint_start)  
         model.load_state_dict(model_state_dict, strict=False)     
+
+    print("Freeze model layers:", config.freeze_layers, config.frozen_stages)
+    if config.freeze_layers:
+        model.freeze_layers(config.frozen_stages)  
 
     # Data parallel
     print("GPUs available:", torch.cuda.device_count())  
@@ -219,10 +241,12 @@ if __name__ == '__main__':
     # Loss                                                                        #
     #-----------------------------------------------------------------------------#
 
-    loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
-    loss_function = ContrastiveLoss(loss_function=loss_fn,
-                            device=config.device,
-                            )
+    # loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
+    loss_function = ContrastiveLoss(
+        device=config.device,
+        label_smoothing=config.label_smoothing,
+        k=config.k,
+    )
 
     if config.mixed_precision:
         scaler = GradScaler(init_scale=2.**10)
@@ -364,3 +388,72 @@ if __name__ == '__main__':
         torch.save(model.module.state_dict(), '{}/weights_end.pth'.format(model_path))
     else:
         torch.save(model.state_dict(), '{}/weights_end.pth'.format(model_path))            
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Training script for gta.")
+
+    parser.add_argument('--log_to_file', action='store_true', help='Log saving to file')
+
+    parser.add_argument('--log_path', type=str, default=None, help='Log file path')
+
+    parser.add_argument('--data_dir', type=str, default='randcam2_std0_stable/train_h23456_iou4', help='Data path')
+
+    parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
+
+    parser.add_argument('--freeze_layers', action='store_true', help='Freeze layers for training')
+
+    parser.add_argument('--frozen_stages', type=int, nargs='+', default=[0,0,0,0], help='Frozen stages for training')
+
+    parser.add_argument('--epochs', type=int, default=5, help='Epochs')
+
+    parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
+
+    parser.add_argument('--batch_size', type=int, default=40, help='Batch size')
+
+    parser.add_argument('--checkpoint_start', type=str, default=None, help='Training from checkpoint')
+
+    parser.add_argument('--train_with_recon', action='store_true', help='Train with reconstruction')
+
+    parser.add_argument('--recon_weight', type=float, default=0.1, help='Loss weight for reconstruction')
+
+    parser.add_argument('--train_in_group', action='store_true', help='Train in group')
+    
+    parser.add_argument('--group_len', type=int, default=2, help='Group length')
+
+    parser.add_argument('--train_with_mix_data', action='store_true', help='Train with mix data')
+
+    parser.add_argument('--loss_type', type=str, nargs='+', default=['part_slice', 'whole_slice'], help='Loss type for group train')
+
+    parser.add_argument('--label_smoothing', type=float, default=0.0, help='Label smoothing value for loss')
+
+    parser.add_argument('--k', type=float, default=5, help='weighted k')
+    
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == '__main__':
+    args = parse_args()
+
+    config = Configuration()
+    config.data_dir = args.data_dir
+    config.log_to_file = args.log_to_file
+    config.log_path = args.log_path
+    config.epochs = args.epochs
+    config.batch_size = args.batch_size
+    config.train_in_group = args.train_in_group
+    config.train_with_recon = args.train_with_recon
+    config.recon_weight = args.recon_weight
+    config.group_len = args.group_len
+    config.train_with_mix_data = args.train_with_mix_data
+    config.loss_type = args.loss_type
+    config.gpu_ids = args.gpu_ids
+    config.label_smoothing = args.label_smoothing
+    config.k = args.k
+    config.checkpoint_start = args.checkpoint_start
+    config.share_weights = not(args.no_share_weights)
+    config.freeze_layers = args.freeze_layers
+    config.frozen_stages = args.frozen_stages
+
+    train_script(config)
