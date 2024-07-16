@@ -4,6 +4,7 @@ import math
 import shutil
 import sys
 import torch
+import argparse
 from dataclasses import dataclass
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
@@ -15,6 +16,13 @@ from sample4geo.trainer import train, train_with_weight
 from sample4geo.evaluate.gta import evaluate
 from sample4geo.loss import InfoNCE, ContrastiveLoss
 from sample4geo.model import TimmModel
+
+
+def parse_tuple(s):
+    try:
+        return tuple(map(int, s.split(',')))
+    except ValueError:
+        raise argparse.ArgumentTypeError("Tuple must be integers separated by commas")
 
 
 @dataclass
