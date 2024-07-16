@@ -22,6 +22,8 @@ GAME_TO_SATE_KY = -1.8220
 GAME_TO_SATE_BY = 15287.16
 SATE_LENGTH = 24576
 
+IOU_THRESHOLD = 0.4
+
 
 def order_points(points):
     hull = ConvexHull(points)
@@ -77,7 +79,7 @@ def tile_expand(tile_xy_list, p_xy_list, debug=False):
         # max_rate = max(intersect_area / tile_size, intersect_area / poly_p_area)
         iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
 
-        if iou > 0.3:
+        if iou > IOU_THRESHOLD:
             tile_expand_list.append((tile_x, tile_y, zoom_level, iou))
         if debug:
             print(tile_x, tile_y, iou)
@@ -123,7 +125,7 @@ def tile_expand(tile_xy_list, p_xy_list, debug=False):
                 #     # print('jyxjyx', intersect_area / tile_size, intersect_area / poly_p_area)
                 #     tile_expand_list.append((tile_x_i, tile_y_i, zoom_level, max_rate))
                 iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
-                if iou > 0.3:
+                if iou > IOU_THRESHOLD:
                     tile_expand_list.append((tile_x_i, tile_y_i, zoom_level, iou))
 
                 # if debug:
@@ -641,13 +643,12 @@ def move_file():
 
 if __name__ == "__main__":
     root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_iou3'
-    process_gta_data(root, save_root, h_list=[200, 300, 400, 500, 600], zoom_list=[3, 4, 5, 6, 7])
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h456_iou4'
+    process_gta_data(root, save_root, h_list=[400, 500, 600], zoom_list=[3, 4, 5, 6, 7])
 
     # src_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
     # dst_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456/all_satellite'
     # copy_png_files(src_path, dst_path)
-
 
     # x = -100
     # y = 314
