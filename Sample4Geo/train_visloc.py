@@ -124,7 +124,7 @@ class Configuration:
 def train_script(config):
     config.train_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/train_pair_meta.pkl'
     config.test_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/test_pair_meta.pkl'
-    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/all_satellite'
+    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/all_satellite'
 
     loss_type_str = ""
     for loss_type in config.loss_type:
@@ -268,6 +268,7 @@ def train_script(config):
                                         )
     query_img_list = query_dataset_test.images
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
+    query_loc_xy_list = query_dataset_test.images_loc_xy
     
     query_dataloader_test = DataLoader(query_dataset_test,
                                        batch_size=config.batch_size_eval,
@@ -282,6 +283,7 @@ def train_script(config):
                                                sate_img_dir=config.sate_img_dir,
                                                )
     gallery_img_list = gallery_dataset_test.images
+    gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
                                        batch_size=config.batch_size_eval,
@@ -356,8 +358,9 @@ def train_script(config):
                            gallery_loader=gallery_dataloader_test, 
                            query_list=query_img_list,
                            gallery_list=gallery_img_list,
+                           query_loc_xy_list=query_loc_xy_list,
+                           gallery_loc_xy_list=gallery_loc_xy_list,
                            pairs_dict=pairs_drone2sate_dict,
-                           share_weights=config.share_weights,
                            ranks_list=[1, 5, 10],
                            step_size=1000,
                            cleanup=True)
@@ -461,6 +464,8 @@ def train_script(config):
                                 query_list=query_img_list,
                                 gallery_list=gallery_img_list,
                                 pairs_dict=pairs_drone2sate_dict,
+                                query_loc_xy_list=query_loc_xy_list,
+                                gallery_loc_xy_list=gallery_loc_xy_list,
                                 ranks_list=[1, 5, 10],
                                 step_size=1000,
                                 cleanup=True)

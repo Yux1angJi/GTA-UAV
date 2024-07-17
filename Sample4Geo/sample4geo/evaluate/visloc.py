@@ -78,7 +78,7 @@ def predict(train_config, model, dataloader):
     if train_config.verbose:
         bar.close()
     
-    return img_features·
+    return img_features
 
 
 def evaluate(config,
@@ -125,7 +125,7 @@ def evaluate(config,
         gallery_mapi_idx.setdefault(str_i, []).append(idx)
     for k, v in gallery_mapi_idx.items():
         array = np.zeros(len(gallery_list), dtype=int)
-        array = array[v]
+        array[v] = 1
         gallery_mapi_idx[k] = array
 
     matches_list = []
@@ -200,15 +200,3 @@ def evaluate(config,
         #torch.cuda.empty_cache()
     
     return cmc[0]
-
-
-
-        
-
-
-
-
-
-    
-        
-

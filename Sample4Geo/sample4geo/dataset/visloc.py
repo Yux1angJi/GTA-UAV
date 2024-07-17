@@ -113,7 +113,7 @@ def tile2sate(tile_name):
     tile_x = int(tile_x)
     tile_y = int(tile_y)
     lt_lat, lt_lon, rb_lat, rb_lon = SATE_LATLON[str_i]
-    tile_center_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y)
+    return tile_center_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y)
 
 
 def is_point_in_rectangle(point_lat, point_lon, rect_top_left_lat, rect_top_left_lon, rect_bottom_right_lat, rect_bottom_right_lon):
@@ -981,7 +981,7 @@ class VisLocDatasetEval(Dataset):
             for pairs_drone2sate in pairs_drone2sate_list:
                 self.images_path.append(os.path.join(pairs_drone2sate['drone_img_dir'], pairs_drone2sate['drone_img']))
                 self.images.append(pairs_drone2sate['drone_img'])
-                self.images_loc_xy((pairs_drone2sate['lat'], pairs_drone2sate['lon'])) 
+                self.images_loc_xy.append((pairs_drone2sate['lat'], pairs_drone2sate['lon'])) 
         elif view == 'sate':
             sate_img_dir_list, sate_img_list = get_sate_data(root_dir=sate_img_dir)
             # print('???????', sate_datas['sate_img'])
