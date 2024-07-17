@@ -255,7 +255,7 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     # Loss                                                                        #
     #-----------------------------------------------------------------------------#
-
+    print("Train with weight?", config.with_weight, "k=", config.k)
     if config.train_in_group:
         loss_function_group = GroupInfoNCE(
             group_len=config.group_len,
@@ -266,8 +266,6 @@ def train_script(config):
         print("Train in group.")
         print("Label Smoothing", config.label_smoothing)
         print("Loss type", config.loss_type)
-
-    print("Train with weight?", config.with_weight, "k=", config.k)
     # loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
     loss_function_normal = ContrastiveLoss(
         device=config.device,
@@ -370,6 +368,7 @@ def train_script(config):
             train_in_group = True
             loss_function = loss_function_group
         else:
+            train_in_group = False
             loss_function = loss_function_normal
     
         if train_in_group:
@@ -467,6 +466,8 @@ def parse_args():
 
     parser.add_argument('--label_smoothing', type=float, default=0.0, help='Label smoothing value for loss')
 
+    parser.add_argument('--with_weight', action='store_true', help='Train with weight')
+
     parser.add_argument('--k', type=float, default=5, help='weighted k')
     
     args = parser.parse_args()
@@ -490,6 +491,7 @@ if __name__ == '__main__':
     config.loss_type = args.loss_type
     config.gpu_ids = args.gpu_ids
     config.label_smoothing = args.label_smoothing
+    config.with_weight = args.with_weight
     config.k = args.k
     config.checkpoint_start = args.checkpoint_start
     config.share_weights = not(args.no_share_weights)

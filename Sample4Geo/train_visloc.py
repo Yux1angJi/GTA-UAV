@@ -427,6 +427,7 @@ def train_script(config):
             train_in_group = True
             loss_function = loss_function_group
         else:
+            train_in_group = False
             loss_function = loss_function_normal
 
         if config.train_with_mix_data:  
