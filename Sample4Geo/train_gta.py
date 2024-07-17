@@ -98,7 +98,6 @@ class Configuration:
     checkpoint_start = None
     # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
 
-
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
     
@@ -206,6 +205,7 @@ def train_script(config):
                                       transforms_gallery=train_drone_transforms,
                                       prob_flip=config.prob_flip,
                                       shuffle_batch_size=config.batch_size,
+                                      mode=config.train_mode,
                                       )
     
     train_dataloader = DataLoader(train_dataset,
@@ -218,6 +218,7 @@ def train_script(config):
     query_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
                                         view="drone",
                                         transforms=val_transforms,
+                                        mode=config.test_mode,
                                         )
     query_img_list = query_dataset_test.images
     query_loc_xy_list = query_dataset_test.images_loc_xy
@@ -427,6 +428,10 @@ def parse_args():
 
     parser.add_argument('--checkpoint_start', type=str, default=None, help='Training from checkpoint')
 
+    parser.add_argument('--train_mode', type=str, default='iou', help='Train with pair in iou or oc')
+
+    parser.add_argument('--test_mode', type=str, default='oc', help='Test with pair in iou or oc')
+
     parser.add_argument('--train_with_recon', action='store_true', help='Train with reconstruction')
 
     parser.add_argument('--recon_weight', type=float, default=0.1, help='Loss weight for reconstruction')
@@ -469,5 +474,7 @@ if __name__ == '__main__':
     config.share_weights = not(args.no_share_weights)
     config.freeze_layers = args.freeze_layers
     config.frozen_stages = args.frozen_stages
+    config.train_mode = args.train_mode
+    config.test_mode = args.test_mode
 
     train_script(config)

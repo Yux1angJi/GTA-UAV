@@ -119,7 +119,7 @@ class Configuration:
     sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/all_satellite'
 
     extra_train_pairs_meta_file: str = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
-  
+
 
 def train_script(config):
     config.train_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/train_pair_meta.pkl'
@@ -233,6 +233,7 @@ def train_script(config):
                                       group_len=config.group_len,
                                       prob_flip=config.prob_flip,
                                       shuffle_batch_size=config.batch_size,
+                                      mode=config.train_mode,
                                       )
     
     train_dataloader = DataLoader(train_dataset,
@@ -263,7 +264,7 @@ def train_script(config):
     # Test query
     query_dataset_test = VisLocDatasetEval(pairs_meta_file=config.test_pairs_meta_file,
                                         view="drone",
-                                        mode='oc',
+                                        mode=config.test_mode,
                                         transforms=val_transforms,
                                         )
     query_img_list = query_dataset_test.images
@@ -520,6 +521,10 @@ def parse_args():
 
     parser.add_argument('--checkpoint_start', type=str, default=None, help='Training from checkpoint')
 
+    parser.add_argument('--train_mode', type=str, default='iou', help='Train with pair in iou or oc')
+
+    parser.add_argument('--test_mode', type=str, default='oc', help='Test with pair in iou or oc')
+
     parser.add_argument('--train_with_recon', action='store_true', help='Train with reconstruction')
 
     parser.add_argument('--recon_weight', type=float, default=0.1, help='Loss weight for reconstruction')
@@ -576,5 +581,7 @@ if __name__ == '__main__':
     config.frozen_stages = args.frozen_stages
     config.with_weight = args.with_weight
     config.k = args.k
+    config.train_mode = args.train_mode
+    config.test_mode = args.test_mode
 
     train_script(config)
