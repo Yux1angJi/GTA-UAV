@@ -9,7 +9,7 @@ from sklearn.metrics import average_precision_score
 from geopy.distance import geodesic
 
 
-def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
+def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.01):
     query_x, query_y = query_loc
 
     sdm_list = []
