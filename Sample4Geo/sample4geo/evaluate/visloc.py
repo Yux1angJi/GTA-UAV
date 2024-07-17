@@ -153,7 +153,7 @@ def evaluate(config,
 
         sdm_list.append(sdm(query_loc_xy_list[i], sdmk_list, index, gallery_loc_xy_list))
 
-        dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list))
+        dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list, disk_list))
 
         good_index_i = np.isin(index, matches_tensor[i]) 
         
