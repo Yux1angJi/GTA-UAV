@@ -37,61 +37,28 @@ TILE_SIZE = 256
 THRESHOLD = 0.4
 
 
-def latlon_to_meters(lat, lon):
-    """Convert lat/lon to meters."""
-    origin_shift = 2 * math.pi * 6378137 / 2.0
-    mx = lon * origin_shift / 180.0
-    my = math.log(math.tan((90 + lat) * math.pi / 360.0)) / (math.pi / 180.0)
-    my = my * origin_shift / 180.0
-    return mx, my
-
-def meters_to_latlon(mx, my):
-    """Convert meters to lat/lon."""
-    origin_shift = 2 * math.pi * 6378137 / 2.0
-    lon = (mx / origin_shift) * 180.0
-    lat = (my / origin_shift) * 180.0
-    lat = 180 / math.pi * (2 * math.atan(math.exp(lat * math.pi / 180.0)) - math.pi / 2.0)
-    return lat, lon
-
-def tile_to_meters(tx, ty, zoom):
-    """Convert tile coordinates to meters."""
-    origin_shift = 2 * math.pi * 6378137 / 2.0
-    initial_resolution = 2 * math.pi * 6378137 / 256.0
-    resolution = initial_resolution / (2**zoom)
-    
-    minx = tx * 256 * resolution - origin_shift
-    miny = ty * 256 * resolution - origin_shift
-    maxx = (tx + 1) * 256 * resolution - origin_shift
-    maxy = (ty + 1) * 256 * resolution - origin_shift
-    
-    return (minx + maxx) / 2, (miny + maxy) / 2
-
-def tile_center_latlon(left_top_lat, left_top_lon, right_bottom_lat, right_bottom_lon, zoom, x, y):
+def tile_center_latlon(left_top_lat, left_top_lon, right_bottom_lat, right_bottom_lon, zoom, x, y, str_i):
     """Calculate the center lat/lon of a tile."""
-    # Convert the corner coordinates to meters
-    left_top_mx, left_top_my = latlon_to_meters(left_top_lat, left_top_lon)
-    right_bottom_mx, right_bottom_my = latlon_to_meters(right_bottom_lat, right_bottom_lon)
-    
-    # Calculate the size of the area in meters
-    total_width = abs(right_bottom_mx - left_top_mx)
-    total_height = abs(right_bottom_my - left_top_my)
-    
-    # Calculate the number of tiles at the given zoom level
-    num_tiles = 2 ** zoom
-    
-    # Calculate the meters per tile
-    meters_per_tile_x = total_width / num_tiles
-    meters_per_tile_y = total_height / num_tiles
+    sate_h, sate_w = SATE_SIZE[str_i][0], SATE_SIZE[str_i][1]
+    max_dim = max(sate_h, sate_w)
+    max_zoom = math.ceil(math.log(max_dim / TILE_SIZE, 2))
+    scale = 2 ** (max_zoom - zoom)
 
-    meters_per_tile = max(meters_per_tile_x, meters_per_tile_y)
-    
-    # Calculate the center of the tile in meters
-    tile_center_mx = left_top_mx + (x + 0.5) * meters_per_tile
-    tile_center_my = right_bottom_my + (num_tiles - y - 0.5) * meters_per_tile
-    
-    # Convert the tile center from meters to lat/lon
-    center_lat, center_lon = meters_to_latlon(tile_center_mx, tile_center_my)
-    
+    scaled_width = math.ceil(sate_w / scale)
+    scaled_height = math.ceil(sate_h / scale)
+
+    coe_lon = (x + 0.5) * TILE_SIZE / scaled_width
+    coe_lat = (y + 0.5) * TILE_SIZE / scaled_height
+
+    # Calculate the size of each tile in degrees
+
+    lat_diff = left_top_lat - right_bottom_lat
+    lon_diff = right_bottom_lon - left_top_lon
+
+    # Calculate the center of the tile in degrees
+    center_lat = left_top_lat - coe_lat * lat_diff
+    center_lon = left_top_lon + coe_lon * lon_diff
+
     return center_lat, center_lon
 
 SATE_LATLON = {
@@ -106,6 +73,19 @@ SATE_LATLON = {
     '10': [40.355093,115.776356,40.341475,115.794041],
     '11': [38.852301,101.013109,38.807825,101.092483],
 }
+## HW
+SATE_SIZE = {
+    '01': (26762,  9774),
+    '02': (34291, 11482),
+    '03': (24308, 35092),
+    '04': (38408, 18093),
+    '05': (6144,   9394),
+    '06': (9780,   8082),
+    '07': (170,    3000),
+    '08': (16294, 43421),
+    '10': (5077,   6593),
+    '11': (16582, 29592),
+}
 
 
 def tile2sate(tile_name):
@@ -115,7 +95,7 @@ def tile2sate(tile_name):
     tile_x = int(tile_x)
     tile_y = int(tile_y)
     lt_lat, lt_lon, rb_lat, rb_lon = SATE_LATLON[str_i]
-    return tile_center_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y)
+    return tile_center_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y, str_i)
 
 
 def is_point_in_rectangle(point_lat, point_lon, rect_top_left_lat, rect_top_left_lon, rect_bottom_right_lat, rect_bottom_right_lon):
@@ -1089,8 +1069,29 @@ if __name__ == '__main__':
     save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4_oc4_z3'
     process_visloc_data(root, save_root)
 
+
     # tile_satellite()
 
     # src_path = '/home/xmuairmud/data/UAV_VisLoc_dataset/11/tile'
     # dst_path = '/home/xmuairmud/data/UAV_VisLoc_dataset/11/satellite'
     # copy_png_files(src_path, dst_path)
+
+    # import pickle
+    # with open('/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4_oc4_z3/train_pair_meta.pkl', 'rb') as f:
+    #     data = pickle.load(f)
+    # for i in range(1):
+    #     pairs_drone2sate = data['pairs_drone2sate_list'][i]
+    #     str_i = pairs_drone2sate['str_i']
+    #     lat = pairs_drone2sate['lat']
+    #     lon = pairs_drone2sate['lon']
+    #     print(pairs_drone2sate['drone_img'])
+    #     print(pairs_drone2sate['lat'], pairs_drone2sate['lon'])
+    #     for sate_oc_img, oc_weight in zip(pairs_drone2sate['pair_oc_sate_img_list'], pairs_drone2sate['pair_oc_sate_weight_list']):
+    #         lat_i, lon_i = tile2sate(sate_oc_img)
+    #         print(lat_i, lon_i)
+    #         print(i, 'oc', oc_weight, geodesic((lat, lon), (lat_i, lon_i)).meters)
+    #     for sate_iou_img, iou_weight in zip(pairs_drone2sate['pair_iou_sate_img_list'], pairs_drone2sate['pair_iou_sate_weight_list']):
+    #         lat_i, lon_i = tile2sate(sate_oc_img)
+    #         print(i, 'iou', iou_weight, geodesic((lat, lon), (lat_i, lon_i)).meters)
+    
+        
