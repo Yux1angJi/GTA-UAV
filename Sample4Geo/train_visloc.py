@@ -95,7 +95,7 @@ class Configuration:
     dataset: str= "VisLoc-D2S"
     
     # Eval before training
-    zero_shot: bool = False
+    zero_shot: bool = True
     
     # Checkpoint to start from
     checkpoint_start = None
