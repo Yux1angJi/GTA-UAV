@@ -82,10 +82,12 @@ def tile_center_latlon(left_top_lat, left_top_lon, right_bottom_lat, right_botto
     # Calculate the meters per tile
     meters_per_tile_x = total_width / num_tiles
     meters_per_tile_y = total_height / num_tiles
+
+    meters_per_tile = max(meters_per_tile_x, meters_per_tile_y)
     
     # Calculate the center of the tile in meters
-    tile_center_mx = left_top_mx + (x + 0.5) * meters_per_tile_x
-    tile_center_my = right_bottom_my + (num_tiles - y - 0.5) * meters_per_tile_y
+    tile_center_mx = left_top_mx + (x + 0.5) * meters_per_tile
+    tile_center_my = right_bottom_my + (num_tiles - y - 0.5) * meters_per_tile
     
     # Convert the tile center from meters to lat/lon
     center_lat, center_lon = meters_to_latlon(tile_center_mx, tile_center_my)
@@ -370,7 +372,7 @@ def process_per_image(drone_meta_data):
     zoom_list = [int(x) for x in zoom_list]
     zoom_list.sort()
     zoom_max = zoom_list[-1]
-    zoom_list = zoom_list[-5:]
+    zoom_list = zoom_list[-3:]
 
     cur_img_x, cur_img_y = geo_to_image_coords(lat, lon, sate_lt_lat, sate_lt_lon, sate_rb_lat, sate_rb_lon, sate_pix_h, sate_pix_w)
     p_img_xy = [
@@ -1082,10 +1084,9 @@ def get_transforms(img_size,
     return val_transforms, train_sat_transforms, train_drone_transforms
 
 
-
 if __name__ == '__main__':
     root = '/home/xmuairmud/data/UAV_VisLoc_dataset'
-    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/test'
+    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4_oc4_z3'
     process_visloc_data(root, save_root)
 
     # tile_satellite()
