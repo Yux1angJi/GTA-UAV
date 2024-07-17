@@ -21,6 +21,7 @@ import csv
 import pickle
 import random
 import itertools
+from geopy.distance import geodesic
 
 
 Image.MAX_IMAGE_PIXELS = None
@@ -32,6 +33,87 @@ TEST_LIST = []
 # OK_LIST = [1]
 
 TILE_SIZE = 256
+
+THRESHOLD = 0.4
+
+
+def latlon_to_meters(lat, lon):
+    """Convert lat/lon to meters."""
+    origin_shift = 2 * math.pi * 6378137 / 2.0
+    mx = lon * origin_shift / 180.0
+    my = math.log(math.tan((90 + lat) * math.pi / 360.0)) / (math.pi / 180.0)
+    my = my * origin_shift / 180.0
+    return mx, my
+
+def meters_to_latlon(mx, my):
+    """Convert meters to lat/lon."""
+    origin_shift = 2 * math.pi * 6378137 / 2.0
+    lon = (mx / origin_shift) * 180.0
+    lat = (my / origin_shift) * 180.0
+    lat = 180 / math.pi * (2 * math.atan(math.exp(lat * math.pi / 180.0)) - math.pi / 2.0)
+    return lat, lon
+
+def tile_to_meters(tx, ty, zoom):
+    """Convert tile coordinates to meters."""
+    origin_shift = 2 * math.pi * 6378137 / 2.0
+    initial_resolution = 2 * math.pi * 6378137 / 256.0
+    resolution = initial_resolution / (2**zoom)
+    
+    minx = tx * 256 * resolution - origin_shift
+    miny = ty * 256 * resolution - origin_shift
+    maxx = (tx + 1) * 256 * resolution - origin_shift
+    maxy = (ty + 1) * 256 * resolution - origin_shift
+    
+    return (minx + maxx) / 2, (miny + maxy) / 2
+
+def tile_center_latlon(left_top_lat, left_top_lon, right_bottom_lat, right_bottom_lon, zoom, x, y):
+    """Calculate the center lat/lon of a tile."""
+    # Convert the corner coordinates to meters
+    left_top_mx, left_top_my = latlon_to_meters(left_top_lat, left_top_lon)
+    right_bottom_mx, right_bottom_my = latlon_to_meters(right_bottom_lat, right_bottom_lon)
+    
+    # Calculate the size of the area in meters
+    total_width = abs(right_bottom_mx - left_top_mx)
+    total_height = abs(right_bottom_my - left_top_my)
+    
+    # Calculate the number of tiles at the given zoom level
+    num_tiles = 2 ** zoom
+    
+    # Calculate the meters per tile
+    meters_per_tile_x = total_width / num_tiles
+    meters_per_tile_y = total_height / num_tiles
+    
+    # Calculate the center of the tile in meters
+    tile_center_mx = left_top_mx + (x + 0.5) * meters_per_tile_x
+    tile_center_my = right_bottom_my + (num_tiles - y - 0.5) * meters_per_tile_y
+    
+    # Convert the tile center from meters to lat/lon
+    center_lat, center_lon = meters_to_latlon(tile_center_mx, tile_center_my)
+    
+    return center_lat, center_lon
+
+SATE_LATLON = {
+    '01': [29.774065,115.970635,29.702283,115.996851],
+    '02': [29.817376,116.033769,29.725402,116.064566],
+    '03': [32.355491,119.805926,32.29029,119.900052],
+    '04': [32.254036,119.90598,32.151018,119.954509],
+    '05': [24.666899,102.340055,24.650422,102.365252],
+    '06': [32.373177,109.63516,32.346944,109.656837],
+    '07': [40.340058,115.791182,40.339604,115.79923],
+    '08': [30.947227,120.136489,30.903521,120.252951],
+    '10': [40.355093,115.776356,40.341475,115.794041],
+    '11': [38.852301,101.013109,38.807825,101.092483],
+}
+
+
+def tile2sate(tile_name):
+    tile_name = tile_name.replace('.png', '')
+    str_i, zoom_level, tile_x, tile_y = tile_name.split('_')
+    zoom_level = int(zoom_level)
+    tile_x = int(tile_x)
+    tile_y = int(tile_y)
+    lt_lat, lt_lon, rb_lat, rb_lon = SATE_LATLON[str_i]
+    tile_center_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y)
 
 
 def is_point_in_rectangle(point_lat, point_lon, rect_top_left_lat, rect_top_left_lon, rect_bottom_right_lat, rect_bottom_right_lon):
@@ -241,20 +323,15 @@ def tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_
     tile_tmp_order = order_points(tile_tmp)
     poly_tile = Polygon(tile_tmp_order)
     poly_tile_area = poly_tile.area
-    intersect_area = calc_intersect_area(poly_p, poly_tile)
-    # max_rate = max(intersect_area/tile_area, intersect_area/poly_p_area)
-    iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
 
-    tile_expand_list = []
-    tile_expand_weight_list = []
-    if iou > 0.3:
-        tile_expand_list.append(f'{str_i}_{zoom_level}_{cur_tile_x:03}_{cur_tile_y:03}.png')
-        tile_expand_weight_list.append(iou)
+    tile_iou_expand_list = []
+    tile_iou_expand_weight_list = []
+    tile_oc_expand_list = []
+    tile_oc_expand_weight_list = []
 
     for tile_x_i in range(tile_l, tile_r + 1):
         for tile_y_i in range(tile_u, tile_d + 1):
-            if tile_x_i == cur_tile_x and tile_y_i == cur_tile_y:
-                continue
+
             tile_tmp = [((tile_x_i    ) * TILE_SIZE, (tile_y_i    ) * TILE_SIZE), 
                         ((tile_x_i + 1) * TILE_SIZE, (tile_y_i    ) * TILE_SIZE), 
                         ((tile_x_i    ) * TILE_SIZE, (tile_y_i + 1) * TILE_SIZE), 
@@ -267,12 +344,15 @@ def tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_
                 print('zoom=', zoom_level, cur_tile_x, cur_tile_y)
                 print(tile_x_i, tile_y_i)
                 print(intersect_area, tile_area, poly_p_area, intersect_area/tile_area, intersect_area/poly_p_area)
-            # max_rate = max(intersect_area/tile_area, intersect_area/poly_p_area)
+            oc = intersect_area / min(poly_p_area, poly_tile_area)
             iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
-            if iou > 0.3:
-                tile_expand_list.append(f'{str_i}_{zoom_level}_{tile_x_i:03}_{tile_y_i:03}.png')
-                tile_expand_weight_list.append(iou)
-    return tile_expand_list, tile_expand_weight_list
+            if iou > THRESHOLD:
+                tile_iou_expand_list.append(f'{str_i}_{zoom_level}_{tile_x_i:03}_{tile_y_i:03}.png')
+                tile_iou_expand_weight_list.append(iou)
+            if oc > THRESHOLD:
+                tile_oc_expand_list.append(f'{str_i}_{zoom_level}_{tile_x_i:03}_{tile_y_i:03}.png')
+                tile_oc_expand_weight_list.append(oc)
+    return tile_iou_expand_list, tile_iou_expand_weight_list, tile_oc_expand_list, tile_oc_expand_weight_list
 
 
 def process_per_image(drone_meta_data):
@@ -307,8 +387,10 @@ def process_per_image(drone_meta_data):
         "lat": lat,
         "lon": lon,
         "sate_img_dir": os.path.join(file_dir, 'satellite'),
-        "pair_sate_img_list": [],
-        "pair_sate_weight_list": [],
+        "pair_iou_sate_img_list": [],
+        "pair_iou_sate_weight_list": [],
+        "pair_oc_sate_img_list": [],
+        "pair_oc_sate_weight_list": [],
     }
 
     for zoom_level in zoom_list:
@@ -330,11 +412,17 @@ def process_per_image(drone_meta_data):
         cur_tile_x = cur_img_x_scale // TILE_SIZE
         cur_tile_y = cur_img_y_scale // TILE_SIZE
 
-        tile_expand_list, tile_expand_weight_list = tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_x_max, tile_y_max, debug)
+        tile_iou_expand_list, tile_iou_expand_weight_list, tile_oc_expand_list, tile_oc_expand_weight_list \
+            = tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_x_max, tile_y_max, debug)
 
-        result["pair_sate_img_list"].extend(tile_expand_list)
-        result["pair_sate_weight_list"].extend(tile_expand_weight_list)
+        result["pair_iou_sate_img_list"].extend(tile_iou_expand_list)
+        result["pair_iou_sate_weight_list"].extend(tile_iou_expand_weight_list)
+        result["pair_oc_sate_img_list"].extend(tile_oc_expand_list)
+        result["pair_oc_sate_weight_list"].extend(tile_oc_expand_weight_list)
     
+    if len(result["pair_iou_sate_img_list"]) == 0:
+        return None
+
     if debug:
         print(result)
     
@@ -342,22 +430,25 @@ def process_per_image(drone_meta_data):
 
 
 def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
-    pairs_sate2drone_dict = {}
-    pairs_drone2sate_dict = {}
+    pairs_iou_sate2drone_dict = {}
+    pairs_iou_drone2sate_dict = {}
+    pairs_oc_sate2drone_dict = {}
+    pairs_oc_drone2sate_dict = {}
     
     drone_save_dir = os.path.join(pair_save_dir, 'drone')
-    sate_save_dir = os.path.join(pair_save_dir, 'satellite')
+    sate_iou_save_dir = os.path.join(pair_save_dir, 'satellite', 'iou')
+    sate_oc_save_dir = os.path.join(pair_save_dir, 'satellite', 'oc')
     os.makedirs(drone_save_dir, exist_ok=True)
-    os.makedirs(sate_save_dir, exist_ok=True)
+    os.makedirs(sate_iou_save_dir, exist_ok=True)
+    os.makedirs(sate_oc_save_dir, exist_ok=True)
 
     pairs_drone2sate_list_save = []
 
     for pairs_drone2sate in pairs_drone2sate_list:
         
         str_i = pairs_drone2sate['str_i']
-        pair_sate_img_list = pairs_drone2sate["pair_sate_img_list"]
-        if len(pair_sate_img_list) == 0:
-            continue
+        pair_iou_sate_img_list = pairs_drone2sate["pair_iou_sate_img_list"]
+        pair_oc_sate_img_list = pairs_drone2sate["pair_oc_sate_img_list"]
 
         drone_img = pairs_drone2sate["drone_img"]
         drone_img_dir = pairs_drone2sate["drone_img_dir"]
@@ -366,37 +457,57 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
 
         drone_save_path = os.path.join(drone_save_dir, drone_img_name)
         os.makedirs(drone_save_path, exist_ok=True)
-        sate_save_path = os.path.join(sate_save_dir, drone_img_name)
-        os.makedirs(sate_save_path, exist_ok=True)
+        sate_iou_save_path = os.path.join(sate_iou_save_dir, drone_img_name)
+        os.makedirs(sate_iou_save_path, exist_ok=True)
+        sate_oc_save_path = os.path.join(sate_oc_save_dir, drone_img_name)
+        os.makedirs(sate_oc_save_path, exist_ok=True)
 
         flag = False
-        for sate_img in pair_sate_img_list:
+        for sate_img in pair_iou_sate_img_list:
             try:
                 shutil.copy(os.path.join(drone_img_dir, drone_img), drone_save_path)
-                shutil.copy(os.path.join(sate_img_dir, sate_img), sate_save_path)
-                pairs_drone2sate_dict.setdefault(drone_img, []).append(f'{sate_img}')
-                pairs_sate2drone_dict.setdefault(f'{sate_img}', []).append(f'{drone_img}')
+                shutil.copy(os.path.join(sate_img_dir, sate_img), sate_iou_save_path)
+                pairs_iou_drone2sate_dict.setdefault(drone_img, []).append(f'{sate_img}')
+                pairs_iou_sate2drone_dict.setdefault(f'{sate_img}', []).append(f'{drone_img}')
                 flag = True
             except:
                 print(f'Warning!! Can\'t find sate {sate_img} for {drone_img}.')
-        
+        for sate_img in pair_oc_sate_img_list:
+            try:
+                shutil.copy(os.path.join(drone_img_dir, drone_img), drone_save_path)
+                shutil.copy(os.path.join(sate_img_dir, sate_img), sate_oc_save_path)
+                pairs_oc_drone2sate_dict.setdefault(drone_img, []).append(f'{sate_img}')
+                pairs_oc_sate2drone_dict.setdefault(f'{sate_img}', []).append(f'{drone_img}')
+                flag = True
+            except:
+                print(f'Warning!! Can\'t find sate {sate_img} for {drone_img}.')
         if flag:
             pairs_drone2sate_list_save.append(pairs_drone2sate)
 
-    pairs_match_set = set()
-    for sate_img, tile2drone in pairs_sate2drone_dict.items():
-        pairs_sate2drone_dict[sate_img] = list(set(tile2drone))
-    for drone_img, drone2tile in pairs_drone2sate_dict.items():
-        pairs_drone2sate_dict[drone_img] = list(set(drone2tile))
-        for sate_img in pairs_drone2sate_dict[drone_img]:
-            pairs_match_set.add((drone_img, f'{sate_img}'))
+    pairs_iou_match_set = set()
+    for sate_img, tile2drone in pairs_iou_sate2drone_dict.items():
+        pairs_iou_sate2drone_dict[sate_img] = list(set(tile2drone))
+    for drone_img, drone2tile in pairs_iou_drone2sate_dict.items():
+        pairs_iou_drone2sate_dict[drone_img] = list(set(drone2tile))
+        for sate_img in pairs_iou_drone2sate_dict[drone_img]:
+            pairs_iou_match_set.add((drone_img, f'{sate_img}'))
+    pairs_oc_match_set = set()
+    for sate_img, tile2drone in pairs_oc_sate2drone_dict.items():
+        pairs_oc_sate2drone_dict[sate_img] = list(set(tile2drone))
+    for drone_img, drone2tile in pairs_oc_drone2sate_dict.items():
+        pairs_oc_drone2sate_dict[drone_img] = list(set(drone2tile))
+        for sate_img in pairs_oc_drone2sate_dict[drone_img]:
+            pairs_oc_match_set.add((drone_img, f'{sate_img}'))
 
     with open(pkl_save_path, 'wb') as f:
         pickle.dump({
             "pairs_drone2sate_list": pairs_drone2sate_list_save,
-            "pairs_sate2drone_dict": pairs_sate2drone_dict,
-            "pairs_drone2sate_dict": pairs_drone2sate_dict,
-            "pairs_match_set": pairs_match_set,
+            "pairs_iou_sate2drone_dict": pairs_iou_sate2drone_dict,
+            "pairs_iou_drone2sate_dict": pairs_iou_drone2sate_dict,
+            "pairs_iou_match_set": pairs_iou_match_set,
+            "pairs_oc_sate2drone_dict": pairs_oc_sate2drone_dict,
+            "pairs_oc_drone2sate_dict": pairs_oc_drone2sate_dict,
+            "pairs_oc_match_set": pairs_oc_match_set,
         }, f)
 
 
@@ -481,19 +592,24 @@ def process_visloc_data(root, save_root):
                 drone_meta_data_list.append(tmp_meta_data)
 
     random.shuffle(drone_meta_data_list)
-    train_num = len(drone_meta_data_list) * 4 // 5
-    drone_meta_data_train_list = drone_meta_data_list[: train_num]
-    drone_meta_data_test_list = drone_meta_data_list[train_num: ]
+    processed_data = []
+    # train_num = len(drone_meta_data_list) * 4 // 5
+    # drone_meta_data_train_list = drone_meta_data_list[: train_num]
+    # drone_meta_data_test_list = drone_meta_data_list[train_num: ]
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        for result in tqdm(executor.map(process_per_image, drone_meta_data_train_list), total=len(drone_meta_data_train_list)):
+        for result in tqdm(executor.map(process_per_image, drone_meta_data_list), total=len(drone_meta_data_list)):
             # 将每个返回值添加到结果列表中
-                processed_data_train.append(result)
-
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        for result in tqdm(executor.map(process_per_image, drone_meta_data_test_list), total=len(drone_meta_data_test_list)):
-            # 将每个返回值添加到结果列表中
-                processed_data_test.append(result)
+                processed_data.append(result)
+    
+    processed_data_wonone = []
+    for result in processed_data:
+        if result is not None:
+            processed_data_wonone.append(result)
+    
+    data_num = len(processed_data_wonone)
+    processed_data_train = processed_data_wonone[:data_num // 5 * 4]
+    processed_data_test = processed_data_wonone[data_num // 5 * 4:]
 
     train_pkl_save_path = os.path.join(save_root, 'train_pair_meta.pkl')
     train_data_save_dir = os.path.join(save_root, 'train')
@@ -538,7 +654,8 @@ class VisLocDatasetTrain(Dataset):
                  transforms_gallery=None,
                  group_len=2,
                  prob_flip=0.5,
-                 shuffle_batch_size=128):
+                 shuffle_batch_size=128,
+                 mode='iou'):
         super().__init__()
         
         with open(pairs_meta_file, 'rb') as f:
@@ -549,9 +666,9 @@ class VisLocDatasetTrain(Dataset):
         self.pairs = []
 
         pairs_drone2sate_list = pairs_meta_data['pairs_drone2sate_list']
-        self.pairs_sate2drone_dict = pairs_meta_data['pairs_sate2drone_dict']
-        self.pairs_drone2sate_dict = pairs_meta_data['pairs_drone2sate_dict']
-        self.pairs_match_set = pairs_meta_data['pairs_match_set']
+        self.pairs_sate2drone_dict = pairs_meta_data[f'pairs_{mode}_sate2drone_dict']
+        self.pairs_drone2sate_dict = pairs_meta_data[f'pairs_{mode}_drone2sate_dict']
+        self.pairs_match_set = pairs_meta_data[f'pairs_{mode}_match_set']
 
         self.drone2sate = drone2sate
         if drone2sate:
@@ -559,8 +676,8 @@ class VisLocDatasetTrain(Dataset):
                 drone_img_dir = pairs_drone2sate['drone_img_dir']
                 drone_img = pairs_drone2sate['drone_img']
                 sate_img_dir = pairs_drone2sate['sate_img_dir']
-                pair_sate_img_list = pairs_drone2sate['pair_sate_img_list']
-                pair_sate_weight_list = pairs_drone2sate['pair_sate_weight_list']
+                pair_sate_img_list = pairs_drone2sate[f'pair_{mode}_sate_img_list']
+                pair_sate_weight_list = pairs_drone2sate[f'pair_{mode}_sate_weight_list']
                 str_i = pairs_drone2sate['str_i']
                 drone_img_file = f'{drone_img_dir}/{drone_img}'
             
@@ -842,7 +959,8 @@ class VisLocDatasetEval(Dataset):
     
     def __init__(self,
                  pairs_meta_file,
-                 mode,
+                 view,
+                 mode='oc',
                  sate_img_dir='',
                  transforms=None,
                  ):
@@ -853,21 +971,24 @@ class VisLocDatasetEval(Dataset):
 
         self.images = []
         self.images_path = []
+        self.images_loc_xy = []
 
-        if mode == 'drone':
+        if view == 'drone':
             pairs_drone2sate_list = pairs_meta_data['pairs_drone2sate_list']
-            self.pairs_sate2drone_dict = pairs_meta_data['pairs_sate2drone_dict']
-            self.pairs_drone2sate_dict = pairs_meta_data['pairs_drone2sate_dict']
-            self.pairs_match_set = pairs_meta_data['pairs_match_set']
+            self.pairs_sate2drone_dict = pairs_meta_data[f'pairs_{mode}_sate2drone_dict']
+            self.pairs_drone2sate_dict = pairs_meta_data[f'pairs_{mode}_drone2sate_dict']
+            self.pairs_match_set = pairs_meta_data[f'pairs_{mode}_match_set']
             for pairs_drone2sate in pairs_drone2sate_list:
                 self.images_path.append(os.path.join(pairs_drone2sate['drone_img_dir'], pairs_drone2sate['drone_img']))
                 self.images.append(pairs_drone2sate['drone_img'])
-        elif mode == 'sate':
+                self.images_loc_xy((pairs_drone2sate['lat'], pairs_drone2sate['lon'])) 
+        elif view == 'sate':
             sate_img_dir_list, sate_img_list = get_sate_data(root_dir=sate_img_dir)
             # print('???????', sate_datas['sate_img'])
             for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
                 self.images_path.append(os.path.join(sate_img_dir, sate_img))
                 self.images.append(sate_img)
+                self.images_loc_xy.append(tile2sate(sate_img))
 
         self.transforms = transforms
 
@@ -903,7 +1024,7 @@ class VisLocDatasetEval(Dataset):
     def get_sample_ids(self):
         return set(self.sample_ids)
 
-    
+
 def get_transforms(img_size,
                    mean=[0.485, 0.456, 0.406],
                    std=[0.229, 0.224, 0.225]):
@@ -964,7 +1085,7 @@ def get_transforms(img_size,
 
 if __name__ == '__main__':
     root = '/home/xmuairmud/data/UAV_VisLoc_dataset'
-    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou3'
+    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/test'
     process_visloc_data(root, save_root)
 
     # tile_satellite()

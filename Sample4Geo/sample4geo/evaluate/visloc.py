@@ -6,6 +6,7 @@ import time
 from torch.cuda.amp import autocast
 import torch.nn.functional as F
 from sklearn.metrics import average_precision_score
+from geopy.distance import geodesic
 
 
 def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
@@ -26,12 +27,19 @@ def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
     return sdm_list
 
 
-def get_dis(query_loc, index, gallery_loc_xy_list):
-    query_x, query_y = query_loc
-    idx = index[0]
-    gallery_x, gallery_y = gallery_loc_xy_list[idx]
-    dis = np.sqrt((query_x - gallery_x)**2 + (query_y - gallery_y)**2)
-    return dis
+def get_dis(query_loc, index, gallery_loc_xy_list, disk_list):
+    query_lat, query_lon = query_loc
+    dis_list = []
+    for k in disk_list:
+        dis_sum = 0.0
+        for i in range(k):
+            idx = index[i]
+            gallery_lat, gallery_lon = gallery_loc_xy_list[idx]
+            dis = geodesic((query_lat, query_lon), (gallery_lat, gallery_lon)).meters
+            dis_sum += dis
+        dis_list.append(dis_sum / k)
+
+    return dis_list
 
 
 def predict(train_config, model, dataloader):
@@ -70,7 +78,7 @@ def predict(train_config, model, dataloader):
     if train_config.verbose:
         bar.close()
     
-    return img_features
+    return img_features·
 
 
 def evaluate(config,
@@ -84,6 +92,7 @@ def evaluate(config,
                 pairs_dict,
                 ranks_list=[1, 5, 10],
                 sdmk_list=[1, 3, 5],
+                disk_list=[1, 3, 5],
                 step_size=1000,
                 cleanup=True):
     print("Extract Features and Compute Scores:")
@@ -109,8 +118,15 @@ def evaluate(config,
     ap = 0.0
 
     gallery_idx = {}
+    gallery_mapi_idx = {}
     for idx, gallery_img in enumerate(gallery_list):
         gallery_idx[gallery_img] = idx
+        str_i = gallery_img.split('_')[0]
+        gallery_mapi_idx.setdefault(str_i, []).append(idx)
+    for k, v in gallery_mapi_idx.items():
+        array = np.zeros(len(gallery_list), dtype=int)
+        array = array[v]
+        gallery_mapi_idx[k] = array
 
     matches_list = []
     for query_i in query_list:
@@ -127,16 +143,17 @@ def evaluate(config,
     all_ap = []
     cmc = np.zeros(len(gallery_list))
     sdm_list = []
-    dis_sum = 0.0
+    dis_list = []
 
     for i in range(query_num):
-        score = all_scores[i]    
+        str_i = query_list[i].split('_')[0]
+        score = all_scores[i] * gallery_mapi_idx[str_i]
         # predict index
         index = np.argsort(score)[::-1]
 
         sdm_list.append(sdm(query_loc_xy_list[i], sdmk_list, index, gallery_loc_xy_list))
 
-        dis_sum += get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list)
+        dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list))
 
         good_index_i = np.isin(index, matches_tensor[i]) 
         
@@ -156,7 +173,7 @@ def evaluate(config,
     cmc = cmc / query_num
 
     sdm_list = np.mean(np.array(sdm_list), axis=0)
-    dis = dis_sum / query_num
+    dis_list = np.mean(np.array(dis_list), axis=0)
 
     # top 1%
     top1 = round(len(gallery_list)*0.01)
@@ -171,8 +188,8 @@ def evaluate(config,
     
     for i in range(len(sdmk_list)):
         string.append('SDM@{}: {:.4f}'.format(sdmk_list[i], sdm_list[i]))
-    
-    string.append('Distance@1: {:.4f}'.format(dis))
+    for i in range(len(disk_list)):
+        string.append('Dis@{}: {:.4f}'.format(disk_list[i], dis_list[i]))
 
     print(' - '.join(string)) 
     

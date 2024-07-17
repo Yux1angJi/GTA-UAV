@@ -92,7 +92,7 @@ class Configuration:
     dataset: str= "GTA-D2S"
     
     # Eval before training
-    zero_shot: bool = False
+    zero_shot: bool = True
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -216,10 +216,11 @@ def train_script(config):
     
     # Test query
     query_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                        mode="drone",
+                                        view="drone",
                                         transforms=val_transforms,
                                         )
     query_img_list = query_dataset_test.images
+    query_loc_xy_list = query_dataset_test.images_loc_xy
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
     
     query_dataloader_test = DataLoader(query_dataset_test,
@@ -230,10 +231,11 @@ def train_script(config):
     
     # Test gallery
     gallery_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                               mode="sate",
+                                               view="sate",
                                                transforms=val_transforms,
                                                sate_img_dir=config.sate_img_dir,
                                                )
+    gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
     gallery_img_list = gallery_dataset_test.images
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
@@ -330,6 +332,8 @@ def train_script(config):
                            gallery_list=gallery_img_list,
                            pairs_dict=pairs_drone2sate_dict,
                            ranks_list=[1, 5, 10],
+                           query_loc_xy_list=query_loc_xy_list,
+                           gallery_loc_xy_list=gallery_loc_xy_list,
                            step_size=1000,
                            cleanup=True)
 
@@ -376,6 +380,8 @@ def train_script(config):
                                 gallery_list=gallery_img_list,
                                 pairs_dict=pairs_drone2sate_dict,
                                 ranks_list=[1, 5, 10],
+                                query_loc_xy_list=query_loc_xy_list,
+                                gallery_loc_xy_list=gallery_loc_xy_list,
                                 step_size=1000,
                                 cleanup=True)
                 
@@ -405,7 +411,7 @@ def parse_args():
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
-    parser.add_argument('--data_dir', type=str, default='randcam2_std0_stable/train_h23456_iou4', help='Data path')
+    parser.add_argument('--data_dir', type=str, default='randcam2_std0_stable/test', help='Data path')
 
     parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
 
