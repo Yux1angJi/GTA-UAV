@@ -14,7 +14,7 @@ from sample4geo.dataset.gta import GTADatasetEval, GTADatasetTrain, get_transfor
 from sample4geo.utils import setup_system, Logger
 from sample4geo.trainer import train, train_with_weight
 from sample4geo.evaluate.gta import evaluate
-from sample4geo.loss import InfoNCE, ContrastiveLoss
+from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE
 from sample4geo.model import TimmModel
 
 
@@ -40,7 +40,7 @@ class Configuration:
 
     share_weights: bool = True
     
-    train_with_weight: bool = True
+    with_weight: bool = True
 
     train_in_group: bool = True
     group_len = 2
@@ -92,7 +92,7 @@ class Configuration:
     dataset: str= "GTA-D2S"
     
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -147,6 +147,8 @@ def train_script(config):
     
     print("training save in path: {}".format(model_path))
 
+    print("training start from", config.checkpoint_start)
+
     #-----------------------------------------------------------------------------#
     # Model                                                                       #
     #-----------------------------------------------------------------------------#
@@ -156,7 +158,8 @@ def train_script(config):
 
     model = TimmModel(config.model,
                           pretrained=True,
-                          img_size=config.img_size)
+                          img_size=config.img_size,
+                          share_weights=config.share_weights)
                           
     data_config = model.get_config()
     print(data_config)
@@ -203,6 +206,7 @@ def train_script(config):
     train_dataset = GTADatasetTrain(pairs_meta_file=config.train_pairs_meta_file,
                                       transforms_query=train_sat_transforms,
                                       transforms_gallery=train_drone_transforms,
+                                      group_len=config.group_len,
                                       prob_flip=config.prob_flip,
                                       shuffle_batch_size=config.batch_size,
                                       mode=config.train_mode,
@@ -252,8 +256,20 @@ def train_script(config):
     # Loss                                                                        #
     #-----------------------------------------------------------------------------#
 
+    if config.train_in_group:
+        loss_function_group = GroupInfoNCE(
+            group_len=config.group_len,
+            label_smoothing=config.label_smoothing,
+            loss_type=config.loss_type,
+            device=config.device,
+        )
+        print("Train in group.")
+        print("Label Smoothing", config.label_smoothing)
+        print("Loss type", config.loss_type)
+
+    print("Train with weight?", config.with_weight, "k=", config.k)
     # loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
-    loss_function = ContrastiveLoss(
+    loss_function_normal = ContrastiveLoss(
         device=config.device,
         label_smoothing=config.label_smoothing,
         k=config.k,
@@ -337,12 +353,7 @@ def train_script(config):
                            gallery_loc_xy_list=gallery_loc_xy_list,
                            step_size=1000,
                            cleanup=True)
-
-    #-----------------------------------------------------------------------------#
-    # Shuffle                                                                     #
-    #-----------------------------------------------------------------------------#            
-    if config.custom_sampling:
-        train_dataloader.dataset.shuffle()
+           
             
     #-----------------------------------------------------------------------------#
     # Train                                                                       #
@@ -354,6 +365,17 @@ def train_script(config):
     for epoch in range(1, config.epochs+1):
         
         print("\n{}[Epoch: {}]{}".format(30*"-", epoch, 30*"-"))
+
+        if config.train_in_group:
+            train_in_group = True
+            loss_function = loss_function_group
+        else:
+            loss_function = loss_function_normal
+    
+        if train_in_group:
+            train_dataloader.dataset.shuffle_group()
+        else:
+            train_dataloader.dataset.shuffle()
         
         train_loss = train_with_weight(config,
                            model,
@@ -362,7 +384,7 @@ def train_script(config):
                            optimizer=optimizer,
                            scheduler=scheduler,
                            scaler=scaler,
-                           with_weight=config.train_with_weight)
+                           with_weight=config.with_weight)
         
         print("Epoch: {}, Train Loss = {:.3f}, Lr = {:.6f}".format(epoch,
                                                                    train_loss,
@@ -395,14 +417,13 @@ def train_script(config):
                 else:
                     torch.save(model.state_dict(), '{}/weights_e{}_{:.4f}.pth'.format(model_path, epoch, r1_test))
                 
-
-        if config.custom_sampling:
-            train_dataloader.dataset.shuffle()
-                
     if torch.cuda.device_count() > 1 and len(config.gpu_ids) > 1:
         torch.save(model.module.state_dict(), '{}/weights_end.pth'.format(model_path))
     else:
-        torch.save(model.state_dict(), '{}/weights_end.pth'.format(model_path))            
+        torch.save(model.state_dict(), '{}/weights_end.pth'.format(model_path))  
+
+    f.close()
+    sys.stdout = sys.__stdout__          
 
 
 def parse_args():

@@ -28,14 +28,14 @@ def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
 
 
 def get_dis(query_loc, index, gallery_loc_xy_list, disk_list):
-    query_lat, query_lon = query_loc
+    query_x, query_y = query_loc
     dis_list = []
     for k in disk_list:
         dis_sum = 0.0
         for i in range(k):
             idx = index[i]
-            gallery_lat, gallery_lon = gallery_loc_xy_list[idx]
-            dis = geodesic((query_lat, query_lon), (gallery_lat, gallery_lon)).meters
+            gallery_x, gallery_y = gallery_loc_xy_list[idx]
+            dis = np.sqrt((query_x - gallery_x)**2 + (query_y - gallery_y)**2)
             dis_sum += dis
         dis_list.append(dis_sum / k)
 

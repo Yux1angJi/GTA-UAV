@@ -95,7 +95,7 @@ class Configuration:
     dataset: str= "VisLoc-D2S"
     
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -148,6 +148,7 @@ def train_script(config):
 
     if config.log_path == None:
         config.log_path = f"nohup_train_visloc_1234z31_group{config.group_len}_{share_str}_l{loss_type_str}_s{smooth_str}_bs{config.batch_size}_e{config.epochs}_g2.out"
+    
     f = open(config.log_path, 'w')
     if config.log_to_file:
         sys.stdout = f
@@ -306,6 +307,7 @@ def train_script(config):
             loss_type=config.loss_type,
             device=config.device,
         )
+        print("Train in group.")
         print("Label Smoothing", config.label_smoothing)
         print("Loss type", config.loss_type)
 
@@ -421,11 +423,10 @@ def train_script(config):
         
         print("\n{}[Epoch: {}]{}".format(30*"-", epoch, 30*"-"))
 
-        if epoch > 2 and config.train_in_group:
+        if config.train_in_group:
             train_in_group = True
             loss_function = loss_function_group
         else:
-            train_in_group = False
             loss_function = loss_function_normal
 
         if config.train_with_mix_data:  
