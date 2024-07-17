@@ -72,7 +72,7 @@ class ContrastiveLoss(nn.Module):
         if positive_weights is not None:
             eps = 1. - (1. - self.label_smoothing) / (1 + torch.exp(-self.k * positive_weights))
         else:
-            eps = self.label_smoothing
+            eps = [self.label_smoothing for _ in range(eps.shape[0])]
         
         logits_per_image2 = logits_per_image1.T
         

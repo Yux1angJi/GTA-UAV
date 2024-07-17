@@ -44,7 +44,7 @@ class Configuration:
 
     share_weights: bool = True
     
-    with_weight: bool = False
+    with_weight: bool = True
 
     train_in_group: bool = True
     group_len = 2
