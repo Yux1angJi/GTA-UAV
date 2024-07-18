@@ -31,12 +31,6 @@ NORM_LOC = 10000.
 
 
 def sate2loc(tile_zoom, tile_x, tile_y):
-    tile_name = tile_file.replace('.png', '')
-    tile_zoom, tile_x, tile_y = tile_name.split('_')
-    tile_zoom = int(tile_zoom)
-    tile_x = int(tile_x)
-    tile_y = int(tile_y)
-
     tile_pix = SATE_LENGTH / (2 ** tile_zoom)
     loc_x = (tile_pix * (tile_x+1/2)) * 0.45
     loc_y = (tile_pix * (tile_y+1/2)) * 0.45
@@ -443,9 +437,9 @@ class GTADatasetTrain(Dataset):
 
                 for pair_sate_img, pair_sate_weight, pair_sate_loc_xy in zip(pair_sate_img_list, pair_sate_weight_list, pair_sate_loc_xy_list):
                     sate_img_file = f'{sate_img_dir}/{pair_sate_img}'
-                    self.pairs.append((drone_img_file, sate_img_file, pair_sate_weight, 
-                        np.array([drone_img_loc_xy[0], drone_img_loc_xy[1]]),
-                        np.array([pair_sate_loc_xy[0], pair_sate_loc_xy[1]])))
+                    self.pairs.append((drone_img_file, sate_img_file, pair_sate_weight))
+                        # np.array([drone_img_loc_xy[0], drone_img_loc_xy[1]]),
+                        # np.array([pair_sate_loc_xy[0], pair_sate_loc_xy[1]])))
 
         self.transforms_query = transforms_query
         self.transforms_gallery = transforms_gallery
@@ -456,7 +450,7 @@ class GTADatasetTrain(Dataset):
     
     def __getitem__(self, index):
         
-        query_img_path, gallery_img_path, positive_weight, query_loc_xy, gallery_loc_xy = self.samples[index]
+        query_img_path, gallery_img_path, positive_weight = self.samples[index]
         
         # for query there is only one file in folder
         query_img = cv2.imread(query_img_path)
@@ -476,7 +470,7 @@ class GTADatasetTrain(Dataset):
         if self.transforms_gallery is not None:
             gallery_img = self.transforms_gallery(image=gallery_img)['image']
         
-        return query_img, gallery_img, positive_weight, query_loc_xy/NORM_LOC, gallery_loc_xy/NORM_LOC
+        return query_img, gallery_img, positive_weight    # , query_loc_xy/NORM_LOC, gallery_loc_xy/NORM_LOC
 
     def __len__(self):
         return len(self.samples)
@@ -516,7 +510,7 @@ class GTADatasetTrain(Dataset):
 
                 pair = pair_pool.pop(0)
                 
-                drone_img_path, sate_img_path, _, _, _ = pair
+                drone_img_path, sate_img_path, _ = pair
                 drone_img_dir = os.path.dirname(drone_img_path)
                 sate_img_dir = os.path.dirname(sate_img_path)
 
@@ -661,7 +655,7 @@ class GTADatasetTrain(Dataset):
                 if len(pair_pool) > 0:
                     pair = pair_pool.pop(0)
                     
-                    drone_img, sate_img, _, _, _ = pair
+                    drone_img, sate_img, _ = pair
                     drone_img_name = drone_img.split('/')[-1]
                     sate_img_name = sate_img.split('/')[-1]
                     # print(sate_img_name)
@@ -750,6 +744,9 @@ class GTADatasetEval(Dataset):
 
                 sate_img_name = sate_img.replace('.png', '')
                 tile_zoom, tile_x, tile_y = sate_img_name.split('_')
+                tile_zoom = int(tile_zoom)
+                tile_x = int(tile_x)
+                tile_y = int(tile_y)
                 self.images_loc_xy.append(sate2loc(tile_zoom, tile_x, tile_y))
 
         self.transforms = transforms

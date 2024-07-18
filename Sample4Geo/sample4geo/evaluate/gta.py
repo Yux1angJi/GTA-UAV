@@ -9,6 +9,8 @@ from sklearn.metrics import average_precision_score
 from geopy.distance import geodesic
 
 
+NORM_LOC = 10000.
+
 def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
     query_x, query_y = query_loc
 
