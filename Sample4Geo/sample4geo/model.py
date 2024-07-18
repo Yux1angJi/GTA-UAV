@@ -32,6 +32,22 @@ class SimpleDecoder(nn.Module):
         x = self.decoder(x)
         return x
 
+class MLP(nn.Module):
+    def __init__(self, input_size=2048, hidden_size=512, output_size=2):
+        super(MLP, self).__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_size, hidden_size // 2)
+        self.fc3 = nn.Linear(hidden_size // 2, output_size)
+    
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.relu(x)
+        x = self.fc3(x)
+        return x
+
 
 class TimmModel(nn.Module):
 
@@ -40,7 +56,8 @@ class TimmModel(nn.Module):
                  pretrained=True,
                  img_size=383,
                  share_weights=True,
-                 train_with_recon=False):
+                 train_with_recon=False,
+                 train_with_offset=False):
                  
         super(TimmModel, self).__init__()
         self.share_weights = share_weights
@@ -65,6 +82,8 @@ class TimmModel(nn.Module):
             else:
                 self.decoder1 = SimpleDecoder()
                 self.decoder2 = SimpleDecoder()
+        if train_with_offset:
+            self.MLP = MLP()
         
         self.logit_scale = torch.nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
         
@@ -157,6 +176,10 @@ class TimmModel(nn.Module):
                 else:
                     image_features = self.model2(img2)
                     return image_features
+
+    def offset_pred(self, img_feature1, img_feature2):
+        offset = self.MLP(torch.cat((img_feature1, img_feature2), dim=1))
+        return offset
     
     def decode(self, img_feature1, img_feature2):
         if self.share_weights:

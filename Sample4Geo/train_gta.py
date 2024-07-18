@@ -12,7 +12,7 @@ from transformers import get_constant_schedule_with_warmup, get_polynomial_decay
 
 from sample4geo.dataset.gta import GTADatasetEval, GTADatasetTrain, get_transforms
 from sample4geo.utils import setup_system, Logger
-from sample4geo.trainer import train, train_with_weight
+from sample4geo.trainer import train, train_with_weight, train_with_weight_dis
 from sample4geo.evaluate.gta import evaluate
 from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE
 from sample4geo.model import TimmModel

@@ -1,16 +1,16 @@
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=0,1
 # conda activate torch2
 
 # python train_gta.py --data_dir "randcam2_std0_stable/test" --log_to_file --log_path "nohup_test.out" --gpu_ids 0 --label_smoothing 0.1 --k 3 --epoch 10 --batch_size 64
-python train_visloc.py --data_dir "data_all_iou4_oc4_z3" --log_to_file --log_path "nohup_train_visloc_alloc4_group2_lcspbws_bs64_e5_s0.1_valoc.out" --train_mode 'oc' --test_mode 'oc' --gpu_ids 0 --label_smoothing 0.1 --epoch 5 --batch_size 64 --train_in_group --group_len 2 --loss_type "contrastive_slice" "part_block" "whole_slice"
-python train_visloc.py --data_dir "data_all_iou4_oc4_z3" --log_to_file --log_path "nohup_train_visloc_alloc4_group2_lcspbwb_bs64_e5_s0.1_valoc.out" --train_mode 'oc' --test_mode 'oc' --gpu_ids 0 --label_smoothing 0.1 --epoch 5 --batch_size 64 --train_in_group --group_len 2 --loss_type "contrastive_slice" "part_block" "whole_block"
-python train_visloc.py --data_dir "data_all_iou4_oc4_z3" --log_to_file --log_path "nohup_train_visloc_alliou4_lc_bs64_e5_s0.1k3_valiou.out" --train_mode 'iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --with_weight --k 3 --epoch 5 --batch_size 64
-python train_visloc.py --data_dir "data_all_iou4_oc4_z3" --log_to_file --log_path "nohup_train_visloc_alloc4_lc_bs64_e5_s0.1k3_valoc.out" --train_mode 'oc' --test_mode 'oc' --gpu_ids 0 --label_smoothing 0.1 --with_weight --k 3 --epoch 5 --batch_size 64
+# python train_visloc.py --data_dir "data_all_iou4_oc4_z3" --log_to_file --log_path "nohup_train_visloc_alliou4_lc_bs40_e5_s0.1k3_valiou.out" --train_mode 'iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 3 --epoch 5 --batch_size 40
 
-python train_gta.py --data_dir "randcam2_std0_stable_all/train_h23456_z4_iou4_oc4" --log_to_file --log_path "nohup_train_gta_alloc4_lc_bs64_e5_s0.1k3_valoc.out" --train_mode "oc" --test_mode "oc" --gpu_ids 0 --label_smoothing 0.1 --with_weight --k 3 --epoch 5 --batch_size 64
-python train_gta.py --data_dir "randcam2_std0_stable_all/train_h23456_z4_iou4_oc4" --log_to_file --log_path "nohup_train_gta_alloc4_group2_lcspbws_bs64_e5_s0.1_valoc.out" --train_mode "oc" --test_mode "oc" --gpu_ids 0 --label_smoothing 0.1 --epoch 5 --batch_size 64 --train_in_group --group_len 2 --loss_type "contrastive_slice" "part_block" "whole_slice"
-python train_gta.py --data_dir "randcam2_std0_stable_all/train_h23456_z4_iou4_oc4" --log_to_file --log_path "nohup_train_gta_alliou4_lc_bs64_e5_s0.1k3_valoc.out" --train_mode "iou" --test_mode "oc" --gpu_ids 0 --label_smoothing 0.1 --with_weight --k 3 --epoch 5 --batch_size 64
-python train_gta.py --data_dir "randcam2_std0_stable_all/train_h23456_z4_iou4_oc4" --log_to_file --log_path "nohup_train_gta_alliou4_lc_bs64_e5_s0.1k3_valiou.out" --train_mode "iou" --test_mode "iou" --gpu_ids 0 --label_smoothing 0.1 --with_weight --k 3 --epoch 5 --batch_size 64
+python train_visloc.py --data_dir "data_all_iou4_oc4_z3" --log_to_file --log_path "nohup_train_visloc_alloc4_lc_bs40_e5_s0.1_valoc.out" --train_mode 'oc' --test_mode 'oc' --gpu_ids 0,1 --label_smoothing 0.1 --epoch 5 --batch_size 40
+python train_visloc.py --data_dir "data_all_iou4_oc4_z3" --log_to_file --log_path "nohup_train_visloc_alloc4_lc_bs40_e5_s0.1k3_valoc.out" --train_mode 'oc' --test_mode 'oc' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 3 --epoch 5 --batch_size 40
+
+# python train_gta.py --data_dir "randcam2_std0_stable_all/train_h23456_z4_iou4_oc4" --log_to_file --log_path "nohup_train_gta_alloc4_lc_bs40_e5_s0.1k3_valoc.out" --train_mode "oc" --test_mode "oc" --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 3 --epoch 5 --batch_size 40
+# python train_gta.py --data_dir "randcam2_std0_stable_all/train_h23456_z4_iou4_oc4" --log_to_file --log_path "nohup_train_gta_alloc4_group2_lcspbws_bs40_e5_s0.1_valoc.out" --train_mode "oc" --test_mode "oc" --gpu_ids 0,1 --label_smoothing 0.1 --epoch 5 --batch_size 40 --train_in_group --group_len 2 --loss_type "contrastive_slice" "part_block" "whole_slice"
+# python train_gta.py --data_dir "randcam2_std0_stable_all/train_h23456_z4_iou4_oc4" --log_to_file --log_path "nohup_train_gta_alliou4_lc_bs40_e5_s0.1k3_valoc.out" --train_mode "iou" --test_mode "oc" --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 3 --epoch 5 --batch_size 40
+# python train_gta.py --data_dir "randcam2_std0_stable_all/train_h23456_z4_iou4_oc4" --log_to_file --log_path "nohup_train_gta_alliou4_lc_bs40_e5_s0.1k3_valiou.out" --train_mode "iou" --test_mode "iou" --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 3 --epoch 5 --batch_size 40
 
 # python train_visloc.py --data_dir "data_all_iou4" --log_to_file --log_path "nohup_train_visloc_alliou4_lc_bs64_e5_s0.1k3.out"  --gpu_ids 0 --label_smoothing 0.1 --k 3 --epoch 5 --batch_size 64
 # python train_visloc.py --data_dir "data_all_iou4" --log_to_file --log_path "nohup_train_visloc_alliou4_lc_bs64_e5_s0.1k5.out"  --gpu_ids 0 --label_smoothing 0.1 --k 5 --epoch 5 --batch_size 64

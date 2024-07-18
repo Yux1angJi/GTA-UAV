@@ -250,6 +250,18 @@ class ReconstructionLoss(nn.Module):
         return {"recon": x}
 
 
+class OffsetLoss(nn.Module):
+    def __init__(self, device='cuda' if torch.cuda.is_available() else 'cpu'):
+        super().__init__()
+        self.device = device
+        self.criterion = nn.MSELoss()
+
+    def forward(self, offset_pred, query_loc_xy, ref_loc_xy):
+        offset_label = query_loc_xy - ref_loc_xy
+        x = self.criterion(offset_pred, offset_label)
+        return {"recon": x}
+
+
 if __name__ == '__main__':
     loss = GroupInfoNCE(group_len=2, label_smoothing=0.00)
 

@@ -27,8 +27,10 @@ THRESHOLD = 0.4
 
 SATE_LENGTH = 24576
 
+NORM_LOC = 10000.
 
-def sate2loc(tile_file):
+
+def sate2loc(tile_zoom, tile_x, tile_y):
     tile_name = tile_file.replace('.png', '')
     tile_zoom, tile_x, tile_y = tile_name.split('_')
     tile_zoom = int(tile_zoom)
@@ -75,7 +77,6 @@ def game_pos2tile_pos(game_pos_x, game_pos_y, zoom_list):
 def tile_expand(tile_xy_list, p_xy_list, debug=False):
     tile_expand_list_iou = []
     tile_expand_list_oc = []
-    tile_expand_weight_list = []
     for tile_x, tile_y, zoom_level in tile_xy_list:
         tile_length = SATE_LENGTH // (2 ** zoom_level)
         tile_size = tile_length ** 2
@@ -139,9 +140,10 @@ def tile_expand(tile_xy_list, p_xy_list, debug=False):
                 #     tile_expand_list.append((tile_x_i, tile_y_i, zoom_level, max_rate))
                 oc = intersect_area / min(poly_tile_area, poly_p_area)
                 iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
+                loc_xy = sate2loc(zoom_level, tile_x_i, tile_y_i)
                 if iou > THRESHOLD:
-                    tile_expand_list_iou.append((tile_x_i, tile_y_i, zoom_level, iou))
-                    tile_expand_list_oc.append((tile_x_i, tile_y_i, zoom_level, iou))
+                    tile_expand_list_iou.append((tile_x_i, tile_y_i, zoom_level, iou, loc_xy))
+                    tile_expand_list_oc.append((tile_x_i, tile_y_i, zoom_level, iou, loc_xy))
 
                 # if debug:
                     # print('enumerate')
@@ -198,21 +200,25 @@ def process_per_drone_image(file_data):
         "sate_img_dir": dir_satellite,
         "pair_iou_sate_img_list": [],
         "pair_iou_sate_weight_list": [],
+        "pair_iou_sate_loc_xy_list": [],
         "pair_oc_sate_img_list": [],
         "pair_oc_sate_weight_list": [],
+        "pair_oc_sate_loc_xy_list": [],
     }
-    for tile_x, tile_y, zoom_level, weight in tile_expand_list_iou:
+    for tile_x, tile_y, zoom_level, weight, loc_xy in tile_expand_list_iou:
         # tile_img = os.path.join(dir_satellite, f'level_{zoom_level}/{zoom_level}_{tile_x}_{tile_y}.png')
         # save_drone_img = os.path.join(save_drone_dir, f'{h}_{img_file}')
         # save_sate_img = os.path.join(save_sate_dir, f'{h}_{zoom_level}_{tile_x}_{tile_y}.png')
         result["pair_iou_sate_img_list"].append(f'{zoom_level}_{tile_x}_{tile_y}.png')
         result["pair_iou_sate_weight_list"].append(weight)
-    for tile_x, tile_y, zoom_level, weight in tile_expand_list_oc:
+        result["pair_iou_sate_loc_xy_list"].append(loc_xy)
+    for tile_x, tile_y, zoom_level, weight, loc_xy in tile_expand_list_oc:
         # tile_img = os.path.join(dir_satellite, f'level_{zoom_level}/{zoom_level}_{tile_x}_{tile_y}.png')
         # save_drone_img = os.path.join(save_drone_dir, f'{h}_{img_file}')
         # save_sate_img = os.path.join(save_sate_dir, f'{h}_{zoom_level}_{tile_x}_{tile_y}.png')
         result["pair_oc_sate_img_list"].append(f'{zoom_level}_{tile_x}_{tile_y}.png')
         result["pair_oc_sate_weight_list"].append(weight)
+        result["pair_oc_sate_loc_xy_list"].append(loc_xy)
 
     if debug:
         print(p_xy_sate_list)
@@ -430,12 +436,16 @@ class GTADatasetTrain(Dataset):
                 sate_img_dir = pairs_drone2sate['sate_img_dir']
                 pair_sate_img_list = pairs_drone2sate[f'pair_{mode}_sate_img_list']
                 pair_sate_weight_list = pairs_drone2sate[f'pair_{mode}_sate_weight_list']
+                pair_sate_loc_xy_list = pairs_drone2sate[f'pair_{mode}_sate_loc_xy_list']
+                drone_img_loc_xy = pairs_drone2sate['drone_loc_x_y']
 
                 drone_img_file = f'{drone_img_dir}/{drone_img}'
 
-                for pair_sate_img, pair_sate_weight in zip(pair_sate_img_list, pair_sate_weight_list):
+                for pair_sate_img, pair_sate_weight, pair_sate_loc_xy in zip(pair_sate_img_list, pair_sate_weight_list, pair_sate_loc_xy_list):
                     sate_img_file = f'{sate_img_dir}/{pair_sate_img}'
-                    self.pairs.append((drone_img_file, sate_img_file, pair_sate_weight))
+                    self.pairs.append((drone_img_file, sate_img_file, pair_sate_weight, 
+                        np.array([drone_img_loc_xy[0], drone_img_loc_xy[1]]),
+                        np.array([pair_sate_loc_xy[0], pair_sate_loc_xy[1]])))
 
         self.transforms_query = transforms_query
         self.transforms_gallery = transforms_gallery
@@ -446,7 +456,7 @@ class GTADatasetTrain(Dataset):
     
     def __getitem__(self, index):
         
-        query_img_path, gallery_img_path, positive_weight = self.samples[index]
+        query_img_path, gallery_img_path, positive_weight, query_loc_xy, gallery_loc_xy = self.samples[index]
         
         # for query there is only one file in folder
         query_img = cv2.imread(query_img_path)
@@ -466,7 +476,7 @@ class GTADatasetTrain(Dataset):
         if self.transforms_gallery is not None:
             gallery_img = self.transforms_gallery(image=gallery_img)['image']
         
-        return query_img, gallery_img, positive_weight
+        return query_img, gallery_img, positive_weight, query_loc_xy/NORM_LOC, gallery_loc_xy/NORM_LOC
 
     def __len__(self):
         return len(self.samples)
@@ -506,7 +516,7 @@ class GTADatasetTrain(Dataset):
 
                 pair = pair_pool.pop(0)
                 
-                drone_img_path, sate_img_path, _ = pair
+                drone_img_path, sate_img_path, _, _, _ = pair
                 drone_img_dir = os.path.dirname(drone_img_path)
                 sate_img_dir = os.path.dirname(sate_img_path)
 
@@ -651,7 +661,7 @@ class GTADatasetTrain(Dataset):
                 if len(pair_pool) > 0:
                     pair = pair_pool.pop(0)
                     
-                    drone_img, sate_img, _ = pair
+                    drone_img, sate_img, _, _, _ = pair
                     drone_img_name = drone_img.split('/')[-1]
                     sate_img_name = sate_img.split('/')[-1]
                     # print(sate_img_name)
@@ -737,7 +747,10 @@ class GTADatasetEval(Dataset):
             for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
                 self.images_path.append(os.path.join(sate_img_dir, sate_img))
                 self.images.append(sate_img)
-                self.images_loc_xy.append(sate2loc(sate_img))
+
+                sate_img_name = sate_img.replace('.png', '')
+                tile_zoom, tile_x, tile_y = sate_img_name.split('_')
+                self.images_loc_xy.append(sate2loc(tile_zoom, tile_x, tile_y))
 
         self.transforms = transforms
 
