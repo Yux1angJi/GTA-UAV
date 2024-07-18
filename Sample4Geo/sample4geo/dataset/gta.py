@@ -96,10 +96,6 @@ def tile_expand(tile_xy_list, p_xy_list, debug=False):
         oc = intersect_area / min(poly_tile_area, poly_p_area)
         iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
 
-        if iou > THRESHOLD:
-            tile_expand_list_iou.append((tile_x, tile_y, zoom_level, iou))
-        if oc > THRESHOLD:
-            tile_expand_list_oc.append((tile_x, tile_y, zoom_level, oc))
         if debug:
             print(tile_x, tile_y, iou, oc)
 
@@ -128,8 +124,6 @@ def tile_expand(tile_xy_list, p_xy_list, debug=False):
         # Enumerate all LRUD
         for tile_x_i in range(tile_l, tile_r + 1):
             for tile_y_i in range(tile_u, tile_d + 1):
-                if tile_x_i == tile_x and tile_y_i == tile_y:
-                    continue
                 tile_tmp = [((tile_x_i    ) * tile_length, (tile_y_i    ) * tile_length), 
                             ((tile_x_i + 1) * tile_length, (tile_y_i    ) * tile_length), 
                             ((tile_x_i    ) * tile_length, (tile_y_i + 1) * tile_length), 
@@ -147,7 +141,7 @@ def tile_expand(tile_xy_list, p_xy_list, debug=False):
                 iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
                 if iou > THRESHOLD:
                     tile_expand_list_iou.append((tile_x_i, tile_y_i, zoom_level, iou))
-                    tile_expand_list_oc.append((tile_x_i, tile_y_i, zoom_level, oc))
+                    tile_expand_list_oc.append((tile_x_i, tile_y_i, zoom_level, iou))
 
                 # if debug:
                     # print('enumerate')

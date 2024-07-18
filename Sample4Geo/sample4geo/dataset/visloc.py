@@ -333,7 +333,7 @@ def tile_expand(str_i, cur_tile_x, cur_tile_y, p_img_xy_scale, zoom_level, tile_
                 tile_iou_expand_weight_list.append(iou)
             if oc > THRESHOLD:
                 tile_oc_expand_list.append(f'{str_i}_{zoom_level}_{tile_x_i:03}_{tile_y_i:03}.png')
-                tile_oc_expand_weight_list.append(oc)
+                tile_oc_expand_weight_list.append(iou)
     return tile_iou_expand_list, tile_iou_expand_weight_list, tile_oc_expand_list, tile_oc_expand_weight_list
 
 
