@@ -137,6 +137,7 @@ def tile_expand(tile_xy_list, p_xy_list, debug=False):
                 loc_xy = sate2loc(zoom_level, tile_x_i, tile_y_i)
                 if iou > THRESHOLD:
                     tile_expand_list_iou.append((tile_x_i, tile_y_i, zoom_level, iou, loc_xy))
+                if oc > THRESHOLD:
                     tile_expand_list_oc.append((tile_x_i, tile_y_i, zoom_level, iou, loc_xy))
 
                 # if debug:
