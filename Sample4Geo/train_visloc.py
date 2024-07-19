@@ -16,7 +16,7 @@ from sample4geo.dataset.gta import GTADatasetTrain
 from sample4geo.dataset.mix_data import MixDatasetTrain
 from sample4geo.utils import setup_system, Logger
 from sample4geo.trainer import train, train_with_weight
-from sample4geo.evaluate.gta import evaluate
+from sample4geo.evaluate.visloc import evaluate
 from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE, ReconstructionLoss
 from sample4geo.model import TimmModel
 
@@ -44,7 +44,7 @@ class Configuration:
 
     share_weights: bool = True
     
-    train_with_weight: bool = True
+    with_weight: bool = True
 
     train_in_group: bool = True
     group_len = 2
@@ -95,7 +95,7 @@ class Configuration:
     dataset: str= "VisLoc-D2S"
     
     # Eval before training
-    zero_shot: bool = False
+    zero_shot: bool = True
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -119,12 +119,12 @@ class Configuration:
     sate_img_dir: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/all_satellite'
 
     extra_train_pairs_meta_file: str = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
-  
+
 
 def train_script(config):
     config.train_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/train_pair_meta.pkl'
     config.test_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/test_pair_meta.pkl'
-    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/all_satellite'
+    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/all_satellite'
 
     loss_type_str = ""
     for loss_type in config.loss_type:
@@ -148,6 +148,7 @@ def train_script(config):
 
     if config.log_path == None:
         config.log_path = f"nohup_train_visloc_1234z31_group{config.group_len}_{share_str}_l{loss_type_str}_s{smooth_str}_bs{config.batch_size}_e{config.epochs}_g2.out"
+    
     f = open(config.log_path, 'w')
     if config.log_to_file:
         sys.stdout = f
@@ -233,6 +234,7 @@ def train_script(config):
                                       group_len=config.group_len,
                                       prob_flip=config.prob_flip,
                                       shuffle_batch_size=config.batch_size,
+                                      mode=config.train_mode,
                                       )
     
     train_dataloader = DataLoader(train_dataset,
@@ -259,29 +261,31 @@ def train_script(config):
                                         num_workers=config.num_workers,
                                         shuffle=not config.custom_sampling,
                                         pin_memory=True)
-        
 
     # Test query
     query_dataset_test = VisLocDatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                        mode="drone",
+                                        view="drone",
+                                        mode=config.test_mode,
                                         transforms=val_transforms,
                                         )
     query_img_list = query_dataset_test.images
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
+    query_loc_xy_list = query_dataset_test.images_loc_xy
     
     query_dataloader_test = DataLoader(query_dataset_test,
                                        batch_size=config.batch_size_eval,
                                        num_workers=config.num_workers,
                                        shuffle=False,
                                        pin_memory=True)
-    
+
     # Test gallery
     gallery_dataset_test = VisLocDatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                               mode="sate",
+                                               view="sate",
                                                transforms=val_transforms,
                                                sate_img_dir=config.sate_img_dir,
                                                )
     gallery_img_list = gallery_dataset_test.images
+    gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
                                        batch_size=config.batch_size_eval,
@@ -303,9 +307,11 @@ def train_script(config):
             loss_type=config.loss_type,
             device=config.device,
         )
+        print("Train in group.")
         print("Label Smoothing", config.label_smoothing)
         print("Loss type", config.loss_type)
 
+    print("Train with weight?", config.with_weight, "k=", config.k)
     # loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
     loss_function_normal = ContrastiveLoss(
         device=config.device,
@@ -355,8 +361,9 @@ def train_script(config):
                            gallery_loader=gallery_dataloader_test, 
                            query_list=query_img_list,
                            gallery_list=gallery_img_list,
+                           query_loc_xy_list=query_loc_xy_list,
+                           gallery_loc_xy_list=gallery_loc_xy_list,
                            pairs_dict=pairs_drone2sate_dict,
-                           share_weights=config.share_weights,
                            ranks_list=[1, 5, 10],
                            step_size=1000,
                            cleanup=True)
@@ -416,7 +423,7 @@ def train_script(config):
         
         print("\n{}[Epoch: {}]{}".format(30*"-", epoch, 30*"-"))
 
-        if epoch > 2 and config.train_in_group:
+        if config.train_in_group:
             train_in_group = True
             loss_function = loss_function_group
         else:
@@ -442,7 +449,7 @@ def train_script(config):
                            train_with_recon=config.train_with_recon,
                            loss_recon=loss_recon,
                            recon_weight=config.recon_weight,
-                           with_weight=config.train_with_weight)
+                           with_weight=config.with_weight)
         
         print("Epoch: {}, Train Loss = {:.3f}, Lr = {:.6f}".format(epoch,
                                                                    train_loss,
@@ -460,6 +467,8 @@ def train_script(config):
                                 query_list=query_img_list,
                                 gallery_list=gallery_img_list,
                                 pairs_dict=pairs_drone2sate_dict,
+                                query_loc_xy_list=query_loc_xy_list,
+                                gallery_loc_xy_list=gallery_loc_xy_list,
                                 ranks_list=[1, 5, 10],
                                 step_size=1000,
                                 cleanup=True)
@@ -514,6 +523,10 @@ def parse_args():
 
     parser.add_argument('--checkpoint_start', type=str, default=None, help='Training from checkpoint')
 
+    parser.add_argument('--train_mode', type=str, default='iou', help='Train with pair in iou or oc')
+
+    parser.add_argument('--test_mode', type=str, default='oc', help='Test with pair in iou or oc')
+
     parser.add_argument('--train_with_recon', action='store_true', help='Train with reconstruction')
 
     parser.add_argument('--recon_weight', type=float, default=0.1, help='Loss weight for reconstruction')
@@ -527,6 +540,8 @@ def parse_args():
     parser.add_argument('--loss_type', type=str, nargs='+', default=['part_slice', 'whole_slice'], help='Loss type for group train')
 
     parser.add_argument('--label_smoothing', type=float, default=0.0, help='Label smoothing value for loss')
+
+    parser.add_argument('--with_weight', action='store_true', help='Train with weight')
 
     parser.add_argument('--k', type=float, default=5, help='weighted k')
     
@@ -562,10 +577,13 @@ if __name__ == '__main__':
     config.loss_type = args.loss_type
     config.gpu_ids = args.gpu_ids
     config.label_smoothing = args.label_smoothing
-    config.k = args.k
     config.checkpoint_start = args.checkpoint_start
     config.share_weights = not(args.no_share_weights)
     config.freeze_layers = args.freeze_layers
     config.frozen_stages = args.frozen_stages
+    config.with_weight = args.with_weight
+    config.k = args.k
+    config.train_mode = args.train_mode
+    config.test_mode = args.test_mode
 
     train_script(config)

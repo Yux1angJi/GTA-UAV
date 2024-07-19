@@ -72,7 +72,7 @@ class ContrastiveLoss(nn.Module):
         if positive_weights is not None:
             eps = 1. - (1. - self.label_smoothing) / (1 + torch.exp(-self.k * positive_weights))
         else:
-            eps = self.label_smoothing
+            eps = [self.label_smoothing for _ in range(image_features1.shape[0])]
         
         logits_per_image2 = logits_per_image1.T
         
@@ -90,13 +90,14 @@ class ContrastiveLoss(nn.Module):
     
 
 class GroupInfoNCE(nn.Module):
-    def __init__(self, group_len, label_smoothing, loss_type, device='cuda' if torch.cuda.is_available() else 'cpu'):
+    def __init__(self, group_len, label_smoothing, loss_type, k=3, device='cuda' if torch.cuda.is_available() else 'cpu'):
         super().__init__()
         self.label_smoothing = label_smoothing
         self.group_len = group_len
         self.device = device
         self.loss_type = loss_type
         self.ce_loss = torch.nn.CrossEntropyLoss(label_smoothing=0.1)
+        self.k = k
 
     def loss_contrastive_slice(self, similarity_matrix, G, N):
         total_loss = 0.0
@@ -191,7 +192,7 @@ class GroupInfoNCE(nn.Module):
         total_loss /= G
         return total_loss
         
-    def forward(self, image_features1, image_features2, logit_scale):
+    def forward(self, image_features1, image_features2, logit_scale, positive_weights=None):
         ## G*N, D
         image_features1 = F.normalize(image_features1, dim=-1)
         image_features2 = F.normalize(image_features2, dim=-1)
@@ -199,6 +200,11 @@ class GroupInfoNCE(nn.Module):
         GN, D = image_features1.shape
         N = self.group_len
         G = GN // N
+
+        if positive_weights is not None:
+            eps = 1. - (1. - self.label_smoothing) / (1 + torch.exp(-self.k * positive_weights))
+        else:
+            eps = [self.label_smoothing for _ in range(image_features1.shape[0])]
 
         # I_g = torch.eye(G)
         # # 创建一个 n x n 的单位矩阵
@@ -241,6 +247,18 @@ class ReconstructionLoss(nn.Module):
 
     def forward(self, recon_img, ori_img):
         x = self.criterion(recon_img, ori_img)
+        return {"recon": x}
+
+
+class OffsetLoss(nn.Module):
+    def __init__(self, device='cuda' if torch.cuda.is_available() else 'cpu'):
+        super().__init__()
+        self.device = device
+        self.criterion = nn.MSELoss()
+
+    def forward(self, offset_pred, query_loc_xy, ref_loc_xy):
+        offset_label = query_loc_xy - ref_loc_xy
+        x = self.criterion(offset_pred, offset_label)
         return {"recon": x}
 
 

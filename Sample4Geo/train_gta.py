@@ -4,6 +4,7 @@ import math
 import shutil
 import sys
 import torch
+import argparse
 from dataclasses import dataclass
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
@@ -13,8 +14,15 @@ from sample4geo.dataset.gta import GTADatasetEval, GTADatasetTrain, get_transfor
 from sample4geo.utils import setup_system, Logger
 from sample4geo.trainer import train, train_with_weight
 from sample4geo.evaluate.gta import evaluate
-from sample4geo.loss import InfoNCE, ContrastiveLoss
+from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE
 from sample4geo.model import TimmModel
+
+
+def parse_tuple(s):
+    try:
+        return tuple(map(int, s.split(',')))
+    except ValueError:
+        raise argparse.ArgumentTypeError("Tuple must be integers separated by commas")
 
 
 @dataclass
@@ -32,7 +40,7 @@ class Configuration:
 
     share_weights: bool = True
     
-    train_with_weight: bool = True
+    with_weight: bool = True
 
     train_in_group: bool = True
     group_len = 2
@@ -90,7 +98,6 @@ class Configuration:
     checkpoint_start = None
     # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
 
-
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
     
@@ -140,6 +147,8 @@ def train_script(config):
     
     print("training save in path: {}".format(model_path))
 
+    print("training start from", config.checkpoint_start)
+
     #-----------------------------------------------------------------------------#
     # Model                                                                       #
     #-----------------------------------------------------------------------------#
@@ -149,7 +158,8 @@ def train_script(config):
 
     model = TimmModel(config.model,
                           pretrained=True,
-                          img_size=config.img_size)
+                          img_size=config.img_size,
+                          share_weights=config.share_weights)
                           
     data_config = model.get_config()
     print(data_config)
@@ -196,8 +206,10 @@ def train_script(config):
     train_dataset = GTADatasetTrain(pairs_meta_file=config.train_pairs_meta_file,
                                       transforms_query=train_sat_transforms,
                                       transforms_gallery=train_drone_transforms,
+                                      group_len=config.group_len,
                                       prob_flip=config.prob_flip,
                                       shuffle_batch_size=config.batch_size,
+                                      mode=config.train_mode,
                                       )
     
     train_dataloader = DataLoader(train_dataset,
@@ -208,10 +220,12 @@ def train_script(config):
     
     # Test query
     query_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                        mode="drone",
+                                        view="drone",
                                         transforms=val_transforms,
+                                        mode=config.test_mode,
                                         )
     query_img_list = query_dataset_test.images
+    query_loc_xy_list = query_dataset_test.images_loc_xy
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
     
     query_dataloader_test = DataLoader(query_dataset_test,
@@ -222,10 +236,11 @@ def train_script(config):
     
     # Test gallery
     gallery_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                               mode="sate",
+                                               view="sate",
                                                transforms=val_transforms,
                                                sate_img_dir=config.sate_img_dir,
                                                )
+    gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
     gallery_img_list = gallery_dataset_test.images
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
@@ -240,9 +255,19 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     # Loss                                                                        #
     #-----------------------------------------------------------------------------#
-
+    print("Train with weight?", config.with_weight, "k=", config.k)
+    if config.train_in_group:
+        loss_function_group = GroupInfoNCE(
+            group_len=config.group_len,
+            label_smoothing=config.label_smoothing,
+            loss_type=config.loss_type,
+            device=config.device,
+        )
+        print("Train in group.")
+        print("Label Smoothing", config.label_smoothing)
+        print("Loss type", config.loss_type)
     # loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
-    loss_function = ContrastiveLoss(
+    loss_function_normal = ContrastiveLoss(
         device=config.device,
         label_smoothing=config.label_smoothing,
         k=config.k,
@@ -322,14 +347,11 @@ def train_script(config):
                            gallery_list=gallery_img_list,
                            pairs_dict=pairs_drone2sate_dict,
                            ranks_list=[1, 5, 10],
+                           query_loc_xy_list=query_loc_xy_list,
+                           gallery_loc_xy_list=gallery_loc_xy_list,
                            step_size=1000,
                            cleanup=True)
-
-    #-----------------------------------------------------------------------------#
-    # Shuffle                                                                     #
-    #-----------------------------------------------------------------------------#            
-    if config.custom_sampling:
-        train_dataloader.dataset.shuffle()
+           
             
     #-----------------------------------------------------------------------------#
     # Train                                                                       #
@@ -341,6 +363,18 @@ def train_script(config):
     for epoch in range(1, config.epochs+1):
         
         print("\n{}[Epoch: {}]{}".format(30*"-", epoch, 30*"-"))
+
+        if config.train_in_group:
+            train_in_group = True
+            loss_function = loss_function_group
+        else:
+            train_in_group = False
+            loss_function = loss_function_normal
+    
+        if train_in_group:
+            train_dataloader.dataset.shuffle_group()
+        else:
+            train_dataloader.dataset.shuffle()
         
         train_loss = train_with_weight(config,
                            model,
@@ -349,7 +383,7 @@ def train_script(config):
                            optimizer=optimizer,
                            scheduler=scheduler,
                            scaler=scaler,
-                           with_weight=config.train_with_weight)
+                           with_weight=config.with_weight)
         
         print("Epoch: {}, Train Loss = {:.3f}, Lr = {:.6f}".format(epoch,
                                                                    train_loss,
@@ -368,6 +402,8 @@ def train_script(config):
                                 gallery_list=gallery_img_list,
                                 pairs_dict=pairs_drone2sate_dict,
                                 ranks_list=[1, 5, 10],
+                                query_loc_xy_list=query_loc_xy_list,
+                                gallery_loc_xy_list=gallery_loc_xy_list,
                                 step_size=1000,
                                 cleanup=True)
                 
@@ -380,14 +416,13 @@ def train_script(config):
                 else:
                     torch.save(model.state_dict(), '{}/weights_e{}_{:.4f}.pth'.format(model_path, epoch, r1_test))
                 
-
-        if config.custom_sampling:
-            train_dataloader.dataset.shuffle()
-                
     if torch.cuda.device_count() > 1 and len(config.gpu_ids) > 1:
         torch.save(model.module.state_dict(), '{}/weights_end.pth'.format(model_path))
     else:
-        torch.save(model.state_dict(), '{}/weights_end.pth'.format(model_path))            
+        torch.save(model.state_dict(), '{}/weights_end.pth'.format(model_path))  
+
+    f.close()
+    sys.stdout = sys.__stdout__          
 
 
 def parse_args():
@@ -397,7 +432,7 @@ def parse_args():
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
-    parser.add_argument('--data_dir', type=str, default='randcam2_std0_stable/train_h23456_iou4', help='Data path')
+    parser.add_argument('--data_dir', type=str, default='randcam2_std0_stable/test', help='Data path')
 
     parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
 
@@ -413,6 +448,10 @@ def parse_args():
 
     parser.add_argument('--checkpoint_start', type=str, default=None, help='Training from checkpoint')
 
+    parser.add_argument('--train_mode', type=str, default='iou', help='Train with pair in iou or oc')
+
+    parser.add_argument('--test_mode', type=str, default='oc', help='Test with pair in iou or oc')
+
     parser.add_argument('--train_with_recon', action='store_true', help='Train with reconstruction')
 
     parser.add_argument('--recon_weight', type=float, default=0.1, help='Loss weight for reconstruction')
@@ -426,6 +465,8 @@ def parse_args():
     parser.add_argument('--loss_type', type=str, nargs='+', default=['part_slice', 'whole_slice'], help='Loss type for group train')
 
     parser.add_argument('--label_smoothing', type=float, default=0.0, help='Label smoothing value for loss')
+
+    parser.add_argument('--with_weight', action='store_true', help='Train with weight')
 
     parser.add_argument('--k', type=float, default=5, help='weighted k')
     
@@ -450,10 +491,13 @@ if __name__ == '__main__':
     config.loss_type = args.loss_type
     config.gpu_ids = args.gpu_ids
     config.label_smoothing = args.label_smoothing
+    config.with_weight = args.with_weight
     config.k = args.k
     config.checkpoint_start = args.checkpoint_start
     config.share_weights = not(args.no_share_weights)
     config.freeze_layers = args.freeze_layers
     config.frozen_stages = args.frozen_stages
+    config.train_mode = args.train_mode
+    config.test_mode = args.test_mode
 
     train_script(config)
