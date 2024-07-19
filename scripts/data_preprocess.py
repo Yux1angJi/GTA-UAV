@@ -4,12 +4,11 @@ from PIL import Image
 
 def resize_image(image_path, size):
     with Image.open(image_path) as img:
-        img = img.resize(size, Image.ANTIALIAS)
+        img = img.resize(size, Image.LANCZOS)
         img.save(image_path)
 
 def process_images(input_dir, size):
     tasks = []
-
     for root, _, files in os.walk(input_dir):
         for file in files:
             if file.endswith('.png'):
@@ -49,9 +48,7 @@ def rename_files(base_dir):
                         print(f"Renamed {current_file_path} to {new_file_path}")
 
 if __name__ == "__main__":
-    # input_directory = 'path/to/your/input_directory'
-    # new_size = (512, 512)  # Example size
+    input_directory = 'path/to/your/input_directory'
+    new_size = (512, 512)  # Example size
 
-    # process_images(input_directory, new_size)
-    base_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/randcam2_std0_stable_all_resize'
-    rename_files(base_dir)
+    process_images(input_directory, new_size)
