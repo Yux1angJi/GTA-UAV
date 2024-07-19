@@ -28,7 +28,7 @@ Image.MAX_IMAGE_PIXELS = None
 FOV_V = 48.44
 FOV_H = 33.48
 
-TRAIN_LIST = [1,2,3,4,5,6,7,8]
+TRAIN_LIST = [1,2,3,4,5,8,11]
 TEST_LIST = []
 # OK_LIST = [1]
 
@@ -352,7 +352,7 @@ def process_per_image(drone_meta_data):
     zoom_list = [int(x) for x in zoom_list]
     zoom_list.sort()
     zoom_max = zoom_list[-1]
-    zoom_list = zoom_list[-3:]
+    zoom_list = zoom_list[-3:-1]
 
     cur_img_x, cur_img_y = geo_to_image_coords(lat, lon, sate_lt_lat, sate_lt_lon, sate_rb_lat, sate_rb_lon, sate_pix_h, sate_pix_w)
     p_img_xy = [
@@ -1066,7 +1066,7 @@ def get_transforms(img_size,
 
 if __name__ == '__main__':
     root = '/home/xmuairmud/data/UAV_VisLoc_dataset'
-    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4_oc4_z3'
+    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/same_all_iou4_oc4_z31'
     process_visloc_data(root, save_root)
 
 

@@ -317,7 +317,7 @@ def copy_png_files(src_path, dst_path):
 
 
 
-def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7]):
+def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7], split_type='same'):
     start_x = -1702
     start_y = -2587.6817
 
@@ -348,9 +348,19 @@ def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7
         if result is not None:
             processed_data_wonone.append(result)
 
-    processed_data_num = len(processed_data_wonone)
-    processed_data_train = processed_data_wonone[:processed_data_num // 5 * 4]
-    processed_data_test = processed_data_wonone[processed_data_num // 5 * 4: ]
+    if split_type == 'same':
+        processed_data_num = len(processed_data_wonone)
+        processed_data_train = processed_data_wonone[:processed_data_num // 5 * 4]
+        processed_data_test = processed_data_wonone[processed_data_num // 5 * 4: ]
+    elif split_type == 'cross':
+        processed_data_train = []
+        processed_data_test = []
+        for result in processed_data_wonone:
+            if result['drone_loc_x_y'][0] < 7500 * 0.45:
+                processed_data_train.append(result)
+            else:
+                processed_data_test.append(result)
+    print(f'After spliting, train data len={len(processed_data_train)}, test data len={len(processed_data_test)}')
     
     train_pkl_save_path = os.path.join(save_root, 'train_pair_meta.pkl')
     train_data_save_dir = os.path.join(save_root, 'train')
@@ -869,8 +879,8 @@ def move_file():
 
 if __name__ == "__main__":
     root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/train_h23456_z4_iou4_oc4'
-    process_gta_data(root, save_root, h_list=[200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7])
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4'
+    process_gta_data(root, save_root, h_list=[200, 300, 400, 500, 600], zoom_list=[4, 5, 6], split_type='same')
 
     # src_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/randcam2_std0_stable_all_resize'
     # dst_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/drone/meta_data'
