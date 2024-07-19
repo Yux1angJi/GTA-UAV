@@ -4,12 +4,11 @@ from PIL import Image
 
 def resize_image(image_path, size):
     with Image.open(image_path) as img:
-        img = img.resize(size, Image.ANTIALIAS)
+        img = img.resize(size, Image.LANCZOS)
         img.save(image_path)
 
 def process_images(input_dir, size):
     tasks = []
-
     for root, _, files in os.walk(input_dir):
         for file in files:
             if file.endswith('.png'):
@@ -20,7 +19,6 @@ def process_images(input_dir, size):
         pool.starmap(resize_image, tasks)
 
 if __name__ == "__main__":
-    input_directory = 'path/to/your/input_directory'
+    input_directory = 'D:\\data\\GTA-UAV\\Captured\\randcam2_std0_stable_all_resize'
     new_size = (512, 512)  # Example size
-
     process_images(input_directory, new_size)

@@ -17,7 +17,7 @@ reinforcement learning tasks.
 
 We used synthetic training data generated with the DeepGTAV framework to good
 real world object detection performance reported in our paper `Leveraging
-Synthetic Data in Object Detection on Unmanned Aerial Vehicles`
+Synthetic Data in Object Detection on Unmanned Aerial s`
 https://arxiv.org/abs/2112.12252.
 
 ## Video Demonstration

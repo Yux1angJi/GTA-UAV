@@ -150,7 +150,7 @@ if __name__ == '__main__':
 
 
     OFFSET_HEIGHT = 30
-    TRAVEL_HEIGHT = 300
+    TRAVEL_HEIGHT = 200
 
     # currentTravelHeight = uniform(TRAVEL_HEIGHT_LOW, TRAVEL_HEIGHT_HIGH)
     
@@ -178,12 +178,17 @@ if __name__ == '__main__':
 
     run_count = getRunCount(args.save_dir)
     # weather = random.choice(["CLEAR", "EXTRASUNNY", "CLOUDS", "OVERCAST"])
-    weather = "CLEAR"
+    weather = "EXTRASUNNY"
     count = 0
 
 
-    x_temp = 3000
-    y_temp = 3000
+    weather = "CLEAR"
+    client.sendMessage(SetWeather(weather))
+
+    client.sendMessage(SetClockTime(12))
+
+    x_temp = 245.23306274414062
+    y_temp = -998.244140625
     client.sendMessage(TeleportToLocation(x_temp, y_temp, TRAVEL_HEIGHT))
     message = client.recvMessage()
     # message = json.loads(data)
@@ -213,7 +218,7 @@ if __name__ == '__main__':
     print('heightAboveGround', message['HeightAboveGround'])
     print('points', points)
 
-    client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=-90, rot_z=0, rot_y=20))
+    client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=-90, rot_z=20, rot_y=0))
     message = client.recvMessage()
     print('end camera', message['CameraAngle'])
 
