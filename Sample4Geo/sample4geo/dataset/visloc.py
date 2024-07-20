@@ -98,6 +98,27 @@ def tile2sate(tile_name):
     return tile_center_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y, str_i)
 
 
+def cp_tile():
+    root = '/home/xmuairmud/data/UAV_VisLoc_dataset'
+    dst_dir = '/home/xmuairmud/data/UAV_VisLoc_dataset/all_satellite_z31'
+    os.makedirs(dst_dir, exist_ok=True)
+    for i in range(1, 12):
+        if i not in TRAIN_LIST:
+            continue
+        str_i = f'{i:02}'
+        tile_dir = os.path.join(root, str_i, 'tile')
+        zoom_list = os.listdir(tile_dir)
+        zoom_list = [int(x) for x in zoom_list]
+        zoom_list.sort()
+        zoom_max = zoom_list[-1]
+        zoom_list = zoom_list[-3:-1]
+        for zoom in zoom_list:
+            tile_zoom_dir = os.path.join(tile_dir, f'{zoom}')
+            for _, _, files in os.walk(tile_zoom_dir):
+                for file in files:
+                    shutil.copy(os.path.join(tile_zoom_dir, file), dst_dir)
+
+
 def is_point_in_rectangle(point_lat, point_lon, rect_top_left_lat, rect_top_left_lon, rect_bottom_right_lat, rect_bottom_right_lon):
     # 判断点是否在长方形区域内
     if (rect_top_left_lat >= point_lat >= rect_bottom_right_lat) and (rect_top_left_lon <= point_lon <= rect_bottom_right_lon):
@@ -1068,6 +1089,7 @@ if __name__ == '__main__':
     root = '/home/xmuairmud/data/UAV_VisLoc_dataset'
     save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/same_all_iou4_oc4_z31'
     process_visloc_data(root, save_root)
+    # cp_tile()
 
 
     # tile_satellite()
