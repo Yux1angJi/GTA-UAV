@@ -124,7 +124,7 @@ class Configuration:
 def train_script(config):
     config.train_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/train_pair_meta.pkl'
     config.test_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/test_pair_meta.pkl'
-    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/all_satellite'
+    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/all_satellite_z31'
 
     loss_type_str = ""
     for loss_type in config.loss_type:
