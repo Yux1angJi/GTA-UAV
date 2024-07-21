@@ -54,7 +54,7 @@ class TimmModel(nn.Module):
     def __init__(self, 
                  model_name,
                  pretrained=True,
-                 img_size=383,
+                 img_size=384,
                  share_weights=True,
                  train_with_recon=False,
                  train_with_offset=False):
@@ -63,13 +63,13 @@ class TimmModel(nn.Module):
         self.share_weights = share_weights
         self.img_size = img_size
         if share_weights:
-            if "vit" in model_name:
+            if "vit" in model_name or "swin" in model_name:
                 # automatically change interpolate pos-encoding to img_size
                 self.model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
             else:
                 self.model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
         else:
-            if "vit" in model_name:
+            if "vit" in model_name or "swin" in model_name:
                 self.model1 = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size)
                 self.model2 = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
             else:
@@ -192,10 +192,19 @@ class TimmModel(nn.Module):
 
 
 if __name__ == '__main__':
-    model = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
+    model1 = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
+    model2 = TimmModel(model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k') 
+    model3 = TimmModel(model_name='resnet101.tv_in1k') 
+    model4 = TimmModel(model_name='swin_base_patch4_window12_384.ms_in22k_ft_in1k')
+    print(model1)
+    print(model2)
     # model = TimmModel(model_name='convnext_tiny', train_with_recon=True, pretrained=False)
-    # x = torch.rand((1, 3, 384, 384))
-    # x = model.forward(x, forward_features=True)
+    x = torch.rand((1, 3, 384, 384))
+    x1 = model1.forward(x)
+    x2 = model2.forward(x)
+    x3 = model3.forward(x)
+    x4 = model4.forward(x)
+    print(x1.shape, x2.shape, x3.shape, x4.shape)
     # x = model.decode(x)
     # print(x.shape)
-    print(len(model.model.stages), len(model.model.stages[0].blocks), len(model.model.stages[1].blocks), len(model.model.stages[2].blocks), len(model.model.stages[3].blocks))
+    # print(len(model.model.stages), len(model.model.stages[0].blocks), len(model.model.stages[1].blocks), len(model.model.stages[2].blocks), len(model.model.stages[3].blocks))

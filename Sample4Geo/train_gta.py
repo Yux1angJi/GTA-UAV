@@ -92,7 +92,7 @@ class Configuration:
     dataset: str= "GTA-D2S"
     
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -434,6 +434,8 @@ def parse_args():
 
     parser.add_argument('--data_dir', type=str, default='randcam2_std0_stable/test', help='Data path')
 
+    parser.add_argument('--model', type=str, default='convnext_base.fb_in22k_ft_in1k_384', help='Model architecture')
+
     parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
 
     parser.add_argument('--freeze_layers', action='store_true', help='Freeze layers for training')
@@ -441,6 +443,8 @@ def parse_args():
     parser.add_argument('--frozen_stages', type=int, nargs='+', default=[0,0,0,0], help='Frozen stages for training')
 
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
+
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 
     parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
 
@@ -494,6 +498,8 @@ if __name__ == '__main__':
     config.with_weight = args.with_weight
     config.k = args.k
     config.checkpoint_start = args.checkpoint_start
+    config.model = args.model
+    config.lr = args.lr
     config.share_weights = not(args.no_share_weights)
     config.freeze_layers = args.freeze_layers
     config.frozen_stages = args.frozen_stages
