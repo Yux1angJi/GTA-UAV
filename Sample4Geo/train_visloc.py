@@ -501,13 +501,15 @@ def train_script(config):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Training script for visloc.")
+    parser = argparse.ArgumentParser(description="Training script for gta.")
 
     parser.add_argument('--log_to_file', action='store_true', help='Log saving to file')
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
-    parser.add_argument('--data_dir', type=str, default='data_all_iou4', help='Log file path')
+    parser.add_argument('--data_dir', type=str, default='same_', help='Data path')
+
+    parser.add_argument('--model', type=str, default='convnext_base.fb_in22k_ft_in1k_384', help='Model architecture')
 
     parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
 
@@ -516,6 +518,8 @@ def parse_args():
     parser.add_argument('--frozen_stages', type=int, nargs='+', default=[0,0,0,0], help='Frozen stages for training')
 
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
+
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 
     parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
 
@@ -552,17 +556,6 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
-    # loss_type_list = [ 
-    #                   # ["whole_slice", "part_slice", "whole_block"], 
-    #                   ["whole_slice", "part_slice", "whole_block", "part_block"],
-    #                   ["whole_block", "part_block", "whole_slice"],
-    #                   ["whole_block", "part_block", "part_slice"]]
-    # log_path_list = [
-    #             # './nohup_train_visloc_1234z3_group2_lpws_wb_bs40_e5.out',
-    #             './nohup_train_visloc_1234z3_group2_lpws_wpb_bs40_e5.out',
-    #             './nohup_train_visloc_1234z3_group2_lpwb_ws_bs40_e5.out',
-    #             './nohup_train_visloc_1234z3_group2_lpwb_ps_bs40_e5.out']
-
     config = Configuration()
     config.data_dir = args.data_dir
     config.log_to_file = args.log_to_file
@@ -577,12 +570,14 @@ if __name__ == '__main__':
     config.loss_type = args.loss_type
     config.gpu_ids = args.gpu_ids
     config.label_smoothing = args.label_smoothing
+    config.with_weight = args.with_weight
+    config.k = args.k
     config.checkpoint_start = args.checkpoint_start
+    config.model = args.model
+    config.lr = args.lr
     config.share_weights = not(args.no_share_weights)
     config.freeze_layers = args.freeze_layers
     config.frozen_stages = args.frozen_stages
-    config.with_weight = args.with_weight
-    config.k = args.k
     config.train_mode = args.train_mode
     config.test_mode = args.test_mode
 
