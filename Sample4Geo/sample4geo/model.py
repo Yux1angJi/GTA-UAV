@@ -61,6 +61,7 @@ class TimmModel(nn.Module):
                  
         super(TimmModel, self).__init__()
         self.share_weights = share_weights
+        self.model_name = model_name
         self.img_size = img_size
         if share_weights:
             if "vit" in model_name or "swin" in model_name:
@@ -99,30 +100,53 @@ class TimmModel(nn.Module):
     def set_grad_checkpointing(self, enable=True):
         self.model.set_grad_checkpointing(enable)
 
-    def freeze_layers(self, frozen_stages=[0,0,0,0]):
-        if self.share_weights:
-            # stem
-            for param in self.model.stem.parameters():
-                param.requires_grad = False
-            # stage
-            for i in range(len(self.model.stages)):
-                for j in range(frozen_stages[i]):
-                    for param in self.model.stages[i].blocks[j].parameters():
+    def freeze_layers(self, frozen_blocks=10, frozen_stages=[0,0,0,0]):
+        if 'convnext' in self.model_name:
+            if self.share_weights:
+                # stem
+                for param in self.model.stem.parameters():
+                    param.requires_grad = False
+                # stage
+                for i in range(len(self.model.stages)):
+                    for j in range(frozen_stages[i]):
+                        for param in self.model.stages[i].blocks[j].parameters():
+                            param.requires_grad = False
+            else:
+                # stem
+                for param in self.model1.stem.parameters():
+                    param.requires_grad = False
+                for param in self.model2.stem.parameters():
+                    param.requires_grad = False
+                # stage
+                for i in range(len(self.model1.stages)):
+                    for j in range(frozen_stages[i]):
+                        for param in self.model1.stages[i].blocks[j].parameters():
+                            param.requires_grad = False
+                for i in range(len(self.model2.stages)):
+                    for j in range(frozen_stages[i]):
+                        for param in self.model2.stages[i].blocks[j].parameters():
+                            param.requires_grad = False
+
+        elif 'vit' in self.model_name:
+            if self.share_weights:
+                # patch_embed
+                for param in self.model.patch_embed.parameters():
+                    param.requires_grad = False
+                # blocks
+                for i in range(frozen_blocks):
+                    for param in self.model.blocks[i].parameters():
                         param.requires_grad = False
-        else:
-            # stem
-            for param in self.model1.stem.parameters():
-                param.requires_grad = False
-            for param in self.model2.stem.parameters():
-                param.requires_grad = False
-            # stage
-            for i in range(len(self.model1.stages)):
-                for j in range(frozen_stages[i]):
-                    for param in self.model1.stages[i].blocks[j].parameters():
+            else:
+                # patch_embed
+                for param in self.model1.patch_embed.parameters():
+                    param.requires_grad = False
+                for param in self.model2.patch_embed.parameters():
+                    param.requires_grad = False
+                # blocks
+                for i in range(frozen_blocks):
+                    for param in self.model1.blocks[i].parameters():
                         param.requires_grad = False
-            for i in range(len(self.model2.stages)):
-                for j in range(frozen_stages[i]):
-                    for param in self.model2.stages[i].blocks[j].parameters():
+                    for param in self.model2.blocks[i].parameters():
                         param.requires_grad = False
 
 
@@ -192,19 +216,19 @@ class TimmModel(nn.Module):
 
 
 if __name__ == '__main__':
-    model1 = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
+    # model1 = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
     model2 = TimmModel(model_name='timm/vit_base_patch16_rope_reg1_gap_256.sbb_in1k') 
-    model3 = TimmModel(model_name='timm/resnet101.tv_in1k') 
-    model4 = TimmModel(model_name='timm/swinv2_small_window8_256.ms_in1k')
-    print(model1)
+    # model3 = TimmModel(model_name='timm/resnet101.tv_in1k') 
+    # model4 = TimmModel(model_name='timm/swinv2_small_window8_256.ms_in1k')
+    # print(model1)
     print(model2)
     # model = TimmModel(model_name='convnext_tiny', train_with_recon=True, pretrained=False)
-    x = torch.rand((1, 3, 384, 384))
-    x1 = model1.forward(x)
-    x2 = model2.forward(x)
-    x3 = model3.forward(x)
-    x4 = model4.forward(x)
-    print(x1.shape, x2.shape, x3.shape, x4.shape)
+    # x = torch.rand((1, 3, 384, 384))
+    # x1 = model1.forward(x)
+    # x2 = model2.forward(x)
+    # x3 = model3.forward(x)
+    # x4 = model4.forward(x)
+    # print(x1.shape, x2.shape, x3.shape, x4.shape)
     # x = model.decode(x)
     # print(x.shape)
     # print(len(model.model.stages), len(model.model.stages[0].blocks), len(model.model.stages[1].blocks), len(model.model.stages[2].blocks), len(model.model.stages[3].blocks))
