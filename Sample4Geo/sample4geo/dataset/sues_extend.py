@@ -24,16 +24,18 @@ class ConditionalResize(A.ImageOnlyTransform):
 
 def get_data_drone(path):
     data = {}
-    for root, dirs, files in os.walk(path, topdown=False):
-        for name in dirs:
-            data[name] = {"path": os.path.join(root, name)}
-            for _, dirs, _ in os.walk(data[name]["path"], topdown=False):
-                for height in dirs:
-                    tmp_dir = os.path.join(data[name]["path"], height)
-                    for _, _, files in os.walk(tmp_dir, topdown=False):
-                        for i in range(len(files)):
-                            files[i] = os.path.join(tmp_dir, files[i])
-                        data[name]["files"] = files
+    dirs = os.listdir(path)
+    for name in dirs:
+        data[name] = {"path": os.path.join(path, name)}
+        for _, dirs, _ in os.walk(data[name]["path"], topdown=False):
+            for height in dirs:
+                tmp_file_path_list = []
+                tmp_dir = os.path.join(data[name]["path"], height)
+                # print('tmp_dir', tmp_dir)
+                for _, _, tmp_files in os.walk(tmp_dir, topdown=False):
+                    for i in range(len(tmp_files)):
+                        tmp_file_path_list.append(os.path.join(tmp_dir, tmp_files[i]))
+                    data[name]["files"] = tmp_file_path_list
     return data
 
 
@@ -42,10 +44,11 @@ def get_data_sate(path):
     for root, dirs, files in os.walk(path, topdown=False):
         for name in dirs:
             data[name] = {"path": os.path.join(root, name)}
-            for _, _, files in os.walk(data[name]["path"], topdown=False):
-                for i in range(len(files)):
-                    files[i] = os.path.join(data[name]["path"], files[i])
-                data[name]["files"] = files
+            tmp_file_path_list = []
+            for _, _, tmp_files in os.walk(data[name]["path"], topdown=False):
+                for i in range(len(tmp_files)):
+                    tmp_file_path_list.append(os.path.join(data[name]["path"], tmp_files[i]))
+                data[name]["files"] = tmp_file_path_list
     return data
 
 
@@ -66,8 +69,8 @@ class SUESEDatasetTrain(Dataset):
         super().__init__()
  
 
-        self.query_dict = get_data_drone(query_folder)
-        self.gallery_dict = get_data_sate(gallery_folder)
+        self.query_dict = get_data_sate(query_folder)
+        self.gallery_dict = get_data_drone(gallery_folder)
         self.ids = set(self.query_dict.keys()).intersection(self.gallery_dict.keys())
 
         if query_extend_folder:
@@ -83,39 +86,41 @@ class SUESEDatasetTrain(Dataset):
         self.pairs = []
         
         for idx in self.ids:
-            
-            query_img = self.query_dict[idx]["files"][0]
+            # print('?????', self.query_dict[idx]['path'])
+            query_img_list = self.query_dict[idx]["files"]
             
             gallery_path = self.gallery_dict[idx]["path"]
             gallery_imgs = self.gallery_dict[idx]["files"]
             
-            for g in gallery_imgs:
-                self.pairs.append((idx, query_img, g))
+            for q in query_img_list:
+                for g in gallery_imgs:
+                    self.pairs.append((idx, q, g))
 
-            gallery_extend_path = self.gallery_extend_dict[idx]["path"]
-            gallery_extend_imgs = self.gallery_extend_dict[idx]["files"]
+            # gallery_extend_path = self.gallery_extend_dict[idx]["path"]
+            # gallery_extend_imgs = self.gallery_extend_dict[idx]["files"]
 
-            if pair_de_s:
-                for g in gallery_extend_imgs:
-                    self.pairs.append((idx, query_img, g))
+            # if pair_de_s:
+            #     for g in gallery_extend_imgs:
+            #         self.pairs.append((idx, query_img, g))
 
-            query_extend_imgs = self.query_extend_dict[idx]["files"]
+            # query_extend_imgs = self.query_extend_dict[idx]["files"]
 
-            for q in query_extend_imgs:
-                query_img = g
+            # for q in query_extend_imgs:
+            #     query_img = g
 
-                if pair_d_se:
-                    for g in gallery_imgs:
-                        self.pairs.append((idx, query_img, g))
-                if pair_de_se:
-                    for g in gallery_extend_imgs:
-                        self.pairs.append((idx, query_img, g)) 
+            #     if pair_d_se:
+            #         for g in gallery_imgs:
+            #             self.pairs.append((idx, query_img, g))
+            #     if pair_de_se:
+            #         for g in gallery_extend_imgs:
+            #             self.pairs.append((idx, query_img, g)) 
         
         self.transforms_query = transforms_query
         self.transforms_gallery = transforms_gallery
         self.prob_flip = prob_flip
         self.shuffle_batch_size = shuffle_batch_size
         
+        print('lenlenlen', len(self.pairs))
         self.samples = copy.deepcopy(self.pairs)
         
     def __getitem__(self, index):
@@ -247,11 +252,14 @@ class SUESDatasetEval(Dataset):
                  gallery_n=-1):
         super().__init__()
  
-
-        self.data_dict = get_data_drone(data_folder)
+        if mode == 'drone':
+            self.data_dict = get_data_drone(data_folder)
+        else:
+            self.data_dict = get_data_sate(data_folder)
 
         # use only folders that exists for both gallery and query
         self.ids = list(self.data_dict.keys())
+        print(self.ids)
                 
         self.transforms = transforms
         

@@ -193,9 +193,9 @@ class TimmModel(nn.Module):
 
 if __name__ == '__main__':
     model1 = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
-    model2 = TimmModel(model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k') 
-    model3 = TimmModel(model_name='resnet101.tv_in1k') 
-    model4 = TimmModel(model_name='swin_base_patch4_window12_384.ms_in22k_ft_in1k')
+    model2 = TimmModel(model_name='timm/vit_base_patch16_rope_reg1_gap_256.sbb_in1k') 
+    model3 = TimmModel(model_name='timm/resnet101.tv_in1k') 
+    model4 = TimmModel(model_name='timm/swinv2_small_window8_256.ms_in1k')
     print(model1)
     print(model2)
     # model = TimmModel(model_name='convnext_tiny', train_with_recon=True, pretrained=False)
