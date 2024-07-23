@@ -42,6 +42,8 @@ class Configuration:
 
     frozen_stages = [0,0,0,0]
 
+    frozen_blocks = 10
+
     share_weights: bool = True
     
     with_weight: bool = True
@@ -202,9 +204,9 @@ def train_script(config):
         model_state_dict = torch.load(config.checkpoint_start)  
         model.load_state_dict(model_state_dict, strict=False)   
 
-    print("Freeze model layers:", config.freeze_layers, config.frozen_stages)
+    print("Freeze model layers:", config.freeze_layers, config.frozen_stages, config.frozen_blocks)
     if config.freeze_layers:
-        model.freeze_layers(config.frozen_stages)  
+        model.freeze_layers(frozen_stages=config.frozen_stages, frozen_blocks=config.frozen_blocks)  
 
     # Data parallel
     print("GPUs available:", torch.cuda.device_count())  
@@ -517,6 +519,8 @@ def parse_args():
 
     parser.add_argument('--frozen_stages', type=int, nargs='+', default=[0,0,0,0], help='Frozen stages for training')
 
+    parser.add_argument('--frozen_blocks', type=int, default=10, help='Frozen blocks for ViT training')
+
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
 
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
@@ -578,6 +582,7 @@ if __name__ == '__main__':
     config.share_weights = not(args.no_share_weights)
     config.freeze_layers = args.freeze_layers
     config.frozen_stages = args.frozen_stages
+    config.frozen_blocks = args.frozen_blocks
     config.train_mode = args.train_mode
     config.test_mode = args.test_mode
 
