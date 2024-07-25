@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from torch.utils.data import DataLoader
 
 from sample4geo.dataset.visloc import VisLocDatasetEval, get_transforms
-from sample4geo.evaluate.gta import evaluate
+from sample4geo.evaluate.visloc import evaluate
 from sample4geo.model import TimmModel
 
 
@@ -23,7 +23,7 @@ class Configuration:
     batch_size_eval: int = 128
 
     verbose: bool = True
-    gpu_ids: tuple = (0,)
+    gpu_ids: tuple = (0,1)
     normalize_features: bool = True
     eval_gallery_n: int = -1             # -1 for all or int
 
@@ -35,8 +35,9 @@ class Configuration:
     # Checkpoint to start from
     # checkpoint_start = 'work_dir/university/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/162436/weights_end.pth'
     # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723160833/weights_end.pth'
-    checkpoint_start = 'work_dir/denseuav/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723164458/weights_end.pth'
+    # checkpoint_start = 'work_dir/denseuav/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723164458/weights_end.pth'
     # checkpoint_start = 'work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0715005126/weights_end.pth'
+    checkpoint_start = 'work_dir/visloc/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723075057/weights_end.pth'
     # checkpoint_start = None
 
     # set num_workers to 0 if on Windows

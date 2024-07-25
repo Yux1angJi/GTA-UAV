@@ -9,8 +9,8 @@ from sklearn.metrics import average_precision_score
 from geopy.distance import geodesic
 
 
-def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.01):
-    query_x, query_y = query_loc
+def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
+    query_lat, query_lon = query_loc
 
     sdm_list = []
 
@@ -19,8 +19,8 @@ def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.01):
         sdm_den = 0.0
         for i in range(k):
             idx = index[i]
-            gallery_x, gallery_y = gallery_loc_xy_list[idx]
-            d = np.sqrt((query_x - gallery_x)**2 + (query_y - gallery_y)**2)
+            gallery_lat, gallery_lon = gallery_loc_xy_list[idx]
+            d = geodesic((query_lat, query_lon), (gallery_lat, gallery_lon)).meters
             sdm_nom += (k - i) / np.exp(s * d)
             sdm_den += (k - i)
         sdm_list.append(sdm_nom/sdm_den)

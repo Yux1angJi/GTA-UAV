@@ -453,7 +453,8 @@ class GTADatasetTrain(Dataset):
                  group_len=2,
                  prob_flip=0.5,
                  shuffle_batch_size=128,
-                 mode='iou'):
+                 mode='iou',
+                 train_ratio=1.0):
         super().__init__()
         
         with open(pairs_meta_file, 'rb') as f:
@@ -491,6 +492,11 @@ class GTADatasetTrain(Dataset):
         self.transforms_gallery = transforms_gallery
         self.prob_flip = prob_flip
         self.shuffle_batch_size = shuffle_batch_size
+
+        num_pairs = len(self.pairs)
+        num_pairs_train = int(train_ratio * num_pairs)
+        random.shuffle(self.paris)
+        self.pairs = self.pairs[:num_pairs_train]
         
         self.samples = copy.deepcopy(self.pairs)
     
