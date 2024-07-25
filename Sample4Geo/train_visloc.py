@@ -435,14 +435,15 @@ def train_script(config):
             train_in_group = False
             loss_function = loss_function_normal
 
-        if config.train_with_mix_data:  
-            train_dataset.shuffle()
-            train_dataset_extra.shuffle()
-            train_dataloader.dataset.update([train_dataset.samples, train_dataset_extra.samples])          
-        elif train_in_group:
-            train_dataloader.dataset.shuffle_group()
-        else:
-            train_dataloader.dataset.shuffle()
+        if config.custom_sampling:
+            if config.train_with_mix_data:  
+                train_dataset.shuffle()
+                train_dataset_extra.shuffle()
+                train_dataloader.dataset.update([train_dataset.samples, train_dataset_extra.samples])          
+            elif train_in_group:
+                train_dataloader.dataset.shuffle_group()
+            else:
+                train_dataloader.dataset.shuffle()
         
         train_loss = train_with_weight(config,
                            model,

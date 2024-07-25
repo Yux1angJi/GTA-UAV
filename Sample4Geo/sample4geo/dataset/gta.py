@@ -495,7 +495,7 @@ class GTADatasetTrain(Dataset):
 
         num_pairs = len(self.pairs)
         num_pairs_train = int(train_ratio * num_pairs)
-        random.shuffle(self.paris)
+        random.shuffle(self.pairs)
         self.pairs = self.pairs[:num_pairs_train]
         
         self.samples = copy.deepcopy(self.pairs)

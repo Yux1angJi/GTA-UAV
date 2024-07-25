@@ -55,7 +55,7 @@ class Configuration:
     
     # Training 
     mixed_precision: bool = True
-    custom_sampling: bool = True         # use custom sampling instead of random
+    custom_sampling: bool = False         # use custom sampling instead of random
     seed = 1
     epochs: int = 10
     batch_size: int = 40                # keep in mind real_batch_size = 2 * batch_size
@@ -370,11 +370,12 @@ def train_script(config):
         else:
             train_in_group = False
             loss_function = loss_function_normal
-    
-        if train_in_group:
-            train_dataloader.dataset.shuffle_group()
-        else:
-            train_dataloader.dataset.shuffle()
+
+        if config.custom_sampling:
+            if train_in_group:
+                train_dataloader.dataset.shuffle_group()
+            else:
+                train_dataloader.dataset.shuffle()
         
         train_loss = train_with_weight(config,
                            model,
