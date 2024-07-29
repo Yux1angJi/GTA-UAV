@@ -12,7 +12,8 @@ from sample4geo.model import TimmModel
 class Configuration:
 
     # Model
-    model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    # model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
     
     # Override model image size
     img_size: int = 384
@@ -20,7 +21,7 @@ class Configuration:
     # Evaluation
     batch_size: int = 128
     verbose: bool = True
-    gpu_ids: tuple = (0,)
+    gpu_ids: tuple = (0,1)
     normalize_features: bool = True
     eval_gallery_n: int = -1             # -1 for all or int
 
@@ -31,7 +32,7 @@ class Configuration:
     # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
     # checkpoint_start = 'work_dir/denseuav/convnext_base.fb_in22k_ft_in1k_384/0630155817/weights_end.pth'
     # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723160833/weights_end.pth'
-    # checkpoint_start = None
+    checkpoint_start = 'work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0721155942/weights_end.pth'
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -44,11 +45,11 @@ class Configuration:
 # Config                                                                      #
 #-----------------------------------------------------------------------------#
 
-config = Configuration() 
+config = Configuration()
 
 if config.dataset == 'GTA-D2S':
-    config.train_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/train_pair_meta.pkl'
-    config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/test_pair_meta.pkl'
+    config.train_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/train_pair_meta.pkl'
+    config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/test_pair_meta.pkl'
     config.sate_img_dir = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
 
 
@@ -148,5 +149,6 @@ if __name__ == '__main__':
                            query_loc_xy_list=query_loc_xy_list,
                            gallery_loc_xy_list=gallery_loc_xy_list,
                            step_size=1000,
-                           cleanup=True)
+                           cleanup=True,
+                           plot_acc_threshold=True)
  

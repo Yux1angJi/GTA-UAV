@@ -141,7 +141,7 @@ def evaluate(config,
     cmc = np.zeros(len(gallery_list))
     sdm_list = []
     dis_list = []
-    acc_threshold = [0 for _ in len(dis_threshold_list)]
+    acc_threshold = [0 for _ in range(len(dis_threshold_list))]
 
     for i in range(query_num):
         score = all_scores[i]    
@@ -153,7 +153,7 @@ def evaluate(config,
         dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list, disk_list))
 
         for j in range(len(dis_threshold_list)):
-            if dis_list[i] < dis_threshold_list[j]:
+            if dis_list[i][0] < dis_threshold_list[j]:
                 acc_threshold[j] += 1.
 
         good_index_i = np.isin(index, matches_tensor[i]) 
@@ -201,28 +201,31 @@ def evaluate(config,
         #torch.cuda.empty_cache()
 
     if plot_acc_threshold:
-        acc_threshold /= query_num
-        x_new = np.linspace(x.min(), x.max(), 500)
-        
-        spl = make_interp_spline(x, y, k=3)  
-        y_smooth = spl(x_new)
+        y = np.array(acc_threshold)
+        x = np.array(dis_threshold_list)
+        y = y / query_num * 100
+        print(y.tolist())
 
-        plt.figure(figsize=(10, 6), dpi=300)
-        plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
-        plt.scatter(x, y, label='Discrete Points', color='blue')
+        # x_new = np.linspace(x.min(), x.max(), 500)
+        # spl = make_interp_spline(x, y, k=3)  
+        # y_smooth = spl(x_new)
 
-        plt.xlabel('X Axis')
-        plt.ylabel('Y Axis')
-        plt.title('Smooth Curve with Discrete Points')
-        plt.legend()
+        # plt.figure(figsize=(10, 6), dpi=300)
+        # plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
+        # plt.scatter(x, y, label='Discrete Points', color='blue')
 
-        # 调整边框
-        plt.gca().spines['top'].set_visible(False)
-        plt.gca().spines['right'].set_visible(False)
+        # plt.xlabel('X Axis')
+        # plt.ylabel('Y Axis')
+        # plt.title('Smooth Curve with Discrete Points')
+        # plt.legend()
 
-        # 显示图表
-        plt.tight_layout()
-        plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Sample4Geo/images/plot_acc_threshold.png')
+        # # 调整边框
+        # plt.gca().spines['top'].set_visible(False)
+        # plt.gca().spines['right'].set_visible(False)
+
+        # # 显示图表
+        # plt.tight_layout()
+        # plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Sample4Geo/images/plot_acc_threshold.png')
     
     return cmc[0]
 

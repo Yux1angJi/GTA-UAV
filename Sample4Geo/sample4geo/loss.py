@@ -269,15 +269,15 @@ class TripletLoss(nn.Module):
         self.miner = miners.TripletMarginMiner(margin=0.2, type_of_triplets="semihard")
         self.criterion = losses.TripletMarginLoss(margin=0.2)
 
-    def forward(self, image_features1, image_features2):
+    def forward(self, image_features1, image_features2, logit_scale):
         N = image_features1.shape[0]
         labels = torch.arange(N)
 
         embeddings_all = torch.cat((image_features1, image_features2), dim=0)
         labels_all = torch.cat((labels, labels), dim=0)
 
-        hard_pairs_all = miner(embeddings_all, labels_all)
-        return self.criterion(embeddings_all, labels_all, hard_pairs_all)
+        hard_pairs_all = self.miner(embeddings_all, labels_all)
+        return {"triplet": self.criterion(embeddings_all, labels_all, hard_pairs_all)}
 
 
 if __name__ == '__main__':
