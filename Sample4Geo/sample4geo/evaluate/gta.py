@@ -7,9 +7,9 @@ from torch.cuda.amp import autocast
 import torch.nn.functional as F
 from sklearn.metrics import average_precision_score
 from geopy.distance import geodesic
+import matplotlib.pyplot as plt
+from scipy.interpolate import make_interp_spline
 
-
-NORM_LOC = 10000.
 
 def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
     query_x, query_y = query_loc
@@ -96,7 +96,9 @@ def evaluate(config,
                 sdmk_list=[1, 3, 5],
                 disk_list=[1, 3, 5],
                 step_size=1000,
-                cleanup=True):
+                cleanup=True,
+                dis_threshold_list=[10*(i+1) for i in range(50)],
+                plot_acc_threshold=False):
     print("Extract Features and Compute Scores:")
     img_features_query = predict(config, model, query_loader)
     # img_features_gallery = predict(config, model, gallery_loader)
@@ -139,6 +141,7 @@ def evaluate(config,
     cmc = np.zeros(len(gallery_list))
     sdm_list = []
     dis_list = []
+    acc_threshold = [0 for _ in len(dis_threshold_list)]
 
     for i in range(query_num):
         score = all_scores[i]    
@@ -148,6 +151,10 @@ def evaluate(config,
         sdm_list.append(sdm(query_loc_xy_list[i], sdmk_list, index, gallery_loc_xy_list))
 
         dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list, disk_list))
+
+        for j in range(len(dis_threshold_list)):
+            if dis_list[i] < dis_threshold_list[j]:
+                acc_threshold[j] += 1.
 
         good_index_i = np.isin(index, matches_tensor[i]) 
         
@@ -192,6 +199,30 @@ def evaluate(config,
         del img_features_query, gallery_features_batch, scores_batch
         gc.collect()
         #torch.cuda.empty_cache()
+
+    if plot_acc_threshold:
+        acc_threshold /= query_num
+        x_new = np.linspace(x.min(), x.max(), 500)
+        
+        spl = make_interp_spline(x, y, k=3)  
+        y_smooth = spl(x_new)
+
+        plt.figure(figsize=(10, 6), dpi=300)
+        plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
+        plt.scatter(x, y, label='Discrete Points', color='blue')
+
+        plt.xlabel('X Axis')
+        plt.ylabel('Y Axis')
+        plt.title('Smooth Curve with Discrete Points')
+        plt.legend()
+
+        # 调整边框
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+
+        # 显示图表
+        plt.tight_layout()
+        plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Sample4Geo/images/plot_acc_threshold.png')
     
     return cmc[0]
 
