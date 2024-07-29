@@ -55,12 +55,14 @@ class Configuration:
     
     # Training 
     mixed_precision: bool = True
-    custom_sampling: bool = False         # use custom sampling instead of random
+    custom_sampling: bool = True         # use custom sampling instead of random
     seed = 1
     epochs: int = 10
     batch_size: int = 40                # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
     gpu_ids: tuple = (0,1)           # GPU ids for training
+
+    train_ratio: float = 1.0
 
     # Eval
     batch_size_eval: int = 128
@@ -210,6 +212,7 @@ def train_script(config):
                                       prob_flip=config.prob_flip,
                                       shuffle_batch_size=config.batch_size,
                                       mode=config.train_mode,
+                                      train_ratio=config.train_ratio,
                                       )
     
     train_dataloader = DataLoader(train_dataset,
@@ -475,6 +478,8 @@ def parse_args():
 
     parser.add_argument('--k', type=float, default=5, help='weighted k')
     
+    parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
+
     args = parser.parse_args()
     return args
 
@@ -506,5 +511,6 @@ if __name__ == '__main__':
     config.frozen_stages = args.frozen_stages
     config.train_mode = args.train_mode
     config.test_mode = args.test_mode
+    config.train_ratio = args.train_ratio
 
     train_script(config)
