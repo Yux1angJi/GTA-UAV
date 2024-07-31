@@ -23,7 +23,8 @@ from sample4geo.model import TimmModel
 class Configuration:
     
     # Model
-    model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    # model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
     
     # Override model image size
     img_size: int = 384
@@ -57,7 +58,7 @@ class Configuration:
     label_smoothing: float = 0.1
     
     # Learning Rate
-    lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
+    lr: float = 0.0001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
     scheduler: str = "cosine"           # "polynomial" | "cosine" | "constant" | None
     warmup_epochs: int = 0.1
     lr_end: float = 0.0001               #  only for "polynomial"
@@ -69,11 +70,11 @@ class Configuration:
     model_path: str = "./work_dir/denseuav"
     
     # Eval before training
-    zero_shot: bool = False
+    zero_shot: bool = True
     
     # Checkpoint to start from
-    # checkpoint_start = None
-    checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
+    checkpoint_start = None
+    # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
   
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 

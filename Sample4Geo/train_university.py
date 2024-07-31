@@ -21,7 +21,8 @@ from sample4geo.model import TimmModel
 class Configuration:
     
     # Model
-    model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    # model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
     
     # Override model image size
     img_size: int = 384
@@ -65,10 +66,10 @@ class Configuration:
     prob_flip: float = 0.5              # flipping the sat image and drone image simultaneously
     
     # Savepath for model checkpoints
-    model_path: str = "./university"
+    model_path: str = "./work_dir/university"
     
     # Eval before training
-    zero_shot: bool = False
+    zero_shot: bool = True
     
     # Checkpoint to start from
     checkpoint_start = None

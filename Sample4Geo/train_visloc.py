@@ -42,6 +42,8 @@ class Configuration:
 
     frozen_stages = [0,0,0,0]
 
+    frozen_blocks = 10
+
     share_weights: bool = True
     
     with_weight: bool = True
@@ -64,6 +66,8 @@ class Configuration:
     batch_size: int = 40                # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
     gpu_ids: tuple = (0,1)           # GPU ids for training
+
+    train_ratio: float = 1.0
     
     # Eval
     batch_size_eval: int = 128
@@ -95,7 +99,7 @@ class Configuration:
     dataset: str= "VisLoc-D2S"
     
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -124,7 +128,7 @@ class Configuration:
 def train_script(config):
     config.train_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/train_pair_meta.pkl'
     config.test_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/test_pair_meta.pkl'
-    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/all_satellite'
+    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/all_satellite_z31'
 
     loss_type_str = ""
     for loss_type in config.loss_type:
@@ -202,9 +206,9 @@ def train_script(config):
         model_state_dict = torch.load(config.checkpoint_start)  
         model.load_state_dict(model_state_dict, strict=False)   
 
-    print("Freeze model layers:", config.freeze_layers, config.frozen_stages)
+    print("Freeze model layers:", config.freeze_layers, config.frozen_stages, config.frozen_blocks)
     if config.freeze_layers:
-        model.freeze_layers(config.frozen_stages)  
+        model.freeze_layers(frozen_stages=config.frozen_stages, frozen_blocks=config.frozen_blocks)  
 
     # Data parallel
     print("GPUs available:", torch.cuda.device_count())  
@@ -235,6 +239,7 @@ def train_script(config):
                                       prob_flip=config.prob_flip,
                                       shuffle_batch_size=config.batch_size,
                                       mode=config.train_mode,
+                                      train_ratio=config.train_ratio,
                                       )
     
     train_dataloader = DataLoader(train_dataset,
@@ -430,14 +435,15 @@ def train_script(config):
             train_in_group = False
             loss_function = loss_function_normal
 
-        if config.train_with_mix_data:  
-            train_dataset.shuffle()
-            train_dataset_extra.shuffle()
-            train_dataloader.dataset.update([train_dataset.samples, train_dataset_extra.samples])          
-        elif train_in_group:
-            train_dataloader.dataset.shuffle_group()
-        else:
-            train_dataloader.dataset.shuffle()
+        if config.custom_sampling:
+            if config.train_with_mix_data:  
+                train_dataset.shuffle()
+                train_dataset_extra.shuffle()
+                train_dataloader.dataset.update([train_dataset.samples, train_dataset_extra.samples])          
+            elif train_in_group:
+                train_dataloader.dataset.shuffle_group()
+            else:
+                train_dataloader.dataset.shuffle()
         
         train_loss = train_with_weight(config,
                            model,
@@ -501,13 +507,15 @@ def train_script(config):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Training script for visloc.")
+    parser = argparse.ArgumentParser(description="Training script for gta.")
 
     parser.add_argument('--log_to_file', action='store_true', help='Log saving to file')
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
-    parser.add_argument('--data_dir', type=str, default='data_all_iou4', help='Log file path')
+    parser.add_argument('--data_dir', type=str, default='same_', help='Data path')
+
+    parser.add_argument('--model', type=str, default='convnext_base.fb_in22k_ft_in1k_384', help='Model architecture')
 
     parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
 
@@ -515,7 +523,11 @@ def parse_args():
 
     parser.add_argument('--frozen_stages', type=int, nargs='+', default=[0,0,0,0], help='Frozen stages for training')
 
+    parser.add_argument('--frozen_blocks', type=int, default=10, help='Frozen blocks for ViT training')
+
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
+
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 
     parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
 
@@ -544,6 +556,8 @@ def parse_args():
     parser.add_argument('--with_weight', action='store_true', help='Train with weight')
 
     parser.add_argument('--k', type=float, default=5, help='weighted k')
+
+    parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
     
     args = parser.parse_args()
     return args
@@ -551,17 +565,6 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-
-    # loss_type_list = [ 
-    #                   # ["whole_slice", "part_slice", "whole_block"], 
-    #                   ["whole_slice", "part_slice", "whole_block", "part_block"],
-    #                   ["whole_block", "part_block", "whole_slice"],
-    #                   ["whole_block", "part_block", "part_slice"]]
-    # log_path_list = [
-    #             # './nohup_train_visloc_1234z3_group2_lpws_wb_bs40_e5.out',
-    #             './nohup_train_visloc_1234z3_group2_lpws_wpb_bs40_e5.out',
-    #             './nohup_train_visloc_1234z3_group2_lpwb_ws_bs40_e5.out',
-    #             './nohup_train_visloc_1234z3_group2_lpwb_ps_bs40_e5.out']
 
     config = Configuration()
     config.data_dir = args.data_dir
@@ -577,13 +580,17 @@ if __name__ == '__main__':
     config.loss_type = args.loss_type
     config.gpu_ids = args.gpu_ids
     config.label_smoothing = args.label_smoothing
+    config.with_weight = args.with_weight
+    config.k = args.k
     config.checkpoint_start = args.checkpoint_start
+    config.model = args.model
+    config.lr = args.lr
     config.share_weights = not(args.no_share_weights)
     config.freeze_layers = args.freeze_layers
     config.frozen_stages = args.frozen_stages
-    config.with_weight = args.with_weight
-    config.k = args.k
+    config.frozen_blocks = args.frozen_blocks
     config.train_mode = args.train_mode
     config.test_mode = args.test_mode
+    config.train_ratio = args.train_ratio
 
     train_script(config)

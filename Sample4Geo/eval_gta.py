@@ -12,7 +12,8 @@ from sample4geo.model import TimmModel
 class Configuration:
 
     # Model
-    model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    # model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
     
     # Override model image size
     img_size: int = 384
@@ -20,7 +21,7 @@ class Configuration:
     # Evaluation
     batch_size: int = 128
     verbose: bool = True
-    gpu_ids: tuple = (0,)
+    gpu_ids: tuple = (0,1)
     normalize_features: bool = True
     eval_gallery_n: int = -1             # -1 for all or int
 
@@ -29,8 +30,9 @@ class Configuration:
 
     # Checkpoint to start from
     # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
-    # checkpoint_start = 'work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0703171314/weights_end.pth'
-    checkpoint_start = None
+    # checkpoint_start = 'work_dir/denseuav/convnext_base.fb_in22k_ft_in1k_384/0630155817/weights_end.pth'
+    # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723160833/weights_end.pth'
+    checkpoint_start = 'work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0721155942/weights_end.pth'
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -43,12 +45,12 @@ class Configuration:
 # Config                                                                      #
 #-----------------------------------------------------------------------------#
 
-config = Configuration() 
+config = Configuration()
 
 if config.dataset == 'GTA-D2S':
-    config.train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456/train_pair_meta.pkl'
-    config.test_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456/test_pair_meta.pkl'
-    config.sate_img_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
+    config.train_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/train_pair_meta.pkl'
+    config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/test_pair_meta.pkl'
+    config.sate_img_dir = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
 
 
 if __name__ == '__main__':
@@ -101,10 +103,12 @@ if __name__ == '__main__':
 
     # Test query
     query_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                        mode="drone",
+                                        view="drone",
                                         transforms=val_transforms,
+                                        mode='iou',
                                         )
     query_img_list = query_dataset_test.images
+    query_loc_xy_list = query_dataset_test.images_loc_xy
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
     
     query_dataloader_test = DataLoader(query_dataset_test,
@@ -115,10 +119,12 @@ if __name__ == '__main__':
     
     # Test gallery
     gallery_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                               mode="sate",
+                                               view="sate",
                                                transforms=val_transforms,
                                                sate_img_dir=config.sate_img_dir,
+                                               mode='iou',
                                                )
+    gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
     gallery_img_list = gallery_dataset_test.images
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
@@ -133,13 +139,16 @@ if __name__ == '__main__':
     print("\n{}[{}]{}".format(30*"-", "GTA-VisLoc", 30*"-"))  
 
     r1_test = evaluate(config=config,
-                        model=model,
-                        query_loader=query_dataloader_test,
-                        gallery_loader=gallery_dataloader_test, 
-                        query_list=query_img_list,
-                        gallery_list=gallery_img_list,
-                        pairs_dict=pairs_drone2sate_dict,
-                        ranks_list=[1, 5, 10],
-                        step_size=1000,
-                        cleanup=True)
+                           model=model,
+                           query_loader=query_dataloader_test,
+                           gallery_loader=gallery_dataloader_test, 
+                           query_list=query_img_list,
+                           gallery_list=gallery_img_list,
+                           pairs_dict=pairs_drone2sate_dict,
+                           ranks_list=[1, 5, 10],
+                           query_loc_xy_list=query_loc_xy_list,
+                           gallery_loc_xy_list=gallery_loc_xy_list,
+                           step_size=1000,
+                           cleanup=True,
+                           plot_acc_threshold=True)
  

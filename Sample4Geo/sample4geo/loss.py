@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed.nn
 import numpy as np
+from pytorch_metric_learning import losses, miners
 
 
 class BCEWithLogitsLossWithLabelSmoothing(nn.Module):
@@ -260,6 +261,23 @@ class OffsetLoss(nn.Module):
         offset_label = query_loc_xy - ref_loc_xy
         x = self.criterion(offset_pred, offset_label)
         return {"recon": x}
+
+class TripletLoss(nn.Module):
+    def __init__(self, device='cuda' if torch.cuda.is_available() else 'cpu'):
+        super().__init__()
+        self.device = device
+        self.miner = miners.TripletMarginMiner(margin=0.2, type_of_triplets="semihard")
+        self.criterion = losses.TripletMarginLoss(margin=0.2)
+
+    def forward(self, image_features1, image_features2, logit_scale):
+        N = image_features1.shape[0]
+        labels = torch.arange(N)
+
+        embeddings_all = torch.cat((image_features1, image_features2), dim=0)
+        labels_all = torch.cat((labels, labels), dim=0)
+
+        hard_pairs_all = self.miner(embeddings_all, labels_all)
+        return {"triplet": self.criterion(embeddings_all, labels_all, hard_pairs_all)}
 
 
 if __name__ == '__main__':

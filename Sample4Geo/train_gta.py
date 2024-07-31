@@ -62,6 +62,8 @@ class Configuration:
     verbose: bool = False
     gpu_ids: tuple = (0,1)           # GPU ids for training
 
+    train_ratio: float = 1.0
+
     # Eval
     batch_size_eval: int = 128
     eval_every_n_epoch: int = 1          # eval every n Epoch
@@ -123,7 +125,7 @@ def train_script(config):
 
     config.train_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/train_pair_meta.pkl'
     config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/test_pair_meta.pkl'
-    config.sate_img_dir = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
+    config.sate_img_dir = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
 
     f = open(config.log_path, 'w')
     if config.log_to_file:
@@ -210,6 +212,7 @@ def train_script(config):
                                       prob_flip=config.prob_flip,
                                       shuffle_batch_size=config.batch_size,
                                       mode=config.train_mode,
+                                      train_ratio=config.train_ratio,
                                       )
     
     train_dataloader = DataLoader(train_dataset,
@@ -370,11 +373,12 @@ def train_script(config):
         else:
             train_in_group = False
             loss_function = loss_function_normal
-    
-        if train_in_group:
-            train_dataloader.dataset.shuffle_group()
-        else:
-            train_dataloader.dataset.shuffle()
+
+        if config.custom_sampling:
+            if train_in_group:
+                train_dataloader.dataset.shuffle_group()
+            else:
+                train_dataloader.dataset.shuffle()
         
         train_loss = train_with_weight(config,
                            model,
@@ -434,6 +438,8 @@ def parse_args():
 
     parser.add_argument('--data_dir', type=str, default='randcam2_std0_stable/test', help='Data path')
 
+    parser.add_argument('--model', type=str, default='convnext_base.fb_in22k_ft_in1k_384', help='Model architecture')
+
     parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
 
     parser.add_argument('--freeze_layers', action='store_true', help='Freeze layers for training')
@@ -441,6 +447,8 @@ def parse_args():
     parser.add_argument('--frozen_stages', type=int, nargs='+', default=[0,0,0,0], help='Frozen stages for training')
 
     parser.add_argument('--epochs', type=int, default=5, help='Epochs')
+
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 
     parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
 
@@ -470,6 +478,8 @@ def parse_args():
 
     parser.add_argument('--k', type=float, default=5, help='weighted k')
     
+    parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
+
     args = parser.parse_args()
     return args
 
@@ -494,10 +504,13 @@ if __name__ == '__main__':
     config.with_weight = args.with_weight
     config.k = args.k
     config.checkpoint_start = args.checkpoint_start
+    config.model = args.model
+    config.lr = args.lr
     config.share_weights = not(args.no_share_weights)
     config.freeze_layers = args.freeze_layers
     config.frozen_stages = args.frozen_stages
     config.train_mode = args.train_mode
     config.test_mode = args.test_mode
+    config.train_ratio = args.train_ratio
 
     train_script(config)

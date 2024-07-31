@@ -24,7 +24,8 @@ from sample4geo.model import TimmModel
 class Configuration:
     
     # Model
-    model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    # model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
     
     # Override model image size
     img_size: int = 384
@@ -70,11 +71,11 @@ class Configuration:
     model_path: str = "./sues"
     
     # Eval before training
-    zero_shot: bool = False
+    zero_shot: bool = True
     
     # Checkpoint to start from
-    # checkpoint_start = None
-    checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
+    checkpoint_start = None
+    # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
   
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -96,11 +97,11 @@ class Configuration:
 config = Configuration() 
 
 config.query_folder_train = '/home/xmuairmud/data/SUES-200/train/satellite'
-config.query_extend_folder_train = '/home/xmuairmud/data/SUES-200/train/satellite_outpainting'
+config.query_extend_folder_train = None # '/home/xmuairmud/data/SUES-200/train/satellite_outpainting'
 config.gallery_folder_train = '/home/xmuairmud/data/SUES-200/train/drone'
-config.gallery_extend_folder_train = '/home/xmuairmud/data/SUES-200/train/drone_outpainting'
-config.query_folder_test = '/home/xmuairmud/data/SUES-200/test/query_drone'
-config.gallery_folder_test = '/home/xmuairmud/data/SUES-200/test/gallery_satellite'
+config.gallery_extend_folder_train = None # '/home/xmuairmud/data/SUES-200/train/drone_outpainting'
+config.query_folder_test = '/home/xmuairmud/data/SUES-200/test/drone'
+config.gallery_folder_test = '/home/xmuairmud/data/SUES-200/test/satellite'
 
 
 if __name__ == '__main__':
@@ -193,7 +194,7 @@ if __name__ == '__main__':
     
     # Reference Satellite Images
     query_dataset_test = SUESDatasetEval(data_folder=config.query_folder_test,
-                                               mode="query",
+                                               mode="drone",
                                                transforms=val_transforms,
                                                )
     
@@ -205,7 +206,7 @@ if __name__ == '__main__':
     
     # Query Ground Images Test
     gallery_dataset_test = SUESDatasetEval(data_folder=config.gallery_folder_test,
-                                               mode="gallery",
+                                               mode="sate",
                                                transforms=val_transforms,
                                                sample_ids=query_dataset_test.get_sample_ids(),
                                                gallery_n=config.eval_gallery_n,
@@ -303,7 +304,7 @@ if __name__ == '__main__':
                            step_size=1000,
                            cleanup=True)
         print('jyx zero shot r1_test', r1_test)
-                
+
     #-----------------------------------------------------------------------------#
     # Shuffle                                                                     #
     #-----------------------------------------------------------------------------#            
