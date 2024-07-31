@@ -27,6 +27,7 @@ import math
 import numpy as np
 
 import os
+import sys
 
 
 
@@ -130,6 +131,8 @@ if __name__ == '__main__':
     client.sendMessage(Start(scenario=scenario, dataset=dataset))
     message = client.recvMessage()
     
+    # f = open('log.txt', 'w')
+    # sys.stdout = f
 
     CAMERA_OFFSET_Z = -10
     CAMERA_OFFSET_ROT_Z = 20
@@ -149,7 +152,7 @@ if __name__ == '__main__':
     CAMERA_ROT_Z_L = -180
     CAMERA_ROT_Z_R = 180
 
-    STD_DEV = 3
+    STD_DEV = 5
     ERROR_EPS = 10
 
     rot_x = CAMERA_ROT_X
@@ -173,13 +176,13 @@ if __name__ == '__main__':
     x_step = step
     y_step = step
     x_y_list = [
-        # [-2480, 1764, -3349, 1304],
-        # [-361, 3171, 2283, 3889],
-        # [1572, 3064, 4168, 5311],
-        # [-1007, 798, 5761, 6745],
-        # [-3316, -2135, -28, 1589]
+        [-2480, 1764, -3349, 1304],
+        [-361, 3171, 2283, 3889],
+        [1572, 3064, 4168, 5311],
+        [-1007, 798, 5761, 6745],
+        [-3316, -2135, -28, 1589]
 
-        [-3418, 3945, -3370, 3740]
+        # [-3418, 3945, -3370, 3740]
     ]
     # x_start, x_end = -1700, 1599
     # y_start, y_end = -2586, 710
@@ -239,14 +242,16 @@ if __name__ == '__main__':
                             message = client.recvMessage()
                         
                         elif f == 12:
-                            #rot_x = gaussin_random_truncted(CAMERA_ROT_X_L, CAMERA_ROT_X_R, CAMERA_ROT_X, STD_DEV)
-                            # rot_y = gaussin_random_truncted(CAMERA_ROT_Y_L, CAMERA_ROT_Y_R, CAMERA_ROT_Y, STD_DEV)
-                            rot_x = CAMERA_ROT_X
-                            rot_y = CAMERA_ROT_Y
+                            rot_x = gaussin_random_truncted(CAMERA_ROT_X_L, CAMERA_ROT_X_R, CAMERA_ROT_X, STD_DEV)
+                            rot_y = gaussin_random_truncted(CAMERA_ROT_Y_L, CAMERA_ROT_Y_R, CAMERA_ROT_Y, STD_DEV)
+                            # rot_x = CAMERA_ROT_X
+                            # rot_y = CAMERA_ROT_Y
                             rot_z = random.randint(CAMERA_ROT_Z_L, CAMERA_ROT_Z_R)
                             # print(f, count, rot_x, rot_y, rot_z)
                             client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=rot_x, rot_y=rot_y, rot_z=rot_z))
                             message = client.recvMessage()
+                            rot_x_m, rot_y_m, rot_z_m = message['CameraAngle']
+                            print('!!!!!', rot_x, rot_x_m, rot_y, rot_y_m, rot_z, rot_z_m)
                         elif f == 13:
                             client.sendMessage(StartRecording())
                             message = client.recvMessage()
@@ -271,13 +276,15 @@ if __name__ == '__main__':
                             count += 1
                         
                         elif f == 17:
-                            # rot_x = gaussin_random_truncted(CAMERA_ROT_X_L, CAMERA_ROT_X_R, CAMERA_ROT_X, STD_DEV)
-                            # rot_y = gaussin_random_truncted(CAMERA_ROT_Y_L, CAMERA_ROT_Y_R, CAMERA_ROT_Y, STD_DEV)
-                            rot_x = CAMERA_ROT_X
-                            rot_y = CAMERA_ROT_Y
+                            rot_x = gaussin_random_truncted(CAMERA_ROT_X_L, CAMERA_ROT_X_R, CAMERA_ROT_X, STD_DEV)
+                            rot_y = gaussin_random_truncted(CAMERA_ROT_Y_L, CAMERA_ROT_Y_R, CAMERA_ROT_Y, STD_DEV)
+                            # rot_x = CAMERA_ROT_X
+                            # rot_y = CAMERA_ROT_Y
                             rot_z = random.randint(CAMERA_ROT_Z_L, CAMERA_ROT_Z_R)
                             client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=rot_x, rot_y=rot_y, rot_z=rot_z))
                             message = client.recvMessage()
+                            rot_x_m, rot_y_m, rot_z_m = message['CameraAngle']
+                            print('!!!!!', rot_x, rot_x_m, rot_y, rot_y_m, rot_z, rot_z_m)
                         elif f == 18:
                             client.sendMessage(StartRecording())
                             message = client.recvMessage()
@@ -296,8 +303,9 @@ if __name__ == '__main__':
                                 print(f'Warning!! heightAboveGround value unstable! h3={heightAboveGround_3:.2f}, h4={heightAboveGround_4:.2f}, diff2={diff2:.2f} \
                                     diff_12:{diff_12:.2f}')
                                 continue
-
+                            
                             rot_x, rot_y, rot_z = message['CameraAngle']
+                            print(rot_x, rot_y, rot_z)
                             proj_points = calculate_projection_points(heightAboveGround_2 + CAMERA_OFFSET_Z, rot_x, rot_y, rot_z, x_temp, y_temp)
                             save_image(save_dir, filename, frame2numpy(message['frame']))
                             save_meta_data(save_dir, filename, message["location"], message["HeightAboveGround"], proj_points, message["CameraPosition"], message["CameraAngle"], message["time"])

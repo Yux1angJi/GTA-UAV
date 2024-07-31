@@ -121,7 +121,8 @@ if __name__ == '__main__':
 
     client = Client(ip=args.host, port=args.port)
     
-    scenario = Scenario(drivingMode=786603, vehicle="buzzard", location=[245.23306274414062, -998.244140625, 29.205352783203125], spawnedEntitiesDespawnSeconds=200)
+    # scenario = Scenario(drivingMode=786603, vehicle="buzzard", location=[245.23306274414062, -998.244140625, 29.205352783203125], spawnedEntitiesDespawnSeconds=200)
+    scenario = Scenario(drivingMode=786603, vehicle="voltic", location=[245.23306274414062, -998.244140625, 29.205352783203125], spawnedEntitiesDespawnSeconds=200)
     dataset=Dataset(location=True, time=True, exportBBox2D=True)
 
     client.sendMessage(Start(scenario=scenario, dataset=dataset))
@@ -138,7 +139,7 @@ if __name__ == '__main__':
     # Adjustments for recording
     #  from UAV perspective
     # client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x = uniform(CAMERA_ROT_X_LOW, CAMERA_ROT_X_HIGH)))
-    client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=-90, rot_z=0, rot_y=0))
+    client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=-70, rot_z=70, rot_y=20))
     message = client.recvMessage()
     print('start camera', message['CameraAngle'])
 
@@ -150,7 +151,7 @@ if __name__ == '__main__':
 
 
     OFFSET_HEIGHT = 30
-    TRAVEL_HEIGHT = 200
+    TRAVEL_HEIGHT = 209.9893341064453
 
     # currentTravelHeight = uniform(TRAVEL_HEIGHT_LOW, TRAVEL_HEIGHT_HIGH)
     
@@ -187,8 +188,8 @@ if __name__ == '__main__':
 
     client.sendMessage(SetClockTime(12))
 
-    x_temp = 245.23306274414062
-    y_temp = -998.244140625
+    x_temp = 216.28526306152344
+    y_temp = 751.0
     client.sendMessage(TeleportToLocation(x_temp, y_temp, TRAVEL_HEIGHT))
     message = client.recvMessage()
     # message = json.loads(data)
@@ -218,9 +219,9 @@ if __name__ == '__main__':
     print('heightAboveGround', message['HeightAboveGround'])
     print('points', points)
 
-    client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=-90, rot_z=20, rot_y=0))
-    message = client.recvMessage()
-    print('end camera', message['CameraAngle'])
+    # client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=-90, rot_z=20, rot_y=0))
+    # message = client.recvMessage()
+    # print('end camera', message['CameraAngle'])
 
     a = input()
 
