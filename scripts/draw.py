@@ -98,12 +98,12 @@ def draw_attitude_roll_pitch():
     x_hist.axis('off')
 
     legend_elements = [
-        Patch(facecolor='#C4C0D9', label='Pitch'),
+        Patch(facecolor='#7970A6', label='Pitch'),
         Patch(facecolor='#F8D795', label='Roll')
     ]
     main_ax.legend(handles=legend_elements, loc='upper right')
 
-    plt.savefig('attitude_angles_roll_pitch.png', transparent=True, bbox_inches='tight', pad_inches=0)
+    plt.savefig('attitude_angles_roll_pitch.pdf', transparent=True, bbox_inches='tight', pad_inches=0)
 
 
 def draw_attitude_yaw():
@@ -135,17 +135,17 @@ def draw_attitude_yaw():
 
     # ax[1].hist(pitchs_rad, bins=20, color='#E76768', label='Pitch')
 
-    ax.hist(yaws_rad, bins=30, color='#F3A783', label='Yaw')
+    ax.hist(yaws_rad, bins=30, color='#F3A783', label='Yaw', edgecolor='k')
 
     ax.set_theta_zero_location('N')  # 设置0度位置为北（即顶部）
     ax.set_theta_direction(-1)  # 设置角度增加方向为顺时针
     ax.set_xticklabels(['0°', '45°', '90°', '135°', '180°', '-135°', '-90°', '-45°'])
-    ax.set_yticklabels([])
+    # ax.set_yticklabels([])
 
     fig.legend(loc='upper center')
 
     plt.show()
-    plt.savefig('attitude_angles_yaw.png', transparent=True, bbox_inches='tight', pad_inches=0)
+    plt.savefig('attitude_angles_yaw.pdf', transparent=True, bbox_inches='tight', pad_inches=0)
 
 
 def draw_altitude():
@@ -215,7 +215,12 @@ def draw_scenes_pie():
 def plot_k_ablation():
     altitude = []
     
+
+def f(k, x):
+    return 1 / (1 + np.exp(-k * x))
     
+def plot_func():
+    pass
 
 
 if __name__ == '__main__':
