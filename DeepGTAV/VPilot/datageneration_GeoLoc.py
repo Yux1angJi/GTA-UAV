@@ -137,13 +137,13 @@ if __name__ == '__main__':
     TRAVEL_HEIGHT_LIST = [200, 300, 400, 500, 600]
     TRAVEL_HEIGHT_ATEMPT = 1000
 
-    CAMERA_ROT_X = -90  # [-70, 110]
-    CAMERA_ROT_X_L = -110
-    CAMERA_ROT_X_R = -70
+    CAMERA_ROT_X = 0  # [-70, 110]
+    CAMERA_ROT_X_L = -10
+    CAMERA_ROT_X_R = 10
 
-    CAMERA_ROT_Y = 0    # [-10, 10]
-    CAMERA_ROT_Y_L = -10
-    CAMERA_ROT_Y_R = 10
+    CAMERA_ROT_Y = -90    # [-10, 10]
+    CAMERA_ROT_Y_L = -110
+    CAMERA_ROT_Y_R = -70
 
     CAMERA_ROT_Z = 0    # [-180, 180]
     CAMERA_ROT_Z_L = -180
