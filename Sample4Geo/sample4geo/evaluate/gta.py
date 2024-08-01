@@ -204,28 +204,28 @@ def evaluate(config,
         y = np.array(acc_threshold)
         x = np.array(dis_threshold_list)
         y = y / query_num * 100
+
+        x_new = np.linspace(x.min(), x.max(), 500)
+        spl = make_interp_spline(x, y, k=3)  
+        y_smooth = spl(x_new)
+
+        plt.figure(figsize=(10, 6), dpi=300)
+        plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
+        plt.scatter(x, y, label='Discrete Points', color='blue')
+
+        plt.xlabel('X Axis')
+        plt.ylabel('Y Axis')
+        plt.title('Smooth Curve with Discrete Points')
+        plt.legend()
+
+        # 调整边框
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+
+        # 显示图表
+        plt.tight_layout()
+        plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Sample4Geo/images/plot_acc_threshold_samearea.png')
         print(y.tolist())
-
-        # x_new = np.linspace(x.min(), x.max(), 500)
-        # spl = make_interp_spline(x, y, k=3)  
-        # y_smooth = spl(x_new)
-
-        # plt.figure(figsize=(10, 6), dpi=300)
-        # plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
-        # plt.scatter(x, y, label='Discrete Points', color='blue')
-
-        # plt.xlabel('X Axis')
-        # plt.ylabel('Y Axis')
-        # plt.title('Smooth Curve with Discrete Points')
-        # plt.legend()
-
-        # # 调整边框
-        # plt.gca().spines['top'].set_visible(False)
-        # plt.gca().spines['right'].set_visible(False)
-
-        # # 显示图表
-        # plt.tight_layout()
-        # plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Sample4Geo/images/plot_acc_threshold.png')
     
     return cmc[0]
 
