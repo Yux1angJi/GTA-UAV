@@ -26,13 +26,14 @@ class Configuration:
     eval_gallery_n: int = -1             # -1 for all or int
 
     # Dataset
-    dataset: str = 'GTA-D2S'           # 'U1652-D2S' | 'U1652-S2D'
+    # query_mode: str = 'D2S'           # 'U1652-D2S' | 'U1652-S2D'
+    query_mode: str = 'S2D'
 
     # Checkpoint to start from
     # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
     # checkpoint_start = 'work_dir/denseuav/convnext_base.fb_in22k_ft_in1k_384/0630155817/weights_end.pth'
     # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723160833/weights_end.pth'
-    checkpoint_start = 'work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0721155942/weights_end.pth'
+    checkpoint_start = 'work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0729045039/weights_end.pth'
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -47,10 +48,9 @@ class Configuration:
 
 config = Configuration()
 
-if config.dataset == 'GTA-D2S':
-    config.train_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/train_pair_meta.pkl'
-    config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/test_pair_meta.pkl'
-    config.sate_img_dir = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
+config.train_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/train_pair_meta.pkl'
+config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/test_pair_meta.pkl'
+config.sate_img_dir = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
 
 
 if __name__ == '__main__':
@@ -102,31 +102,45 @@ if __name__ == '__main__':
 
 
     # Test query
-    query_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                        view="drone",
-                                        transforms=val_transforms,
-                                        mode='iou',
+    if config.query_mode == 'D2S':
+        query_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
+                                            view="drone",
+                                            transforms=val_transforms,
+                                            mode='iou',
+                                            )
+        gallery_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
+                                            view="sate",
+                                            transforms=val_transforms,
+                                            sate_img_dir=config.sate_img_dir,
+                                            mode='iou',
+                                            )
+        pairs_dict = query_dataset_test.pairs_drone2sate_dict
+    elif config.query_mode == 'S2D':
+        gallery_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
+                                            view="drone",
+                                            transforms=val_transforms,
+                                            mode='iou',
+                                            )
+        pairs_dict = gallery_dataset_test.pairs_sate2drone_dict
+        query_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
+                                            view="sate",
+                                            transforms=val_transforms,
+                                            query_mode=config.query_mode,
+                                            pairs_sate2drone_dict=pairs_dict,
+                                            sate_img_dir=config.sate_img_dir,
+                                            mode='iou',
                                         )
     query_img_list = query_dataset_test.images
     query_loc_xy_list = query_dataset_test.images_loc_xy
-    pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
-    
-    query_dataloader_test = DataLoader(query_dataset_test,
-                                       batch_size=config.batch_size,
-                                       num_workers=config.num_workers,
-                                       shuffle=False,
-                                       pin_memory=True)
-    
-    # Test gallery
-    gallery_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                               view="sate",
-                                               transforms=val_transforms,
-                                               sate_img_dir=config.sate_img_dir,
-                                               mode='iou',
-                                               )
+
     gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
     gallery_img_list = gallery_dataset_test.images
-    
+
+    query_dataloader_test = DataLoader(query_dataset_test,
+                                    batch_size=config.batch_size,
+                                    num_workers=config.num_workers,
+                                    shuffle=False,
+                                    pin_memory=True)
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
                                        batch_size=config.batch_size,
                                        num_workers=config.num_workers,
@@ -144,7 +158,7 @@ if __name__ == '__main__':
                            gallery_loader=gallery_dataloader_test, 
                            query_list=query_img_list,
                            gallery_list=gallery_img_list,
-                           pairs_dict=pairs_drone2sate_dict,
+                           pairs_dict=pairs_dict,
                            ranks_list=[1, 5, 10],
                            query_loc_xy_list=query_loc_xy_list,
                            gallery_loc_xy_list=gallery_loc_xy_list,
