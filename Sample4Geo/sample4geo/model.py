@@ -2,6 +2,9 @@ import torch
 import timm
 import numpy as np
 import torch.nn as nn
+from PIL import Image
+from urllib.request import urlopen
+from thop import profile
 
 
 class SimpleDecoder(nn.Module):
@@ -216,18 +219,33 @@ class TimmModel(nn.Module):
 
 
 if __name__ == '__main__':
-    # model1 = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
-    model2 = TimmModel(model_name='timm/vit_base_patch16_rope_reg1_gap_256.sbb_in1k') 
-    # model3 = TimmModel(model_name='timm/resnet101.tv_in1k') 
-    # model4 = TimmModel(model_name='timm/swinv2_small_window8_256.ms_in1k')
+    # model = TimmModel(model_name='convnext_base.fb_in22k_ft_in1k_384', train_with_recon=True)
+    model = TimmModel(model_name='timm/vit_large_patch16_384.augreg_in21k_ft_in1k')
+    # model = TimmModel(model_name='timm/vit_base_patch16_224.augreg_in1k')
+    # from timm.models.vision_transformer import vit_base_patch16_224
+    # model = vit_base_patch16_224(img_size=384, patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, num_classes=0)
+
+    # model = TimmModel(model_name='timm/swin_base_patch4_window12_384.ms_in22k_ft_in1k', img_size=384)
+    # model = TimmModel(model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k')
+    # model = TimmModel(model_name='timm/vit_medium_patch16_rope_reg1_gap_256.sbb_in1k')
+    # model = TimmModel(model_name='timm/vit_medium_patch16_gap_256.sw_in12k_ft_in1k')
+    # model = TimmModel(model_name='timm/resnet101.tv_in1k') 
+    # img = Image.open(urlopen(
+    # 'https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/beignets-task-guide.png'
+    # ))
+    x = torch.rand((1, 3, 384, 384))
+    flops, params = profile(model, inputs=(x,))
+    # print(img.size)
+    # img = transform(img)
+    # print(img.size)
+
     # print(model1)
-    print(model2)
+    print('flops(G)', flops/1e9, 'params(M)', params/1e6)
     # model = TimmModel(model_name='convnext_tiny', train_with_recon=True, pretrained=False)
-    # x = torch.rand((1, 3, 384, 384))
     # x1 = model1.forward(x)
     # x2 = model2.forward(x)
     # x3 = model3.forward(x)
-    # x4 = model4.forward(x)
+    # x = model.forward(x)
     # print(x1.shape, x2.shape, x3.shape, x4.shape)
     # x = model.decode(x)
     # print(x.shape)
