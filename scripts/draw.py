@@ -4,6 +4,9 @@ import random
 import numpy as np
 from scipy.stats import gaussian_kde
 from matplotlib.patches import Patch
+import pandas as pd
+import seaborn as sns
+
 
 import os
 
@@ -53,6 +56,52 @@ def draw_backgroud():
     # 保存为无背景的png图片，高分辨率
     plt.savefig('3d_background.png', transparent=True, bbox_inches='tight', pad_inches=0)
     plt.show()
+
+
+def draw_attitude_roll_pitch_2():
+    yaw_range = [-180, 180]
+    pitch_range = [-110, -70]
+    roll_range = [-10, 10]
+    std = 5
+    pitchs = [gaussin_random_truncted(pitch_range[0], pitch_range[1], -90, std) for _ in range(50000)]
+    rolls = [gaussin_random_truncted(roll_range[0], roll_range[1], 0, std) for _ in range(50000)]
+    yaws = [random.uniform(-180.0, 180.0) for _ in range(50000)]
+    
+    data = pd.DataFrame({
+        'Pitch': pitchs,
+        'Roll': rolls
+    })
+
+    # sns.jointplot(data=data, x='Pitch', y='Roll', kind='scatter', marginal_kws=dict(bins=50, fill=True))
+
+    # 创建JointGrid对象
+    g = sns.JointGrid(data=data, x='Pitch', y='Roll')
+
+    # 添加主散点图
+    g.plot_joint(sns.scatterplot, color='m', alpha=0.6)
+
+    # 添加边缘直方图
+    g.plot_marginals(sns.histplot, color='m', bins=20)
+
+    # 顶部边缘图：确保X轴和Y轴都可见
+    g.ax_marg_x.set_visible(True)
+    g.ax_marg_x.set_axis_on()
+    g.ax_marg_x.spines['bottom'].set_visible(True)  # 显示X轴线
+    g.ax_marg_x.spines['top'].set_visible(False)
+    g.ax_marg_x.spines['left'].set_visible(False)
+    g.ax_marg_x.spines['right'].set_visible(False)
+    g.ax_marg_x.xaxis.set_tick_params(labelbottom=True)
+
+    # 右侧边缘图：确保X轴和Y轴都可见
+    g.ax_marg_y.set_visible(True)
+    g.ax_marg_y.set_axis_on()
+    g.ax_marg_y.spines['left'].set_visible(False)
+    g.ax_marg_y.spines['right'].set_visible(True)  # 显示Y轴线
+    g.ax_marg_y.spines['top'].set_visible(False)
+    g.ax_marg_y.spines['bottom'].set_visible(False)
+    g.ax_marg_y.yaxis.set_tick_params(labelleft=True)
+
+    plt.savefig('attitude_angles_roll_pitch_2.pdf', transparent=True, bbox_inches='tight', pad_inches=0)
 
 
 def draw_attitude_roll_pitch():
@@ -223,8 +272,32 @@ def plot_func():
     pass
 
 
+def gen_attitudes():
+    yaw_range = [-180, 180]
+    pitch_range = [-110, -70]
+    roll_range = [-10, 10]
+    std = 5
+    pitchs = [gaussin_random_truncted(pitch_range[0], pitch_range[1], -90, std) for _ in range(50000)]
+    rolls = [gaussin_random_truncted(roll_range[0], roll_range[1], 0, std) for _ in range(50000)]
+    yaws = [random.uniform(-180.0, 180.0) for _ in range(50000)]
+
+    # 创建一个简单的数据框
+    data = {
+        'Pitch': pitchs,
+        'Roll': rolls,
+        'Yaw': yaws
+    }
+
+    df = pd.DataFrame(data)
+
+    # 写出数据到CSV文件
+    df.to_csv('output.csv', index=False)
+
+
 if __name__ == '__main__':
-    draw_attitude_yaw()
+    gen_attitudes()
+    # draw_attitude_roll_pitch_2()
+    # draw_attitude_yaw()
     # draw_attitude_roll_pitch()
     # draw_altitude()
     # draw_scenes_pie()
