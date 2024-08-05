@@ -768,6 +768,8 @@ class GTADatasetEval(Dataset):
                  view,
                  mode='oc',
                  sate_img_dir='',
+                 query_mode='D2S',
+                 pairs_sate2drone_dict=None,
                  transforms=None,
                  ):
         super().__init__()
@@ -791,17 +793,32 @@ class GTADatasetEval(Dataset):
                 self.images.append(pairs_drone2sate['drone_img'])
                 self.images_loc_xy.append(pairs_drone2sate['drone_loc_x_y'])
         elif view == 'sate':
-            sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
-            for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
-                self.images_path.append(os.path.join(sate_img_dir, sate_img))
-                self.images.append(sate_img)
+            if query_mode == 'D2S':
+                sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
+                for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
+                    self.images_path.append(os.path.join(sate_img_dir, sate_img))
+                    self.images.append(sate_img)
 
-                sate_img_name = sate_img.replace('.png', '')
-                tile_zoom, tile_x, tile_y = sate_img_name.split('_')
-                tile_zoom = int(tile_zoom)
-                tile_x = int(tile_x)
-                tile_y = int(tile_y)
-                self.images_loc_xy.append(sate2loc(tile_zoom, tile_x, tile_y))
+                    sate_img_name = sate_img.replace('.png', '')
+                    tile_zoom, tile_x, tile_y = sate_img_name.split('_')
+                    tile_zoom = int(tile_zoom)
+                    tile_x = int(tile_x)
+                    tile_y = int(tile_y)
+                    self.images_loc_xy.append(sate2loc(tile_zoom, tile_x, tile_y))
+            else:
+                sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
+                for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
+                    if sate_img not in pairs_sate2drone_dict.keys():
+                        continue
+                    self.images_path.append(os.path.join(sate_img_dir, sate_img))
+                    self.images.append(sate_img)
+
+                    sate_img_name = sate_img.replace('.png', '')
+                    tile_zoom, tile_x, tile_y = sate_img_name.split('_')
+                    tile_zoom = int(tile_zoom)
+                    tile_x = int(tile_x)
+                    tile_y = int(tile_y)
+                    self.images_loc_xy.append(sate2loc(tile_zoom, tile_x, tile_y))
 
         self.transforms = transforms
 
@@ -922,8 +939,8 @@ def move_file():
 
 if __name__ == "__main__":
     root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4'
-    process_gta_data(root, save_root, h_list=[200, 300, 400, 500, 600], zoom_list=[4, 5, 6], split_type='same')
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h2_z41_iou4_oc4'
+    process_gta_data(root, save_root, h_list=[200], zoom_list=[4, 5, 6], split_type='cross')
 
     # src_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/randcam2_std0_stable_all_resize'
     # dst_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/drone/meta_data'
