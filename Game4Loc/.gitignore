@@ -163,15 +163,15 @@ data/
 pretrained/
 .DS_Store
 
-Sample4Geo/pretrained/
-Sample4Geo/pretrained.zip
+Game4Loc/pretrained/
+Game4Loc/pretrained.zip
 
 *.png
 *.jpg
 *.out
 *.zip
 *.pdf
-Sample4Geo/university/
+Game4Loc/university/
 */university/*
 
 */visualization/*

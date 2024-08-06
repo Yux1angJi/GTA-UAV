@@ -5,8 +5,8 @@ import cv2
 import numpy as np
 import pickle
 
-from sample4geo.model import TimmModel
-from sample4geo.dataset.gta import GTADatasetEval, get_transforms
+from game4loc.model import TimmModel
+from game4loc.dataset.gta import GTADatasetEval, get_transforms
 
 def query_match(drone_img):
     pickle_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4'

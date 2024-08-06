@@ -222,7 +222,7 @@ def evaluate(config,
     if top10_log:
         satellite_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
         pickle_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/test_pair_meta.pkl'
-        save_dir = '/home/xmuairmud/jyx/GTA-UAV/Sample4Geo/visualization'
+        save_dir = '/home/xmuairmud/jyx/GTA-UAV/Game4Loc/visualization'
         with open(pickle_path, 'rb') as f:
             data = pickle.load(f)
             test_semi_drone2sate_dict = data['pairs_semi_iou_drone2sate_dict']
@@ -284,7 +284,7 @@ def evaluate(config,
 
         # 显示图表
         plt.tight_layout()
-        plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Sample4Geo/images/plot_acc_threshold_samearea.png')
+        plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/images/plot_acc_threshold_samearea.png')
         print(y.tolist())
     
     return cmc[0]

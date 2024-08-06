@@ -3,9 +3,9 @@ import torch
 from dataclasses import dataclass
 from torch.utils.data import DataLoader
 
-from sample4geo.dataset.visloc import VisLocDatasetEval, get_transforms
-from sample4geo.evaluate.visloc import evaluate
-from sample4geo.model import TimmModel
+from game4loc.dataset.visloc import VisLocDatasetEval, get_transforms
+from game4loc.evaluate.visloc import evaluate
+from game4loc.model import TimmModel
 
 
 @dataclass

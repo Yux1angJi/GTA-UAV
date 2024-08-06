@@ -3,11 +3,11 @@ import torch
 from dataclasses import dataclass
 from torch.utils.data import DataLoader
 
-from sample4geo.dataset.university import get_transforms
-from sample4geo.dataset.custom_query import CustomData, CustomDataWithLatlon
-from sample4geo.model import TimmModel
+from game4loc.dataset.university import get_transforms
+from game4loc.dataset.custom_query import CustomData, CustomDataWithLatlon
+from game4loc.model import TimmModel
 from torch.cuda.amp import autocast
-from sample4geo.evaluate.query_topn import QueryTopN
+from game4loc.evaluate.query_topn import QueryTopN
 import torch.nn.functional as F
 
 import matplotlib.pyplot as plt
@@ -90,7 +90,7 @@ class Configuration:
     # Checkpoint to start from
     # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
     # checkpoint_start = '/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/university/convnext_base.fb_in22k_ft_in1k_384/0629220257/weights_end.pth'
-    checkpoint_start = '/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0703163147/weights_end.pth'
+    checkpoint_start = '/home/xmuairmud/jyx/ExtenGeo/Game4Loc/work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0703163147/weights_end.pth'
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4

@@ -3,15 +3,10 @@ import torch
 from dataclasses import dataclass
 from torch.utils.data import DataLoader
 
-from sample4geo.dataset.university import get_transforms
-from sample4geo.dataset.custom_query import CustomData
-from sample4geo.model import TimmModel
+from game4loc.dataset.university import U1652DatasetEval, get_transforms
+from game4loc.evaluate.university import evaluate
+from game4loc.model import TimmModel
 
-from sample4geo.evaluate.query_topn import QueryTopN
-
-import matplotlib.pyplot as plt
-
-import cv2
 
 @dataclass
 class Configuration:
@@ -31,18 +26,19 @@ class Configuration:
     
     # Dataset
     dataset: str = 'U1652-D2S'           # 'U1652-D2S' | 'U1652-S2D'
-    data_folder: str = "./data/U1652"
+    # data_folder: str = "./data/U1652"
     
     # Checkpoint to start from
     # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
-    checkpoint_start = '/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/university/convnext_base.fb_in22k_ft_in1k_384/0627211134/weights_end.pth'
+    checkpoint_start = 'work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0703171314/weights_end.pth'
+    # checkpoint_start = None
   
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
     
     # train on GPU if available
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu' 
-
+    
 
 #-----------------------------------------------------------------------------#
 # Config                                                                      #
@@ -50,19 +46,16 @@ class Configuration:
 
 config = Configuration() 
 
-# if config.dataset == 'U1652-D2S':
-#     config.query_folder_train = './data/U1652/train/satellite'
-#     config.gallery_folder_train = './data/U1652/train/drone'   
-#     config.query_folder_test = './data/U1652/test/query_drone' 
-#     config.gallery_folder_test = './data/U1652/test/gallery_satellite'    
-# elif config.dataset == 'U1652-S2D':
-#     config.query_folder_train = './data/U1652/train/satellite'
-#     config.gallery_folder_train = './data/U1652/train/drone'    
-#     config.query_folder_test = './data/U1652/test/query_satellite'
-#     config.gallery_folder_test = './data/U1652/test/gallery_drone'
- 
-config.query_folder_test = '/home/xmuairmud/data/work/map_data/map2/query_drone' 
-config.gallery_folder_test = '/home/xmuairmud/data/work/map_data/map2/gallery_satellite'    
+if config.dataset == 'U1652-D2S':
+    config.query_folder_train = '/home/xmuairmud/data/University-Release/train/satellite'
+    config.gallery_folder_train = '/home/xmuairmud/data/University-Release/train/drone'   
+    config.query_folder_test = '/home/xmuairmud/data/University-Release/test/query_drone' 
+    config.gallery_folder_test = '/home/xmuairmud/data/University-Release/test/gallery_satellite'    
+elif config.dataset == 'U1652-S2D':
+    config.query_folder_train = './data/U1652/train/satellite'
+    config.gallery_folder_train = './data/U1652/train/drone'    
+    config.query_folder_test = './data/U1652/test/query_satellite'
+    config.gallery_folder_test = './data/U1652/test/gallery_drone'
 
 
 if __name__ == '__main__':
@@ -111,12 +104,13 @@ if __name__ == '__main__':
 
     # Transforms
     val_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
-
+                                                                                                                                 
+    
     # Reference Satellite Images
-    query_dataset_test = CustomData(root_dir=config.query_folder_test,
+    query_dataset_test = U1652DatasetEval(data_folder=config.query_folder_test,
+                                               mode="query",
                                                transforms=val_transforms,
                                                )
-    query_path_list = query_dataset_test.imgs_list
     
     query_dataloader_test = DataLoader(query_dataset_test,
                                        batch_size=config.batch_size,
@@ -125,52 +119,30 @@ if __name__ == '__main__':
                                        pin_memory=True)
     
     # Query Ground Images Test
-    gallery_dataset_test = CustomData(root_dir=config.gallery_folder_test,
+    gallery_dataset_test = U1652DatasetEval(data_folder=config.gallery_folder_test,
+                                               mode="gallery",
                                                transforms=val_transforms,
+                                               sample_ids=query_dataset_test.get_sample_ids(),
+                                               gallery_n=config.eval_gallery_n,
                                                )
-    gallery_path_list = gallery_dataset_test.imgs_list
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
                                        batch_size=config.batch_size,
                                        num_workers=config.num_workers,
                                        shuffle=False,
-                                       pin_memory=True)                                                                                                               
+                                       pin_memory=True)
     
-    
+    print("Query Images Test:", len(query_dataset_test))
+    print("Gallery Images Test:", len(gallery_dataset_test))
+   
 
-    results = QueryTopN(config, model, query_dataloader_test, query_path_list, gallery_dataloader_test, gallery_path_list)
+    print("\n{}[{}]{}".format(30*"-", "University-1652", 30*"-"))  
 
-    rows = len(results)
-    fig, axes = plt.subplots(nrows=rows, ncols=11, figsize=(20, 2))
-    for i, result in enumerate(results):
-        print(result)
-        size = 256, 256
-
-        query_img = result[0]
-        query_img = cv2.imread(query_img)
-        query_img = cv2.cvtColor(query_img, cv2.COLOR_BGR2RGB)
-        query_img = cv2.resize(query_img, size)
-        
-        ax = axes[i, 0]
-        ax.imshow(query_img, cmap='gray')
-        ax.set_title("Query")
-        ax.axis('off')
-
-        for j in range(10):
-            ax = axes[i, j+1]
-            topj_img = result[j+1]
-            topj_img = cv2.imread(topj_img)
-            topj_img = cv2.cvtColor(topj_img, cv2.COLOR_BGR2RGB)
-            topj_img = cv2.resize(topj_img, size)
-            ax.imshow(topj_img, cmap='gray')
-            ax.set_title(f"Top {j+1}")
-            ax.axis('off')
-    fig.set_dpi(100)
-
-    plt.tight_layout()
-    plt.savefig('demo_extend_des.png')
-
-
-        
-
+    r1_test = evaluate(config=config,
+                       model=model,
+                       query_loader=query_dataloader_test,
+                       gallery_loader=gallery_dataloader_test, 
+                       ranks=[1, 5, 10],
+                       step_size=1000,
+                       cleanup=True)
  

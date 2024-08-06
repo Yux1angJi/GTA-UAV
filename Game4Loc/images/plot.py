@@ -75,7 +75,7 @@ def plot_line_cross():
 
     # 显示图表
     plt.tight_layout()
-    plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Sample4Geo/images/plot_acc_threshold_cross_area_s2d.png', bbox_inches='tight')
+    plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/images/plot_acc_threshold_cross_area_s2d.png', bbox_inches='tight')
     # print(y.tolist())
 
 
@@ -151,7 +151,7 @@ def plot_line_same():
 
     # 显示图表
     plt.tight_layout()
-    plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Sample4Geo/images/plot_acc_threshold_same_area_s2d.png', bbox_inches='tight')
+    plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/images/plot_acc_threshold_same_area_s2d.png', bbox_inches='tight')
     # print(y.tolist())
 
 
