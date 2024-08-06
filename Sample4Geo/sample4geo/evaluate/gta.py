@@ -9,6 +9,9 @@ from sklearn.metrics import average_precision_score
 from geopy.distance import geodesic
 import matplotlib.pyplot as plt
 from scipy.interpolate import make_interp_spline
+from PIL import Image
+import pickle
+import os
 
 
 def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
@@ -42,6 +45,14 @@ def get_dis(query_loc, index, gallery_loc_xy_list, disk_list):
         dis_list.append(dis_sum / k)
 
     return dis_list
+
+
+def get_top10(index, gallery_list):
+    top10 = []
+    for i in range(10):
+        idx = index[i]
+        top10.append(gallery_list[idx])
+    return top10
 
 
 def predict(train_config, model, dataloader):
@@ -98,7 +109,8 @@ def evaluate(config,
                 step_size=1000,
                 cleanup=True,
                 dis_threshold_list=[10*(i+1) for i in range(50)],
-                plot_acc_threshold=False):
+                plot_acc_threshold=False,
+                top10_log=False):
     print("Extract Features and Compute Scores:")
     img_features_query = predict(config, model, query_loader)
     # img_features_gallery = predict(config, model, gallery_loader)
@@ -143,6 +155,9 @@ def evaluate(config,
     dis_list = []
     acc_threshold = [0 for _ in range(len(dis_threshold_list))]
 
+    top10_list = []
+    loc1_list = []
+
     for i in range(query_num):
         score = all_scores[i]    
         # predict index
@@ -151,6 +166,10 @@ def evaluate(config,
         sdm_list.append(sdm(query_loc_xy_list[i], sdmk_list, index, gallery_loc_xy_list))
 
         dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list, disk_list))
+
+        top10_list.append(get_top10(index, gallery_list))
+        loc1_x, loc1_y = gallery_loc_xy_list[index[0]]
+        loc1_list.append((query_loc_xy_list[i][0], query_loc_xy_list[i][1], loc1_x, loc1_y))
 
         for j in range(len(dis_threshold_list)):
             if dis_list[i][0] < dis_threshold_list[j]:
@@ -199,6 +218,47 @@ def evaluate(config,
         del img_features_query, gallery_features_batch, scores_batch
         gc.collect()
         #torch.cuda.empty_cache()
+
+    if top10_log:
+        satellite_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
+        pickle_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/test_pair_meta.pkl'
+        save_dir = '/home/xmuairmud/jyx/GTA-UAV/Sample4Geo/visualization'
+        with open(pickle_path, 'rb') as f:
+            data = pickle.load(f)
+            test_semi_drone2sate_dict = data['pairs_semi_iou_drone2sate_dict']
+            test_pos_drone2sate_dict = data['pairs_iou_drone2sate_dict']
+        for query_img, top10, loc in zip(query_list, top10_list, loc1_list):
+            print('Query', query_img)
+            print('Top10', top10)
+            print('Query loc', loc[0], loc[1])
+            print('Top1 loc', loc[2], loc[3])
+            
+            imgs_path = []
+            imgs_type = []
+            for img_name in top10[:5]:
+                imgs_path.append(os.path.join(satellite_dir, img_name))
+                if img_name in test_pos_drone2sate_dict[query_img]:
+                    imgs_type.append('Pos')
+                elif img_name in test_semi_drone2sate_dict[query_img]:
+                    imgs_type.append('Semi')
+                else:
+                    imgs_type.append('Null')
+            print(imgs_type)
+
+            images = [Image.open(x) for x in imgs_path]
+
+            gap_width = 40
+            total_width = sum(i.size[0] for i in images) + gap_width * (len(images) - 1)
+            height = images[0].size[1]
+            new_im = new_im = Image.new('RGBA', (total_width, height), (255, 255, 255, 0))
+
+            x_offset = 0
+            for im in images:
+                new_im.paste(im, (x_offset, 0))
+                x_offset += im.size[0] + gap_width  # 在每张图片后添加间隙
+            new_im.save(f'{save_dir}/same_{query_img}')
+
+
 
     if plot_acc_threshold:
         y = np.array(acc_threshold)

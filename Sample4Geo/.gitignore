@@ -170,7 +170,11 @@ Sample4Geo/pretrained.zip
 *.jpg
 *.out
 *.zip
+*.pdf
 Sample4Geo/university/
 */university/*
+
+*/visualization/*
+
 
 *demo/

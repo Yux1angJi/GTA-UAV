@@ -26,14 +26,14 @@ class Configuration:
     eval_gallery_n: int = -1             # -1 for all or int
 
     # Dataset
-    # query_mode: str = 'D2S'           # 'U1652-D2S' | 'U1652-S2D'
-    query_mode: str = 'S2D'
+    query_mode: str = 'D2S'           # 'U1652-D2S' | 'U1652-S2D'
+    # query_mode: str = 'S2D'
 
     # Checkpoint to start from
     # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
     # checkpoint_start = 'work_dir/denseuav/convnext_base.fb_in22k_ft_in1k_384/0630155817/weights_end.pth'
     # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723160833/weights_end.pth'
-    checkpoint_start = 'work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0729045039/weights_end.pth'
+    checkpoint_start = 'work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0801012744/weights_end.pth'
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -164,5 +164,6 @@ if __name__ == '__main__':
                            gallery_loc_xy_list=gallery_loc_xy_list,
                            step_size=1000,
                            cleanup=True,
-                           plot_acc_threshold=True)
+                           plot_acc_threshold=True,
+                           top10_log=True)
  

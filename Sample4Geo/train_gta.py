@@ -14,7 +14,7 @@ from sample4geo.dataset.gta import GTADatasetEval, GTADatasetTrain, get_transfor
 from sample4geo.utils import setup_system, Logger
 from sample4geo.trainer import train, train_with_weight
 from sample4geo.evaluate.gta import evaluate
-from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE
+from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE, TripletLoss
 from sample4geo.model import TimmModel
 
 
@@ -124,7 +124,8 @@ class Configuration:
 def train_script(config):
 
     config.train_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/train_pair_meta.pkl'
-    config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/test_pair_meta.pkl'
+    config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/test_pair_meta.pkl'
+    # config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/test_pair_meta.pkl'
     config.sate_img_dir = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
 
     f = open(config.log_path, 'w')
@@ -275,6 +276,7 @@ def train_script(config):
         label_smoothing=config.label_smoothing,
         k=config.k,
     )
+    # loss_function_normal = TripletLoss(device=config.device)
 
     if config.mixed_precision:
         scaler = GradScaler(init_scale=2.**10)
