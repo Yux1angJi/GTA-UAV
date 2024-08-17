@@ -60,7 +60,7 @@ def draw_backgroud():
 
 def draw_attitude_roll_pitch_2():
     yaw_range = [-180, 180]
-    pitch_range = [-110, -70]
+    pitch_range = [-100, -80]
     roll_range = [-10, 10]
     std = 5
     pitchs = [gaussin_random_truncted(pitch_range[0], pitch_range[1], -90, std) for _ in range(50000)]
@@ -72,37 +72,15 @@ def draw_attitude_roll_pitch_2():
         'Roll': rolls
     })
 
-    # sns.jointplot(data=data, x='Pitch', y='Roll', kind='scatter', marginal_kws=dict(bins=50, fill=True))
+    sns.set_theme(style="ticks")
 
-    # 创建JointGrid对象
-    g = sns.JointGrid(data=data, x='Pitch', y='Roll')
+    ## #7970A6 #4CB391 #183E67
+    g = sns.jointplot(x=rolls, y=pitchs, kind="hex", color="#5975A4", marginal_ticks=True)
+    
+    g.set_axis_labels('Roll', 'Pitch')
 
-    # 添加主散点图
-    g.plot_joint(sns.scatterplot, color='m', alpha=0.6)
-
-    # 添加边缘直方图
-    g.plot_marginals(sns.histplot, color='m', bins=20)
-
-    # 顶部边缘图：确保X轴和Y轴都可见
-    g.ax_marg_x.set_visible(True)
-    g.ax_marg_x.set_axis_on()
-    g.ax_marg_x.spines['bottom'].set_visible(True)  # 显示X轴线
-    g.ax_marg_x.spines['top'].set_visible(False)
-    g.ax_marg_x.spines['left'].set_visible(False)
-    g.ax_marg_x.spines['right'].set_visible(False)
-    g.ax_marg_x.xaxis.set_tick_params(labelbottom=True)
-
-    # 右侧边缘图：确保X轴和Y轴都可见
-    g.ax_marg_y.set_visible(True)
-    g.ax_marg_y.set_axis_on()
-    g.ax_marg_y.spines['left'].set_visible(False)
-    g.ax_marg_y.spines['right'].set_visible(True)  # 显示Y轴线
-    g.ax_marg_y.spines['top'].set_visible(False)
-    g.ax_marg_y.spines['bottom'].set_visible(False)
-    g.ax_marg_y.yaxis.set_tick_params(labelleft=True)
-
-    plt.savefig('attitude_angles_roll_pitch_2.pdf', transparent=True, bbox_inches='tight', pad_inches=0)
-
+    plt.savefig('attitude_angles_roll_pitch.pdf', transparent=True, bbox_inches='tight', pad_inches=0)
+    # plt.savefig('attitude_angles_roll_pitch_2.pdf')
 
 def draw_attitude_roll_pitch():
     # 生成一些示例数据
@@ -184,48 +162,60 @@ def draw_attitude_yaw():
 
     # ax[1].hist(pitchs_rad, bins=20, color='#E76768', label='Pitch')
 
-    ax.hist(yaws_rad, bins=30, color='#F3A783', label='Yaw', edgecolor='k')
+    ax.hist(yaws_rad, bins=30, label='Yaw', color='#4C84B6', edgecolor='k')
 
     ax.set_theta_zero_location('N')  # 设置0度位置为北（即顶部）
     ax.set_theta_direction(-1)  # 设置角度增加方向为顺时针
     ax.set_xticklabels(['0°', '45°', '90°', '135°', '180°', '-135°', '-90°', '-45°'])
     # ax.set_yticklabels([])
 
-    fig.legend(loc='upper center')
+    # fig.legend(loc='upper center')
 
     plt.show()
     plt.savefig('attitude_angles_yaw.pdf', transparent=True, bbox_inches='tight', pad_inches=0)
 
 
 def draw_altitude():
-    altitude = []
+    # altitude = []
     
-    directory = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/drone/meta_data'
-    for filename in os.listdir(directory):
-        if filename.endswith('.txt'):
-            filepath = os.path.join(directory, filename)
-            with open(filepath, 'r') as file:
-                line = file.readline().strip()
-                values = line.split()
-                if len(values) >= 4:
-                    h = float(values[3])
-                    altitude.append(h)
-                    if h > 150 and h < 250:
-                        altitude.append(h - 80)
+    # directory = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/drone/meta_data'
+    # for filename in os.listdir(directory):
+    #     if filename.endswith('.txt'):
+    #         filepath = os.path.join(directory, filename)
+    #         with open(filepath, 'r') as file:
+    #             line = file.readline().strip()
+    #             values = line.split()
+    #             if len(values) >= 4:
+    #                 h = float(values[3])
+    #                 altitude.append(h)
+    #                 if h > 150 and h < 250:
+    #                     altitude.append(h - 80)
 
-    print(len(altitude))
-    
-    bins = 1000
-    fig, ax = plt.subplots(1, 1, figsize=(10, 2), dpi=300)
+    # print(len(altitude))
+    # sns.set_theme(style="darkgrid")
+    plt.figure(figsize=(4, 6))
+
+    alttitude = list(reversed([5263 * 5 // 3.6, 5963 * 5 // 3.6, 6058 * 5 // 3.6, 6106 * 5 // 3.6, 6166 * 5 // 3.6, 6187 * 5 // 3.6]))
+    height = list(reversed(['100m', '200m', '300m', '400m', '500m', '600m']))
+    data = pd.DataFrame({
+        'Altitude': height,
+        'Count': alttitude,
+    })
+    sns.barplot(data, x="Count", y="Altitude", color='#4C84B6')
+    plt.grid(True, axis='x', color='gray', linestyle='-', linewidth=0.5)
+
+    # plt.savefig('altitude.pdf')
+
     # counts, bin_edges = np.histogram(altitude, bins=bins)
 
     # plt.figure(figsize=(10, 5), dpi=300)
 
-    # plt.barh(bin_edges[:-1], counts, height=(bin_edges[1] - bin_edges[0]))
-    ax.hist(altitude, bins=bins)
-    ax.set_xlim(100, 630)
-    ax.set_xlabel('Altitude (m)')
-    ax.set_ylabel('Count')
+    # sns.set_theme(style="darkgrid")
+    # # plt.barh(bin_edges[:-1], counts, height=(bin_edges[1] - bin_edges[0]))
+    
+    # ax.set_xlim(100, 630)
+    # ax.set_xlabel('Altitude (m)')
+    # ax.set_ylabel('Count')
 
     # plt.xlabel('Altitude (m)')
     # plt.xlabel('Count')
@@ -233,7 +223,7 @@ def draw_altitude():
     # plt.ylim(0, 600)
 
     plt.show()
-    plt.savefig('altitude_hist.png', transparent=True, bbox_inches='tight', pad_inches=0.02)
+    plt.savefig('altitude_hist.pdf', transparent=True, bbox_inches='tight', pad_inches=0.02)
 
 
 def draw_scenes_pie():
@@ -295,8 +285,8 @@ def gen_attitudes():
 
 
 if __name__ == '__main__':
-    gen_attitudes()
-    # draw_attitude_roll_pitch_2()
+    # gen_attitudes()
+    draw_attitude_roll_pitch_2()
     # draw_attitude_yaw()
     # draw_attitude_roll_pitch()
     # draw_altitude()
