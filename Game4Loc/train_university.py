@@ -4,82 +4,99 @@ import math
 import shutil
 import sys
 import torch
-import pickle
+import argparse
+
 from dataclasses import dataclass
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from transformers import get_constant_schedule_with_warmup, get_polynomial_decay_schedule_with_warmup, get_cosine_schedule_with_warmup
 
-from sample4geo.dataset.cvusa import CVUSADatasetEval, CVUSADatasetTrain
-from sample4geo.transforms import get_transforms_train, get_transforms_val
-from sample4geo.utils import setup_system, Logger
-from sample4geo.trainer import train
-from sample4geo.evaluate.cvusa_and_cvact import evaluate, calc_sim
-from sample4geo.loss import InfoNCE
-from sample4geo.model import TimmModel
+from game4loc.dataset.university import U1652DatasetEval, U1652DatasetTrain, get_transforms
+from game4loc.utils import setup_system, Logger
+from game4loc.trainer import train
+from game4loc.evaluate.university import evaluate
+from game4loc.loss import InfoNCE
+from game4loc.model import TimmModel
 
+def parse_tuple(s):
+    try:
+        return tuple(map(int, s.split(',')))
+    except ValueError:
+        raise argparse.ArgumentTypeError("Tuple must be integers separated by commas")
 
 @dataclass
 class Configuration:
     
     # Model
-    model: str = 'convnext_base.fb_in22k_ft_in1k_384' 
+    model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
     
     # Override model image size
     img_size: int = 384
+ 
+    freeze_layers: bool = False
+
+    frozen_stages = [0,0,0,0]
+
+    share_weights: bool = True
+    
+    with_weight: bool = True
+
+    train_in_group: bool = True
+    group_len = 2
+
+    loss_type = ["whole_slice", "part_slice"]
+
+    train_with_mix_data: bool = False
+
+    train_with_recon: bool = False
+    recon_weight: float = 0.1
+    
     
     # Training 
     mixed_precision: bool = True
-    seed = 42
-    epochs: int = 40
-    batch_size: int = 128        # keep in mind real_batch_size = 2 * batch_size
-    verbose: bool = True
-    gpu_ids: tuple = (0,1,2,3)   # GPU ids for training
-    
-    
-    # Similarity Sampling
-    custom_sampling: bool = True   # use custom sampling instead of random
-    gps_sample: bool = True        # use gps sampling
-    sim_sample: bool = True        # use similarity sampling
-    neighbour_select: int = 64     # max selection size from pool
-    neighbour_range: int = 128     # pool size for selection
-    gps_dict_path: str = "./data/CVUSA/gps_dict.pkl"   # path to pre-computed distances
- 
+    custom_sampling: bool = True         # use custom sampling instead of random
+    seed = 1
+    epochs: int = 10
+    batch_size: int = 40                # keep in mind real_batch_size = 2 * batch_size
+    verbose: bool = False
+    gpu_ids: tuple = (0,1)           # GPU ids for training
+
+    train_ratio: float = 1.0
+
     # Eval
     batch_size_eval: int = 128
-    eval_every_n_epoch: int = 4        # eval every n Epoch
+    eval_every_n_epoch: int = 1          # eval every n Epoch
     normalize_features: bool = True
+    eval_gallery_n: int = -1             # -1 for all or int
 
     # Optimizer 
-    clip_grad = 100.                   # None | float
+    clip_grad = 100.                     # None | float
     decay_exclue_bias: bool = False
-    grad_checkpointing: bool = False   # Gradient Checkpointing
+    grad_checkpointing: bool = False     # Gradient Checkpointing
     
     # Loss
     label_smoothing: float = 0.1
+    k: float = 3
     
     # Learning Rate
-    lr: float = 0.001                  # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
-    scheduler: str = "cosine"          # "polynomial" | "cosine" | "constant" | None
-    warmup_epochs: int = 1
-    lr_end: float = 0.0001             #  only for "polynomial"
-    
-    # Dataset
-    data_folder = "./data/CVUSA"     
-    
+    lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
+    scheduler: str = "cosine"           # "polynomial" | "cosine" | "constant" | None
+    warmup_epochs: int = 0.1
+    lr_end: float = 0.0001               #  only for "polynomial"
+
     # Augment Images
-    prob_rotate: float = 0.75          # rotates the sat image and ground images simultaneously
-    prob_flip: float = 0.5             # flipping the sat image and ground images simultaneously
+    prob_flip: float = 0.5              # flipping the sat image and drone image simultaneously
     
     # Savepath for model checkpoints
-    model_path: str = "./cvusa"
+    model_path: str = "./work_dir/university"
     
     # Eval before training
-    zero_shot: bool = False 
+    zero_shot: bool = True
     
     # Checkpoint to start from
-    checkpoint_start = None   
-  
+    checkpoint_start = None
+    # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Game4Loc/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
+
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
     
@@ -92,20 +109,38 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
+    query_folder_train = '/home/xmuairmud/data/University-Release/train/satellite'
+    gallery_folder_train = '/home/xmuairmud/data/University-Release/train/drone'   
+    query_folder_test = '/home/xmuairmud/data/University-Release/test/query_drone' 
+    gallery_folder_test = '/home/xmuairmud/data/University-Release/test/gallery_satellite'  
+
 
 #-----------------------------------------------------------------------------#
 # Train Config                                                                #
 #-----------------------------------------------------------------------------#
 
-config = Configuration() 
+# config = Configuration() 
+
+# # if config.dataset == 'U1652-D2S':
+# config.query_folder_train = '/home/xmuairmud/data/University-Release/train/satellite'
+# config.gallery_folder_train = '/home/xmuairmud/data/University-Release/train/drone'   
+# config.query_folder_test = '/home/xmuairmud/data/University-Release/test/query_drone' 
+# config.gallery_folder_test = '/home/xmuairmud/data/University-Release/test/gallery_satellite'  
+# elif config.dataset == 'U1652-S2D':
+#     config.query_folder_train = './data/U1652/train/satellite'
+#     config.gallery_folder_train = './data/U1652/train/drone'    
+#     config.query_folder_test = './data/U1652/test/query_satellite'
+#     config.gallery_folder_test = './data/U1652/test/gallery_drone'
 
 
-if __name__ == '__main__':
-
+def train_script(config):
+    f = open(config.log_path, 'w')
+    if config.log_to_file:
+        sys.stdout = f
 
     model_path = "{}/{}/{}".format(config.model_path,
-                                   config.model,
-                                   time.strftime("%H%M%S"))
+                                       config.model,
+                                       time.strftime("%H%M%S"))
 
     if not os.path.exists(model_path):
         os.makedirs(model_path)
@@ -126,25 +161,19 @@ if __name__ == '__main__':
 
 
     model = TimmModel(config.model,
-                      pretrained=True,
-                      img_size=config.img_size)
+                          pretrained=True,
+                          img_size=config.img_size)
                           
     data_config = model.get_config()
     print(data_config)
     mean = data_config["mean"]
     std = data_config["std"]
-    img_size = config.img_size
-    
-    image_size_sat = (img_size, img_size)
-    
-    new_width = config.img_size * 2    
-    new_hight = round((224 / 1232) * new_width)
-    img_size_ground = (new_hight, new_width)
+    img_size = (config.img_size, config.img_size)
     
     # Activate gradient checkpointing
     if config.grad_checkpointing:
         model.set_grad_checkpointing(True)
-     
+    
     # Load pretrained Checkpoint    
     if config.checkpoint_start is not None:  
         print("Start from:", config.checkpoint_start)
@@ -159,8 +188,8 @@ if __name__ == '__main__':
     # Model to device   
     model = model.to(config.device)
 
-    print("\nImage Size Sat:", image_size_sat)
-    print("Image Size Ground:", img_size_ground)
+    print("\nImage Size Query:", img_size)
+    print("Image Size Ground:", img_size)
     print("Mean: {}".format(mean))
     print("Std:  {}\n".format(std)) 
 
@@ -170,22 +199,16 @@ if __name__ == '__main__':
     #-----------------------------------------------------------------------------#
 
     # Transforms
-    sat_transforms_train, ground_transforms_train = get_transforms_train(image_size_sat,
-                                                                   img_size_ground,
-                                                                   mean=mean,
-                                                                   std=std,
-                                                                   )
-                                                                   
-                                                                   
+    val_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
+                                                                                                                                 
     # Train
-    train_dataset = CVUSADatasetTrain(data_folder=config.data_folder ,
-                                      transforms_query=ground_transforms_train,
-                                      transforms_reference=sat_transforms_train,
+    train_dataset = U1652DatasetTrain(query_folder=config.query_folder_train,
+                                      gallery_folder=config.gallery_folder_train,
+                                      transforms_query=train_sat_transforms,
+                                      transforms_gallery=train_drone_transforms,
                                       prob_flip=config.prob_flip,
-                                      prob_rotate=config.prob_rotate,
-                                      shuffle_batch_size=config.batch_size
+                                      shuffle_batch_size=config.batch_size,
                                       )
-    
     
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=config.batch_size,
@@ -193,36 +216,11 @@ if __name__ == '__main__':
                                   shuffle=not config.custom_sampling,
                                   pin_memory=True)
     
-    
-    # Eval
-    sat_transforms_val, ground_transforms_val = get_transforms_val(image_size_sat,
-                                                               img_size_ground,
-                                                               mean=mean,
-                                                               std=std,
-                                                               )
-
-
     # Reference Satellite Images
-    reference_dataset_test = CVUSADatasetEval(data_folder=config.data_folder ,
-                                              split="test",
-                                              img_type="reference",
-                                              transforms=sat_transforms_val,
-                                              )
-    
-    reference_dataloader_test = DataLoader(reference_dataset_test,
-                                           batch_size=config.batch_size_eval,
-                                           num_workers=config.num_workers,
-                                           shuffle=False,
-                                           pin_memory=True)
-    
-    
-    
-    # Query Ground Images Test
-    query_dataset_test = CVUSADatasetEval(data_folder=config.data_folder ,
-                                          split="test",
-                                          img_type="query",    
-                                          transforms=ground_transforms_val,
-                                          )
+    query_dataset_test = U1652DatasetEval(data_folder=config.query_folder_test,
+                                               mode="query",
+                                               transforms=val_transforms,
+                                               )
     
     query_dataloader_test = DataLoader(query_dataset_test,
                                        batch_size=config.batch_size_eval,
@@ -230,56 +228,22 @@ if __name__ == '__main__':
                                        shuffle=False,
                                        pin_memory=True)
     
-    
-    print("Reference Images Test:", len(reference_dataset_test))
-    print("Query Images Test:", len(query_dataset_test))
-    
-    
-    #-----------------------------------------------------------------------------#
-    # GPS Sample                                                                  #
-    #-----------------------------------------------------------------------------#
-    if config.gps_sample:
-        with open(config.gps_dict_path, "rb") as f:
-            sim_dict = pickle.load(f)
-    else:
-        sim_dict = None
-
-    #-----------------------------------------------------------------------------#
-    # Sim Sample                                                                  #
-    #-----------------------------------------------------------------------------#
-    
-    if config.sim_sample:
-    
-        # Query Ground Images Train for simsampling
-        query_dataset_train = CVUSADatasetEval(data_folder=config.data_folder ,
-                                               split="train",
-                                               img_type="query",   
-                                               transforms=ground_transforms_val,
+    # Query Ground Images Test
+    gallery_dataset_test = U1652DatasetEval(data_folder=config.gallery_folder_test,
+                                               mode="gallery",
+                                               transforms=val_transforms,
+                                               sample_ids=query_dataset_test.get_sample_ids(),
+                                               gallery_n=config.eval_gallery_n,
                                                )
-            
-        query_dataloader_train = DataLoader(query_dataset_train,
-                                            batch_size=config.batch_size_eval,
-                                            num_workers=config.num_workers,
-                                            shuffle=False,
-                                            pin_memory=True)
-        
-        
-        reference_dataset_train = CVUSADatasetEval(data_folder=config.data_folder ,
-                                                   split="train",
-                                                   img_type="reference", 
-                                                   transforms=sat_transforms_val,
-                                                   )
-        
-        reference_dataloader_train = DataLoader(reference_dataset_train,
-                                                batch_size=config.batch_size_eval,
-                                                num_workers=config.num_workers,
-                                                shuffle=False,
-                                                pin_memory=True)
-
-
-        print("\nReference Images Train:", len(reference_dataset_train))
-        print("Query Images Train:", len(query_dataset_train))        
-
+    
+    gallery_dataloader_test = DataLoader(gallery_dataset_test,
+                                       batch_size=config.batch_size_eval,
+                                       num_workers=config.num_workers,
+                                       shuffle=False,
+                                       pin_memory=True)
+    
+    print("Query Images Test:", len(query_dataset_test))
+    print("Gallery Images Test:", len(gallery_dataset_test))
     
     #-----------------------------------------------------------------------------#
     # Loss                                                                        #
@@ -356,31 +320,19 @@ if __name__ == '__main__':
     if config.zero_shot:
         print("\n{}[{}]{}".format(30*"-", "Zero Shot", 30*"-"))  
 
-      
         r1_test = evaluate(config=config,
                            model=model,
-                           reference_dataloader=reference_dataloader_test,
-                           query_dataloader=query_dataloader_test, 
+                           query_loader=query_dataloader_test,
+                           gallery_loader=gallery_dataloader_test, 
                            ranks=[1, 5, 10],
                            step_size=1000,
                            cleanup=True)
-        
-        if config.sim_sample:
-            r1_train, sim_dict = calc_sim(config=config,
-                                          model=model,
-                                          reference_dataloader=reference_dataloader_train,
-                                          query_dataloader=query_dataloader_train, 
-                                          ranks=[1, 5, 10],
-                                          step_size=1000,
-                                          cleanup=True)
                 
     #-----------------------------------------------------------------------------#
     # Shuffle                                                                     #
     #-----------------------------------------------------------------------------#            
     if config.custom_sampling:
-        train_dataloader.dataset.shuffle(sim_dict,
-                                         neighbour_select=config.neighbour_select,
-                                         neighbour_range=config.neighbour_range)
+        train_dataloader.dataset.shuffle()
             
     #-----------------------------------------------------------------------------#
     # Train                                                                       #
@@ -400,7 +352,8 @@ if __name__ == '__main__':
                            loss_function=loss_function,
                            optimizer=optimizer,
                            scheduler=scheduler,
-                           scaler=scaler)
+                           scaler=scaler,
+                           )
         
         print("Epoch: {}, Train Loss = {:.3f}, Lr = {:.6f}".format(epoch,
                                                                    train_loss,
@@ -413,20 +366,11 @@ if __name__ == '__main__':
         
             r1_test = evaluate(config=config,
                                model=model,
-                               reference_dataloader=reference_dataloader_test,
-                               query_dataloader=query_dataloader_test, 
+                               query_loader=query_dataloader_test,
+                               gallery_loader=gallery_dataloader_test, 
                                ranks=[1, 5, 10],
                                step_size=1000,
                                cleanup=True)
-            
-            if config.sim_sample:
-                r1_train, sim_dict = calc_sim(config=config,
-                                              model=model,
-                                              reference_dataloader=reference_dataloader_train,
-                                              query_dataloader=query_dataloader_train, 
-                                              ranks=[1, 5, 10],
-                                              step_size=1000,
-                                              cleanup=True)
                 
             if r1_test > best_score:
 
@@ -439,11 +383,99 @@ if __name__ == '__main__':
                 
 
         if config.custom_sampling:
-            train_dataloader.dataset.shuffle(sim_dict,
-                                             neighbour_select=config.neighbour_select,
-                                             neighbour_range=config.neighbour_range)
+            train_dataloader.dataset.shuffle()
                 
     if torch.cuda.device_count() > 1 and len(config.gpu_ids) > 1:
         torch.save(model.module.state_dict(), '{}/weights_end.pth'.format(model_path))
     else:
-        torch.save(model.state_dict(), '{}/weights_end.pth'.format(model_path))            
+        torch.save(model.state_dict(), '{}/weights_end.pth'.format(model_path))      
+
+    f.close()
+    sys.stdout = sys.__stdout__   
+
+      
+def parse_args():
+    parser = argparse.ArgumentParser(description="Training script for gta.")
+
+    parser.add_argument('--log_to_file', action='store_true', help='Log saving to file')
+
+    parser.add_argument('--log_path', type=str, default=None, help='Log file path')
+
+    parser.add_argument('--data_dir', type=str, default='randcam2_std0_stable/test', help='Data path')
+
+    parser.add_argument('--model', type=str, default='convnext_base.fb_in22k_ft_in1k_384', help='Model architecture')
+
+    parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
+
+    parser.add_argument('--freeze_layers', action='store_true', help='Freeze layers for training')
+
+    parser.add_argument('--frozen_stages', type=int, nargs='+', default=[0,0,0,0], help='Frozen stages for training')
+
+    parser.add_argument('--epochs', type=int, default=5, help='Epochs')
+
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+
+    parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
+
+    parser.add_argument('--batch_size', type=int, default=40, help='Batch size')
+
+    parser.add_argument('--checkpoint_start', type=str, default=None, help='Training from checkpoint')
+
+    parser.add_argument('--train_mode', type=str, default='iou', help='Train with pair in iou or oc')
+
+    parser.add_argument('--test_mode', type=str, default='oc', help='Test with pair in iou or oc')
+
+    parser.add_argument('--train_with_recon', action='store_true', help='Train with reconstruction')
+
+    parser.add_argument('--recon_weight', type=float, default=0.1, help='Loss weight for reconstruction')
+
+    parser.add_argument('--train_in_group', action='store_true', help='Train in group')
+    
+    parser.add_argument('--group_len', type=int, default=2, help='Group length')
+
+    parser.add_argument('--train_with_mix_data', action='store_true', help='Train with mix data')
+
+    parser.add_argument('--loss_type', type=str, nargs='+', default=['part_slice', 'whole_slice'], help='Loss type for group train')
+
+    parser.add_argument('--label_smoothing', type=float, default=0.0, help='Label smoothing value for loss')
+
+    parser.add_argument('--with_weight', action='store_true', help='Train with weight')
+
+    parser.add_argument('--k', type=float, default=5, help='weighted k')
+    
+    parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
+
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == '__main__':
+    args = parse_args()
+
+    config = Configuration()
+    config.data_dir = args.data_dir
+    config.log_to_file = args.log_to_file
+    config.log_path = args.log_path
+    config.epochs = args.epochs
+    config.batch_size = args.batch_size
+    config.train_in_group = args.train_in_group
+    config.train_with_recon = args.train_with_recon
+    config.recon_weight = args.recon_weight
+    config.group_len = args.group_len
+    config.train_with_mix_data = args.train_with_mix_data
+    config.loss_type = args.loss_type
+    config.gpu_ids = args.gpu_ids
+    config.label_smoothing = args.label_smoothing
+    config.with_weight = args.with_weight
+    config.k = args.k
+    config.checkpoint_start = args.checkpoint_start
+    config.model = args.model
+    config.lr = args.lr
+    config.share_weights = not(args.no_share_weights)
+    config.freeze_layers = args.freeze_layers
+    config.frozen_stages = args.frozen_stages
+    config.train_mode = args.train_mode
+    config.test_mode = args.test_mode
+    config.train_ratio = args.train_ratio
+
+    train_script(config)

@@ -10,12 +10,12 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from transformers import get_constant_schedule_with_warmup, get_polynomial_decay_schedule_with_warmup, get_cosine_schedule_with_warmup
 
-from sample4geo.dataset.gta import GTADatasetEval, GTADatasetTrain, get_transforms
-from sample4geo.utils import setup_system, Logger
-from sample4geo.trainer import train, train_with_weight
-from sample4geo.evaluate.gta import evaluate
-from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE
-from sample4geo.model import TimmModel
+from game4loc.dataset.gta import GTADatasetEval, GTADatasetTrain, get_transforms
+from game4loc.utils import setup_system, Logger
+from game4loc.trainer import train, train_with_weight
+from game4loc.evaluate.gta import evaluate
+from game4loc.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE, TripletLoss
+from game4loc.model import TimmModel
 
 
 def parse_tuple(s):
@@ -98,7 +98,7 @@ class Configuration:
     
     # Checkpoint to start from
     checkpoint_start = None
-    # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
+    # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Game4Loc/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -124,7 +124,8 @@ class Configuration:
 def train_script(config):
 
     config.train_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/train_pair_meta.pkl'
-    config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/test_pair_meta.pkl'
+    config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/test_pair_meta.pkl'
+    # config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/test_pair_meta.pkl'
     config.sate_img_dir = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
 
     f = open(config.log_path, 'w')
@@ -275,6 +276,7 @@ def train_script(config):
         label_smoothing=config.label_smoothing,
         k=config.k,
     )
+    # loss_function_normal = TripletLoss(device=config.device)
 
     if config.mixed_precision:
         scaler = GradScaler(init_scale=2.**10)

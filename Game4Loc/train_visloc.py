@@ -11,14 +11,14 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from transformers import get_constant_schedule_with_warmup, get_polynomial_decay_schedule_with_warmup, get_cosine_schedule_with_warmup
 
-from sample4geo.dataset.visloc import VisLocDatasetEval, VisLocDatasetTrain, get_transforms
-from sample4geo.dataset.gta import GTADatasetTrain
-from sample4geo.dataset.mix_data import MixDatasetTrain
-from sample4geo.utils import setup_system, Logger
-from sample4geo.trainer import train, train_with_weight
-from sample4geo.evaluate.visloc import evaluate
-from sample4geo.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE, ReconstructionLoss
-from sample4geo.model import TimmModel
+from game4loc.dataset.visloc import VisLocDatasetEval, VisLocDatasetTrain, get_transforms
+from game4loc.dataset.gta import GTADatasetTrain
+from game4loc.dataset.mix_data import MixDatasetTrain
+from game4loc.utils import setup_system, Logger
+from game4loc.trainer import train, train_with_weight
+from game4loc.evaluate.visloc import evaluate
+from game4loc.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE, ReconstructionLoss
+from game4loc.model import TimmModel
 
 
 def parse_tuple(s):

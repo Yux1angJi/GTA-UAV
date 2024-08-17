@@ -10,21 +10,20 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from transformers import get_constant_schedule_with_warmup, get_polynomial_decay_schedule_with_warmup, get_cosine_schedule_with_warmup
 
-# from sample4geo.dataset.university import U1652DatasetEval, U1652DatasetTrain, get_transforms
-from sample4geo.dataset.denseuav_extend import DenseUAVEDatasetTrain, DenseUAVDatasetEval, get_transforms
-from sample4geo.utils import setup_system, Logger
-from sample4geo.trainer import train
-from sample4geo.evaluate.university import evaluate
-from sample4geo.loss import InfoNCE
-from sample4geo.model import TimmModel
+# from game4loc.dataset.university import U1652DatasetEval, U1652DatasetTrain, get_transforms
+from game4loc.dataset.university_extend import U1652DatasetEval, U1652EDatasetTrain, get_transforms
+from game4loc.utils import setup_system, Logger
+from game4loc.trainer import train
+from game4loc.evaluate.university import evaluate
+from game4loc.loss import InfoNCE
+from game4loc.model import TimmModel
 
 
 @dataclass
 class Configuration:
     
     # Model
-    # model: str = 'convnext_base.fb_in22k_ft_in1k_384'
-    model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
+    model: str = 'convnext_base.fb_in22k_ft_in1k_384'
     
     # Override model image size
     img_size: int = 384
@@ -34,9 +33,9 @@ class Configuration:
     custom_sampling: bool = True         # use custom sampling instead of random
     seed = 1
     epochs: int = 1
-    batch_size: int = 64                # keep in mind real_batch_size = 2 * batch_size
+    batch_size: int = 16             # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
-    gpu_ids: tuple = (0) # (0,1,2,3)           # GPU ids for training
+    gpu_ids: tuple = (0, 1) # (0,1,2,3)           # GPU ids for training
 
     ##### ExtenGeo Setting
     pair_de_s: bool = False
@@ -44,7 +43,7 @@ class Configuration:
     pair_de_se: bool = False
     
     # Eval
-    batch_size_eval: int = 64
+    batch_size_eval: int = 128
     eval_every_n_epoch: int = 1          # eval every n Epoch
     normalize_features: bool = True
     eval_gallery_n: int = -1             # -1 for all or int
@@ -58,23 +57,26 @@ class Configuration:
     label_smoothing: float = 0.1
     
     # Learning Rate
-    lr: float = 0.0001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
+    lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
     scheduler: str = "cosine"           # "polynomial" | "cosine" | "constant" | None
     warmup_epochs: int = 0.1
     lr_end: float = 0.0001               #  only for "polynomial"
+    
+    # Dataset
+    dataset: str = 'U1652-D2S'           # 'U1652-D2S' | 'U1652-S2D'
+    data_folder: str = "./data/U1652"
     
     # Augment Images
     prob_flip: float = 0.5              # flipping the sat image and drone image simultaneously
     
     # Savepath for model checkpoints
-    model_path: str = "./work_dir/denseuav"
+    model_path: str = "./work_dir/university"
     
     # Eval before training
     zero_shot: bool = True
     
     # Checkpoint to start from
     checkpoint_start = None
-    # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Sample4Geo/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
   
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -95,12 +97,18 @@ class Configuration:
 
 config = Configuration() 
 
-config.query_folder_train = '/home/xmuairmud/data/DenseUAV/DenseUAV/train/satellite'
-config.query_extend_folder_train = None
-config.gallery_folder_train = '/home/xmuairmud/data/DenseUAV/DenseUAV/train/drone'
-config.gallery_extend_folder_train = None
-config.query_folder_test = '/home/xmuairmud/data/DenseUAV/DenseUAV/test/query_drone'
-config.gallery_folder_test = '/home/xmuairmud/data/DenseUAV/DenseUAV/test/gallery_satellite'
+if config.dataset == 'U1652-D2S':
+    config.query_folder_train = '/home/xmuairmud/data/University-Release/train/satellite'
+    config.query_extend_folder_train = '/home/xmuairmud/data/University-Release/train/satellite_outpainting'
+    config.gallery_folder_train = '/home/xmuairmud/data/University-Release/train/drone'
+    config.gallery_extend_folder_train = '/home/xmuairmud/data/University-Release/train/drone_outpainting'
+    config.query_folder_test = '/home/xmuairmud/data/University-Release/test/query_drone'
+    config.gallery_folder_test = '/home/xmuairmud/data/University-Release/test/gallery_satellite'
+elif config.dataset == 'U1652-S2D':
+    config.query_folder_train = './data/U1652/train/satellite'
+    config.gallery_folder_train = './data/U1652/train/drone'    
+    config.query_folder_test = './data/U1652/test/query_satellite'
+    config.gallery_folder_test = './data/U1652/test/gallery_drone'
 
 
 if __name__ == '__main__':
@@ -126,14 +134,14 @@ if __name__ == '__main__':
     #-----------------------------------------------------------------------------#
     # Model                                                                       #
     #-----------------------------------------------------------------------------#
-
+        
     print("\nModel: {}".format(config.model))
 
 
     model = TimmModel(config.model,
                           pretrained=True,
                           img_size=config.img_size)
-
+                          
     data_config = model.get_config()
     print(data_config)
     mean = data_config["mean"]
@@ -172,7 +180,7 @@ if __name__ == '__main__':
     val_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
                                                                                                                                  
     # Train
-    train_dataset = DenseUAVEDatasetTrain(query_folder=config.query_folder_train,
+    train_dataset = U1652EDatasetTrain(query_folder=config.query_folder_train,
                                       query_extend_folder=config.query_extend_folder_train,
                                       gallery_folder=config.gallery_folder_train,
                                       gallery_extend_folder=config.gallery_extend_folder_train,
@@ -192,7 +200,7 @@ if __name__ == '__main__':
                                   pin_memory=True)
     
     # Reference Satellite Images
-    query_dataset_test = DenseUAVDatasetEval(data_folder=config.query_folder_test,
+    query_dataset_test = U1652DatasetEval(data_folder=config.query_folder_test,
                                                mode="query",
                                                transforms=val_transforms,
                                                )
@@ -204,7 +212,7 @@ if __name__ == '__main__':
                                        pin_memory=True)
     
     # Query Ground Images Test
-    gallery_dataset_test = DenseUAVDatasetEval(data_folder=config.gallery_folder_test,
+    gallery_dataset_test = U1652DatasetEval(data_folder=config.gallery_folder_test,
                                                mode="gallery",
                                                transforms=val_transforms,
                                                sample_ids=query_dataset_test.get_sample_ids(),

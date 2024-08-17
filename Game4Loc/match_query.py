@@ -5,11 +5,11 @@ import torch
 from dataclasses import dataclass
 from torch.utils.data import DataLoader
 
-from sample4geo.dataset.university import get_transforms
-from sample4geo.dataset.custom_query import CustomData
-from sample4geo.model import TimmModel
+from game4loc.dataset.university import get_transforms
+from game4loc.dataset.custom_query import CustomData
+from game4loc.model import TimmModel
 from torch.cuda.amp import autocast
-# from sample4geo.evaluate.query_topn import QueryTopN
+# from game4loc.evaluate.query_topn import QueryTopN
 import torch.nn.functional as F
 
 import matplotlib.pyplot as plt
