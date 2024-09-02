@@ -8,7 +8,7 @@ def process():
     ori_dir = '/home/xmuairmud/data/visualization/drone'
     new_dir = '/home/xmuairmud/data/visualization/drone_resize'
     # 设置新的图像大小
-    new_size = (1280, 960)
+    new_size = (960, 720)
 
     # 遍历目录中的所有文件
     for subdir, dirs, files in os.walk(ori_dir):
@@ -28,8 +28,7 @@ def process():
                     img_resized = img_cropped.resize(new_size)
                     # 保存修改后的图像，可以选择覆盖原图像或保存为新图像
                     img_resized.save(image_save_path)
-                # print(f'Processed {filename}')
-
+                print(f'Processed {filename}')
 
 
 
