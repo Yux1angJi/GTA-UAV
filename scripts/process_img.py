@@ -28,7 +28,8 @@ def process():
                     img_resized = img_cropped.resize(new_size)
                     # 保存修改后的图像，可以选择覆盖原图像或保存为新图像
                     img_resized.save(image_save_path)
-                print(f'Processed {filename}')
+                # print(f'Processed {filename}')
+
 
 
 

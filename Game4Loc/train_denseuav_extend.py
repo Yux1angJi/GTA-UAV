@@ -111,12 +111,12 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
-    query_folder_train = '/home/xmuairmud/data/DenseUAV/DenseUAV/train/satellite'
+    query_folder_train = '/home/xmuairmud/data/DenseUAV/train/satellite'
     query_extend_folder_train = None
-    gallery_folder_train = '/home/xmuairmud/data/DenseUAV/DenseUAV/train/drone'
+    gallery_folder_train = '/home/xmuairmud/data/DenseUAV/train/drone'
     gallery_extend_folder_train = None
-    query_folder_test = '/home/xmuairmud/data/DenseUAV/DenseUAV/test/query_drone'
-    gallery_folder_test = '/home/xmuairmud/data/DenseUAV/DenseUAV/test/gallery_satellite'
+    query_folder_test = '/home/xmuairmud/data/DenseUAV/test/query_drone'
+    gallery_folder_test = '/home/xmuairmud/data/DenseUAV/test/gallery_satellite'
 
 
 #-----------------------------------------------------------------------------#
@@ -210,9 +210,6 @@ def train_script(config):
                                       query_extend_folder=config.query_extend_folder_train,
                                       gallery_folder=config.gallery_folder_train,
                                       gallery_extend_folder=config.gallery_extend_folder_train,
-                                      pair_de_s=config.pair_de_s,
-                                      pair_d_se=config.pair_d_se,
-                                      pair_de_se=config.pair_de_se,
                                       transforms_query=train_sat_transforms,
                                       transforms_gallery=train_drone_transforms,
                                       prob_flip=config.prob_flip,

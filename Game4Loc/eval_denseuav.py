@@ -12,7 +12,7 @@ from game4loc.model import TimmModel
 class Configuration:
 
     # Model
-    model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
     
     # Override model image size
     img_size: int = 384
@@ -20,7 +20,7 @@ class Configuration:
     # Evaluation
     batch_size: int = 128
     verbose: bool = True
-    gpu_ids: tuple = (0,)
+    gpu_ids: tuple = (0,1)
     normalize_features: bool = True
     eval_gallery_n: int = -1             # -1 for all or int
     
@@ -31,14 +31,17 @@ class Configuration:
     # Checkpoint to start from
     # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
     # checkpoint_start = 'work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0703171314/weights_end.pth'
-    checkpoint_start = 'work_dir/denseuav/convnext_base.fb_in22k_ft_in1k_384/0630155817/weights_end.pth'
+    checkpoint_start = 'work_dir/university/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/064058/weights_end.pth'
     # checkpoint_start = None
-  
+    
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
     
     # train on GPU if available
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu' 
+
+    query_folder_test = '/home/xmuairmud/data/DenseUAV/test/query_drone'
+    gallery_folder_test = '/home/xmuairmud/data/DenseUAV/test/gallery_satellite'
     
 
 #-----------------------------------------------------------------------------#
@@ -46,13 +49,6 @@ class Configuration:
 #-----------------------------------------------------------------------------#
 
 config = Configuration() 
-
-config.query_folder_train = '/home/xmuairmud/data/DenseUAV/DenseUAV/train/satellite'
-config.query_extend_folder_train = None
-config.gallery_folder_train = '/home/xmuairmud/data/DenseUAV/DenseUAV/train/drone'
-config.gallery_extend_folder_train = None
-config.query_folder_test = '/home/xmuairmud/data/DenseUAV/DenseUAV/test/query_drone'
-config.gallery_folder_test = '/home/xmuairmud/data/DenseUAV/DenseUAV/test/gallery_satellite'
 
 
 if __name__ == '__main__':

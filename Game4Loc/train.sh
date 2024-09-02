@@ -1,6 +1,15 @@
 export CUDA_VISIBLE_DEVICES=0,1
 # conda activate torch2
 
+# python train_university.py --log_to_file --log_path "nohup_train_university_lc_bs40_e5_fromgta.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5 --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0802121048/weights_end.pth"
+# python train_university.py --log_to_file --log_path "nohup_train_university_lc_bs40_e5.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5
+
+# python train_denseuav_extend.py --log_to_file --log_path "nohup_train_denseuav_lc_bs40_e5_fromgta.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5 --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0802121048/weights_end.pth"
+# python train_denseuav_extend.py --log_to_file --log_path "nohup_train_denseuav_lc_bs40_e5.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5
+
+# python train_sues_extend.py --log_to_file --log_path "nohup_train_sues_lc_bs40_e5_fromgta.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5 --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0802121048/weights_end.pth"
+python train_sues_extend.py --log_to_file --log_path "nohup_train_sues_lc_bs40_e5.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5
+
 # python train_gta.py --data_dir "randcam2_std0_stable_all/cross_h2_z41_iou4_oc4" --log_to_file --log_path "nohup_train_gta_h2_z41_cross_allsemiiou4_lc_bs40_e2_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 5 --epoch 2 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40
 # python train_gta.py --data_dir "randcam2_std0_stable_all/cross_h34_z41_iou4_oc4" --log_to_file --log_path "nohup_train_gta_h34_z41_cross_allsemiiou4_lc_bs40_e2_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 5 --epoch 2 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40
 # python train_gta.py --data_dir "randcam2_std0_stable_all/cross_h56_z41_iou4_oc4" --log_to_file --log_path "nohup_train_gta_h56_z41_cross_allsemiiou4_lc_bs40_e2_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 5 --epoch 2 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40
@@ -16,7 +25,7 @@ export CUDA_VISIBLE_DEVICES=0,1
 
 # python train_gta.py --data_dir "randcam2_std0_stable_all/same_h23456_z41_iou4_oc4" --log_to_file --log_path "nohup_train_gta_z41_same_allsemiiou4_lc_bs40_e5_s0.1k10_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 10 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40
 
-python train_gta.py --data_dir "randcam2_std0_stable_all/same_h23456_z41_iou4_oc4" --log_to_file --log_path "nohup_train_gta_z41_same_allsemiiou4_lc_bs40_e5_s0.1k20_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 20 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40
+# python train_gta.py --data_dir "randcam2_std0_stable_all/same_h23456_z41_iou4_oc4" --log_to_file --log_path "nohup_train_gta_z41_same_allsemiiou4_lc_bs40_e5_s0.1k20_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 20 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40
 
 
 # python train_gta.py --data_dir "randcam2_std0_stable_all/same_h2_z41_iou4_oc4" --log_to_file --log_path "nohup_train_gta_h2_z41_same_allsemiiou4_lc_bs40_e5_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 10 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40

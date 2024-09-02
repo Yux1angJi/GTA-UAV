@@ -3,7 +3,7 @@ import torch
 from dataclasses import dataclass
 from torch.utils.data import DataLoader
 
-from game4loc.dataset.university import U1652DatasetEval, get_transforms
+from game4loc.dataset.sues_extend import SUESDatasetEval, get_transforms
 from game4loc.evaluate.university import evaluate
 from game4loc.model import TimmModel
 
@@ -30,14 +30,18 @@ class Configuration:
     
     # Checkpoint to start from
     # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
+    # checkpoint_start = 'work_dir/gta/convnext_base.fb_in22k_ft_in1k_384/0703171314/weights_end.pth'
     checkpoint_start = 'work_dir/denseuav/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0809045532/weights_end.pth'
     # checkpoint_start = None
-  
+    
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
     
     # train on GPU if available
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu' 
+
+    query_folder_test = '/home/xmuairmud/data/SUES-200/test/drone'
+    gallery_folder_test = '/home/xmuairmud/data/SUES-200/test/satellite'
     
 
 #-----------------------------------------------------------------------------#
@@ -45,17 +49,6 @@ class Configuration:
 #-----------------------------------------------------------------------------#
 
 config = Configuration() 
-
-if config.dataset == 'U1652-D2S':
-    config.query_folder_train = '/home/xmuairmud/data/University-Release/train/satellite'
-    config.gallery_folder_train = '/home/xmuairmud/data/University-Release/train/drone'   
-    config.query_folder_test = '/home/xmuairmud/data/University-Release/test/query_drone' 
-    config.gallery_folder_test = '/home/xmuairmud/data/University-Release/test/gallery_satellite'    
-elif config.dataset == 'U1652-S2D':
-    config.query_folder_train = './data/U1652/train/satellite'
-    config.gallery_folder_train = './data/U1652/train/drone'    
-    config.query_folder_test = './data/U1652/test/query_satellite'
-    config.gallery_folder_test = './data/U1652/test/gallery_drone'
 
 
 if __name__ == '__main__':
@@ -95,7 +88,7 @@ if __name__ == '__main__':
     print("\nImage Size Query:", img_size)
     print("Image Size Ground:", img_size)
     print("Mean: {}".format(mean))
-    print("Std:  {}\n".format(std))
+    print("Std:  {}\n".format(std)) 
 
 
     #-----------------------------------------------------------------------------#
@@ -107,8 +100,8 @@ if __name__ == '__main__':
                                                                                                                                  
     
     # Reference Satellite Images
-    query_dataset_test = U1652DatasetEval(data_folder=config.query_folder_test,
-                                               mode="query",
+    query_dataset_test = SUESDatasetEval(data_folder=config.query_folder_test,
+                                               mode="drone",
                                                transforms=val_transforms,
                                                )
     
@@ -119,8 +112,8 @@ if __name__ == '__main__':
                                        pin_memory=True)
     
     # Query Ground Images Test
-    gallery_dataset_test = U1652DatasetEval(data_folder=config.gallery_folder_test,
-                                               mode="gallery",
+    gallery_dataset_test = SUESDatasetEval(data_folder=config.gallery_folder_test,
+                                               mode="satellite",
                                                transforms=val_transforms,
                                                sample_ids=query_dataset_test.get_sample_ids(),
                                                gallery_n=config.eval_gallery_n,
@@ -136,7 +129,7 @@ if __name__ == '__main__':
     print("Gallery Images Test:", len(gallery_dataset_test))
    
 
-    print("\n{}[{}]{}".format(30*"-", "University-1652", 30*"-"))  
+    print("\n{}[{}]{}".format(30*"-", "SUES-200", 30*"-"))  
 
     r1_test = evaluate(config=config,
                        model=model,
