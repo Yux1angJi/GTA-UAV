@@ -6,9 +6,13 @@ from scipy.stats import gaussian_kde
 from matplotlib.patches import Patch
 import pandas as pd
 import seaborn as sns
-
+from PIL import Image
+import pickle
+import cv2
 
 import os
+
+Image.MAX_IMAGE_PIXELS = None
 
 
 def gaussin_random_truncted(lower_bound, upper_bound, mean, std_dev):
@@ -294,8 +298,63 @@ def gen_attitudes():
     df.to_csv('output.csv', index=False)
 
 
+def draw_loc():
+
+    train_pickle = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/train_pair_meta.pkl'
+    test_pickle = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/test_pair_meta.pkl'
+    with open(train_pickle, 'rb') as f:
+        data_train = pickle.load(f)
+    with open(test_pickle, 'rb') as f:
+        data_test = pickle.load(f)
+
+    x_coords_train = []
+    y_coords_train = []
+    x_coords_test = []
+    y_coords_test = []
+    for data_sate in data_train['pairs_drone2sate_list']:
+        x_coords_train.append(data_sate['drone_loc_x_y'][0]/0.45)
+        y_coords_train.append(data_sate['drone_loc_x_y'][1]/0.45)
+    for data_sate in data_test['pairs_drone2sate_list']:
+        x_coords_test.append(data_sate['drone_loc_x_y'][0]/0.45)
+        y_coords_test.append(data_sate['drone_loc_x_y'][1]/0.45)
+
+
+    image_path = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-sate.png'  # 替换为你的图片路径
+    image = Image.open(image_path)
+
+    # 获取图片的分辨率
+    width, height = image.size
+
+    plt.figure(figsize=(width / 1000, height / 1000), dpi=1000)
+
+    plt.imshow(image)
+
+    plt.scatter(x_coords_train, y_coords_train, color='red', s=10)
+    plt.scatter(x_coords_test, y_coords_test, color='blue', s=10)
+    # plt.scatter(x_coords_train, y_coords_train, color='red', s=5)
+
+    # 设置图片的边界与比例
+    plt.xlim(0, width)
+    plt.ylim(height, 0)  # 因为图像坐标系的原点在左上角，所以要反转 y 轴
+    plt.gca().set_aspect('equal', adjustable='box')
+
+    # 隐藏坐标轴
+    plt.axis('off')
+    plt.savefig('GTA-UAV-sample-dist-cross.png', transparent=True, bbox_inches='tight', pad_inches=0)
+
+
+def resize_img():
+    a = cv2.imread('GTA-UAV-sample-dist-cross.png')
+    height, width, _ = a.shape
+    print(height, width)
+    a = cv2.resize(a, (width // 8, height // 8))
+    cv2.imwrite('GTA-UAV-sample-dist-cross-resize.png', a)
+
+
 if __name__ == '__main__':
-    gen_attitudes()
+    draw_loc()
+    resize_img()
+    # gen_attitudes()
     # draw_attitude_roll_pitch_2()
     # draw_attitude_yaw()
     # draw_attitude_roll_pitch()
