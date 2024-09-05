@@ -243,7 +243,13 @@ if __name__ == '__main__':
     # print('flops(G)', flops/1e9, 'params(M)', params/1e6)
 
     from transformers import CLIPProcessor, CLIPModel
-    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
+    model = CLIPModel.from_pretrained("/home/xmuairmud/jyx/clip-vit-base-patch16")
+    vision_model = model.vision_model
+    # print(vision_model)
 
-    print()
+    x = torch.rand((1, 3, 224, 224))
+    # print(vision_model(x).pooler_output.shape)
+    flops, params = profile(vision_model, inputs=(x,))
+    print('flops(G)', flops/1e9, 'params(M)', params/1e6)
+
 
