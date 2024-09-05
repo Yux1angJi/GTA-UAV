@@ -938,9 +938,9 @@ def move_file():
 
 
 if __name__ == "__main__":
-    root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h2_z41_iou4_oc4'
-    process_gta_data(root, save_root, h_list=[200], zoom_list=[4, 5, 6], split_type='cross')
+    root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area'
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/same_h123456_z4567'
+    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], split_type='same')
 
     # src_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/randcam2_std0_stable_all_resize'
     # dst_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/drone/meta_data'
