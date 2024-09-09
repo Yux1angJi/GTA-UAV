@@ -63,13 +63,35 @@ def draw_backgroud():
 
 
 def draw_attitude_roll_pitch_2():
-    yaw_range = [-180, 180]
-    pitch_range = [-100, -80]
-    roll_range = [-10, 10]
-    std = 5
-    pitchs = [gaussin_random_truncted(pitch_range[0], pitch_range[1], -90, std) for _ in range(50000)]
-    rolls = [gaussin_random_truncted(roll_range[0], roll_range[1], 0, std) for _ in range(50000)]
-    yaws = [random.uniform(-180.0, 180.0) for _ in range(50000)]
+    # yaw_range = [-180, 180]
+    # pitch_range = [-100, -80]
+    # roll_range = [-10, 10]
+    # std = 5
+    # pitchs = [gaussin_random_truncted(pitch_range[0], pitch_range[1], -90, std) for _ in range(50000)]
+    # rolls = [gaussin_random_truncted(roll_range[0], roll_range[1], 0, std) for _ in range(50000)]
+    # yaws = [random.uniform(-180.0, 180.0) for _ in range(50000)]
+    pitchs = []
+    yaws = []
+    rolls = []
+    altitude = []
+    directory = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_5area_resize/drone/meta_data'
+    for filename in os.listdir(directory):
+        if filename.endswith('.txt'):
+            filepath = os.path.join(directory, filename)
+            with open(filepath, 'r') as file:
+                line = file.readline().strip()
+                values = line.split()
+                if len(values) >= 4:
+                    h = float(values[3])
+                    altitude.append(h)
+                    
+                    roll = float(values[7])
+                    pitch = float(values[8])
+                    yaw = float(values[9])
+                    
+                    rolls.append(roll)
+                    pitchs.append(pitch)
+                    yaws.append(yaw)
     
     data = pd.DataFrame({
         'Pitch': pitchs,
@@ -87,14 +109,36 @@ def draw_attitude_roll_pitch_2():
     # plt.savefig('attitude_angles_roll_pitch_2.pdf')
 
 def draw_attitude_roll_pitch():
-    # 生成一些示例数据
-    yaw_range = [-180, 180]
-    pitch_range = [-110, -70]
-    roll_range = [-10, 10]
-    std = 5
-    pitchs = [gaussin_random_truncted(pitch_range[0], pitch_range[1], -90, std) for _ in range(50000)]
-    rolls = [gaussin_random_truncted(roll_range[0], roll_range[1], 0, std) for _ in range(50000)]
-    yaws = [random.uniform(-180.0, 180.0) for _ in range(50000)]
+    # # 生成一些示例数据
+    # yaw_range = [-180, 180]
+    # pitch_range = [-110, -70]
+    # roll_range = [-10, 10]
+    # std = 5
+    # pitchs = [gaussin_random_truncted(pitch_range[0], pitch_range[1], -90, std) for _ in range(50000)]
+    # rolls = [gaussin_random_truncted(roll_range[0], roll_range[1], 0, std) for _ in range(50000)]
+    # yaws = [random.uniform(-180.0, 180.0) for _ in range(50000)]
+    pitchs = []
+    yaws = []
+    rolls = []
+    altitude = []
+    directory = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_5area_resize/drone/meta_data'
+    for filename in os.listdir(directory):
+        if filename.endswith('.txt'):
+            filepath = os.path.join(directory, filename)
+            with open(filepath, 'r') as file:
+                line = file.readline().strip()
+                values = line.split()
+                if len(values) >= 4:
+                    h = float(values[3])
+                    altitude.append(h)
+                    
+                    roll = float(values[7])
+                    pitch = float(values[8])
+                    yaw = float(values[9])
+                    
+                    rolls.append(roll)
+                    pitchs.append(pitch)
+                    yaws.append(yaw)
 
     y = rolls
     x = pitchs
@@ -138,13 +182,35 @@ def draw_attitude_roll_pitch():
 
 
 def draw_attitude_yaw():
-    yaw_range = [-180, 180]
-    pitch_range = [-110, -70]
-    roll_range = [-10, 10]
-    std = 5
-    pitchs = [gaussin_random_truncted(pitch_range[0], pitch_range[1], -90, std) for _ in range(50000)]
-    rolls = [gaussin_random_truncted(roll_range[0], roll_range[1], 0, std) for _ in range(50000)]
-    yaws = [random.uniform(-180.0, 180.0) for _ in range(50000)]
+    # yaw_range = [-180, 180]
+    # pitch_range = [-110, -70]
+    # roll_range = [-10, 10]
+    # std = 5
+    # pitchs = [gaussin_random_truncted(pitch_range[0], pitch_range[1], -90, std) for _ in range(50000)]
+    # rolls = [gaussin_random_truncted(roll_range[0], roll_range[1], 0, std) for _ in range(50000)]
+    # yaws = [random.uniform(-180.0, 180.0) for _ in range(50000)]
+    pitchs = []
+    yaws = []
+    rolls = []
+    altitude = []
+    directory = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_5area_resize/drone/meta_data'
+    for filename in os.listdir(directory):
+        if filename.endswith('.txt'):
+            filepath = os.path.join(directory, filename)
+            with open(filepath, 'r') as file:
+                line = file.readline().strip()
+                values = line.split()
+                if len(values) >= 4:
+                    h = float(values[3])
+                    altitude.append(h)
+                    
+                    roll = float(values[7])
+                    pitch = float(values[8])
+                    yaw = float(values[9])
+                    
+                    rolls.append(roll)
+                    pitchs.append(pitch)
+                    yaws.append(yaw)
 
     print(pitchs[0], rolls[0], yaws[0])
 
@@ -343,12 +409,12 @@ def resize_img():
 
 if __name__ == '__main__':
     # gen_attitudes()
-    draw_attitude_roll_pitch_2()
-    draw_loc()
-    resize_img()
+    # draw_attitude_roll_pitch_2()
+    # draw_loc()
+    # resize_img()
     # gen_attitudes()
     # draw_attitude_roll_pitch_2()
-    # draw_attitude_yaw()
+    draw_attitude_yaw()
     # draw_attitude_roll_pitch()
     # draw_altitude()
     # draw_scenes_pie()
