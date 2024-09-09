@@ -181,7 +181,6 @@ Game4Loc/pretrained/
 Game4Loc/pretrained.zip
 
 *.png
-*.jpg
 *.out
 *.zip
 *.pdf
