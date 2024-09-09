@@ -15,6 +15,7 @@ from shapely.validation import make_valid
 import concurrent.futures
 import itertools
 import pickle
+import json
 
 
 GAME_TO_SATE_KX = 1.8206
@@ -443,56 +444,102 @@ def get_sate_data(root_dir):
     return sate_img_dir_list, sate_img_list
 
 
+def write_json():
+    data_drone2sate_json = []
+    with open('/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/same_h123456_z4567/train_pair_meta.pkl', 'rb') as f:
+        data_pickle = pickle.load(f)
+    for pair_drone2sate in data_pickle['pairs_drone2sate_list']:
+        img_name = pair_drone2sate['drone_img']
+        meta_file = os.path.join('/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/drone/meta_data', img_name.replace('.png', '.txt'))
+        with open(meta_file, 'r') as file:
+            line = file.readline().strip()
+            values = line.split()
+            if len(values) >= 4:
+                height = float(values[3])           
+                cam_roll = float(values[7])
+                cam_pitch = float(values[8])
+                cam_yaw = float(values[9])
+                drone_roll = cam_roll + 90.0
+                drone_pitch = cam_pitch
+                drone_yaw = cam_yaw
+        data_drone2sate_json.append({
+            "drone_img_dir": "drone/images",
+            "drone_img_name": pair_drone2sate['drone_img'],
+            "drone_loc_x_y": pair_drone2sate['drone_loc_x_y'],
+            "sate_img_dir": "satellite",
+            "pair_pos_sate_img_list": pair_drone2sate['pair_iou_sate_img_list'],
+            "pair_pos_sate_weight_list": pair_drone2sate['pair_iou_sate_weight_list'],
+            "pair_pos_sate_loc_x_y_list": pair_drone2sate['pair_iou_sate_loc_xy_list'],
+            "pair_pos_semipos_sate_img_list": pair_drone2sate['pair_semi_iou_sate_img_list'],
+            "pair_pos_semipos_sate_weight_list": pair_drone2sate['pair_semi_iou_sate_weight_list'],
+            "pair_pos_semipos_sate_loc_x_y_list": pair_drone2sate['pair_semi_iou_sate_loc_xy_list'],
+            "drone_metadata": {
+                "height": height,
+                "drone_roll": drone_roll,
+                "drone_pitch": drone_pitch,
+                "drone_yaw": drone_yaw,
+                "cam_roll": cam_roll,
+                "cam_pitch": cam_pitch,
+                "cam_yaw": cam_yaw,
+            }
+        })
+    save_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/same-area-drone2sate-train.json'
+    with open(save_path, 'w', encoding='utf-8') as f:
+        json.dump(data_drone2sate_json, f, indent=4, ensure_ascii=False)
+
+
+
 class GTADatasetTrain(Dataset):
     
     def __init__(self,
                  pairs_meta_file,
-                 drone2sate=True,
+                 data_root,
                  transforms_query=None,
                  transforms_gallery=None,
-                 group_len=2,
                  prob_flip=0.5,
                  shuffle_batch_size=128,
-                 mode='iou',
-                 train_ratio=1.0):
+                 mode='pos_semipos',
+                 train_ratio=1.0,
+                 group_len=2):
         super().__init__()
         
-        with open(pairs_meta_file, 'rb') as f:
-            pairs_meta_data = pickle.load(f)
-
+        with open(os.path.join(data_root, pairs_meta_file), 'r', encoding='utf-8') as f:
+            pairs_meta_data = json.load(f)
+        self.data_root = data_root
         self.group_len = group_len
 
         self.pairs = []
+        self.pairs_sate2drone_dict = {}
+        self.pairs_drone2sate_dict = {}
+        self.pairs_match_set = set()
 
-        pairs_drone2sate_list = pairs_meta_data['pairs_drone2sate_list']
-        self.pairs_sate2drone_dict = pairs_meta_data[f'pairs_{mode}_sate2drone_dict']
-        self.pairs_drone2sate_dict = pairs_meta_data[f'pairs_{mode}_drone2sate_dict']
-        self.pairs_match_set = pairs_meta_data[f'pairs_{mode}_match_set']
+        for pair_drone2sate in pairs_meta_data:
+            drone_img_dir = pair_drone2sate['drone_img_dir']
+            drone_img_name = pair_drone2sate['drone_img_name']
+            sate_img_dir = pair_drone2sate['sate_img_dir']
+            # Training with Positive-only data or Positive+Semi-positive data
+            pair_sate_img_list = pair_drone2sate[f'pair_{mode}_sate_img_list']
+            pair_sate_weight_list = pair_drone2sate[f'pair_{mode}_sate_weight_list']
+            
+            drone_img_file = os.path.join(data_root, drone_img_dir, drone_img_name)
 
-        self.drone2sate = drone2sate
-        if drone2sate:
-            for pairs_drone2sate in pairs_drone2sate_list:
-                drone_img_dir = pairs_drone2sate['drone_img_dir']
-                drone_img = pairs_drone2sate['drone_img']
-                sate_img_dir = pairs_drone2sate['sate_img_dir']
-                pair_sate_img_list = pairs_drone2sate[f'pair_{mode}_sate_img_list']
-                pair_sate_weight_list = pairs_drone2sate[f'pair_{mode}_sate_weight_list']
-                pair_sate_loc_xy_list = pairs_drone2sate[f'pair_{mode}_sate_loc_xy_list']
-                drone_img_loc_xy = pairs_drone2sate['drone_loc_x_y']
+            for pair_sate_img, pair_sate_weight in zip(pair_sate_img_list, pair_sate_weight_list):
+                sate_img_file = os.path.join(data_root, sate_img_dir, pair_sate_img)
+                self.pairs.append((drone_img_file, sate_img_file, pair_sate_weight))
 
-                drone_img_file = f'{drone_img_dir}/{drone_img}'
-
-                for pair_sate_img, pair_sate_weight, pair_sate_loc_xy in zip(pair_sate_img_list, pair_sate_weight_list, pair_sate_loc_xy_list):
-                    sate_img_file = f'{sate_img_dir}/{pair_sate_img}'
-                    self.pairs.append((drone_img_file, sate_img_file, pair_sate_weight))
-                        # np.array([drone_img_loc_xy[0], drone_img_loc_xy[1]]),
-                        # np.array([pair_sate_loc_xy[0], pair_sate_loc_xy[1]])))
+            # Build Graph with All Edges (drone, sate)
+            pair_all_sate_img_list = pair_drone2sate['pair_pos_semipos_sate_img_list']
+            for pair_sate_img in pair_all_sate_img_list:
+                self.pairs_drone2sate_dict.setdefault(drone_img_name, []).append(pair_sate_img)
+                self.pairs_sate2drone_dict.setdefault(pair_sate_img, []).append(drone_img_name)
+                self.pairs_match_set.add((drone_img_name, pair_sate_img))
 
         self.transforms_query = transforms_query
         self.transforms_gallery = transforms_gallery
         self.prob_flip = prob_flip
         self.shuffle_batch_size = shuffle_batch_size
 
+        # Training with sparse data
         num_pairs = len(self.pairs)
         num_pairs_train = int(train_ratio * num_pairs)
         random.shuffle(self.pairs)
@@ -529,9 +576,9 @@ class GTADatasetTrain(Dataset):
 
     def shuffle_group(self, ):
         '''
-        custom shuffle function for unique class_id sampling in batch
+        Implementation of Mutually Exclusive Sampling process with group
         '''
-        print("\nShuffle Dataset in Groups:")
+        print("\nShuffle Dataset in Batches:")
         
         pair_pool = copy.deepcopy(self.pairs)
         # Shuffle pairs order
@@ -549,9 +596,6 @@ class GTADatasetTrain(Dataset):
         
         # counter
         break_counter = 0
-        
-        # progressbar
-        # pbar = tqdm()
 
         while True:
             # pbar.update()
@@ -629,8 +673,8 @@ class GTADatasetTrain(Dataset):
                     # random.shuffle(subset_drone)
                     # random.shuffle(subset_sate)
                     for drone_img_name, sate_img_name in zip(subset_drone, subset_sate):
-                        drone_img_path = os.path.join(drone_img_dir, drone_img_name)
-                        sate_img_path = os.path.join(sate_img_dir, sate_img_name)
+                        drone_img_path = os.path.join(self.data_root, drone_img_dir, drone_img_name)
+                        sate_img_path = os.path.join(self.data_root, sate_img_dir, sate_img_name)
                         current_batch.append((drone_img_path, sate_img_path, 1.0))
                         pairs_epoch.add((drone_img_name, sate_img_name))
                     for drone_img in subset_drone:
@@ -656,117 +700,112 @@ class GTADatasetTrain(Dataset):
                 sate_batch = set()
                 drone_batch = set()
                 current_batch = []
-    
-        # pbar.close()
-        
-        # wait before closing progress bar
-        time.sleep(0.3)
         
         self.samples = batches
         
         print("Original Length: {} - Length after Shuffle: {}".format(len(self.pairs), len(self.samples))) 
         print("Break Counter:", break_counter)
         print("Pairs left out of last batch to avoid creating noise:", len(self.pairs) - len(self.samples))
-        print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][0], self.samples[-1][0]))  
-        print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][1], self.samples[-1][1]))  
+        print("First Element: {} - Last Element: {}".format(self.samples[0][0], self.samples[-1][0]))  
+        print("First Element: {} - Last Element: {}".format(self.samples[0][1], self.samples[-1][1]))  
     
 
     def shuffle(self, ):
+        '''
+        Implementation of Mutually Exclusive Sampling process
+        '''
+        
+        print("\nShuffle Dataset:")
+        
+        pair_pool = copy.deepcopy(self.pairs)
+            
+        # Shuffle pairs order
+        random.shuffle(pair_pool)
+        
+        sate_batch = set()
+        drone_batch = set()
+        
+        # Lookup if already used in epoch
+        pairs_epoch = set()   
 
-            '''
-            custom shuffle function for unique class_id sampling in batch
-            '''
+        # buckets
+        batches = []
+        current_batch = []
             
-            print("\nShuffle Dataset:")
-            
-            pair_pool = copy.deepcopy(self.pairs)
-              
-            # Shuffle pairs order
-            random.shuffle(pair_pool)
-           
-            sate_batch = set()
-            drone_batch = set()
-            
-            # Lookup if already used in epoch
-            pairs_epoch = set()   
+        # counter
+        break_counter = 0
+        
+        # progressbar
+        # pbar = tqdm()
 
-            # buckets
-            batches = []
-            current_batch = []
-             
-            # counter
-            break_counter = 0
+        while True:
             
-            # progressbar
-            # pbar = tqdm()
-
-            while True:
+            # pbar.update()
+            
+            if len(pair_pool) > 0:
+                pair = pair_pool.pop(0)
                 
-                # pbar.update()
-                
-                if len(pair_pool) > 0:
-                    pair = pair_pool.pop(0)
+                drone_img, sate_img, _ = pair
+                drone_img_name = drone_img.split('/')[-1]
+                sate_img_name = sate_img.split('/')[-1]
+                # print(sate_img_name)
+
+                pair_name = (drone_img_name, sate_img_name)
+
+                if drone_img_name not in drone_batch and sate_img_name not in sate_batch and pair_name not in pairs_epoch:
+
+                    current_batch.append(pair)
+                    pairs_epoch.add(pair_name)
                     
-                    drone_img, sate_img, _ = pair
-                    drone_img_name = drone_img.split('/')[-1]
-                    sate_img_name = sate_img.split('/')[-1]
-                    # print(sate_img_name)
-
-                    pair_name = (drone_img_name, sate_img_name)
-
-                    if drone_img_name not in drone_batch and sate_img_name not in sate_batch and pair_name not in pairs_epoch:
-
-                        current_batch.append(pair)
-                        pairs_epoch.add(pair_name)
-                        
-                        pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name]
-                        for sate in pairs_drone2sate:
-                            sate_batch.add(sate)
-                        pairs_sate2drone = self.pairs_sate2drone_dict[sate_img_name]
-                        for drone in pairs_sate2drone:
-                            drone_batch.add(drone)
-                        
-                        break_counter = 0
-                        
-                    else:
-                        # if pair fits not in batch and is not already used in epoch -> back to pool
-                        if pair_name not in pairs_epoch:
-                            pair_pool.append(pair)
-                            
-                        break_counter += 1
-                        
-                    if break_counter >= 16384:
-                        break
+                    pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name]
+                    for sate in pairs_drone2sate:
+                        sate_batch.add(sate)
+                    pairs_sate2drone = self.pairs_sate2drone_dict[sate_img_name]
+                    for drone in pairs_sate2drone:
+                        drone_batch.add(drone)
+                    
+                    break_counter = 0
+                    
                 else:
+                    # if pair fits not in batch and is not already used in epoch -> back to pool
+                    if pair_name not in pairs_epoch:
+                        pair_pool.append(pair)
+                        
+                    break_counter += 1
+                    
+                if break_counter >= 16384:
                     break
+            else:
+                break
 
-                if len(current_batch) >= self.shuffle_batch_size:
-                    # empty current_batch bucket to batches
-                    batches.extend(current_batch)
-                    sate_batch = set()
-                    drone_batch = set()
-                    current_batch = []
-       
-            # pbar.close()
-            
-            # wait before closing progress bar
-            time.sleep(0.3)
-            
-            self.samples = batches
-            
-            print("Original Length: {} - Length after Shuffle: {}".format(len(self.pairs), len(self.samples))) 
-            print("Break Counter:", break_counter)
-            print("Pairs left out of last batch to avoid creating noise:", len(self.pairs) - len(self.samples))
-            print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][0], self.samples[-1][0]))  
-            print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][1], self.samples[-1][1]))  
-            
+            if len(current_batch) >= self.shuffle_batch_size:
+                # empty current_batch bucket to batches
+                batches.extend(current_batch)
+                sate_batch = set()
+                drone_batch = set()
+                current_batch = []
+    
+        # pbar.close()
+        
+        # wait before closing progress bar
+        # time.sleep(0.3)
+        
+        self.samples = batches
+        
+        print("Original Length: {} - Length after Shuffle: {}".format(len(self.pairs), len(self.samples))) 
+        print("Break Counter:", break_counter)
+        print("Pairs left out of last batch to avoid creating noise:", len(self.pairs) - len(self.samples))
+        print("First Element: {} - Last Element: {}".format(self.samples[0][0], self.samples[-1][0]))  
+        print("First Element: {} - Last Element: {}".format(self.samples[0][1], self.samples[-1][1]))  
+        
 
 class GTADatasetEval(Dataset):
     
     def __init__(self,
                  pairs_meta_file,
+                 data_root,
                  view,
-                 mode='oc',
+                 mode='pos',
                  sate_img_dir='',
                  query_mode='D2S',
                  pairs_sate2drone_dict=None,
@@ -774,30 +813,41 @@ class GTADatasetEval(Dataset):
                  ):
         super().__init__()
         
-        with open(pairs_meta_file, 'rb') as f:
-            pairs_meta_data = pickle.load(f)         
+        with open(os.path.join(data_root, pairs_meta_file), 'r', encoding='utf-8') as f:
+            pairs_meta_data = json.load(f)
+        self.data_root = data_root
+        sate_img_dir = os.path.join(data_root, sate_img_dir)    
 
         self.images_path = []
-        self.images = []
+        self.images_name = []
         self.images_loc_xy = []
 
+        self.pairs_sate2drone_dict = {}
+        self.pairs_drone2sate_dict = {}
+        self.pairs_match_set = set()
+
         if view == 'drone':
-            pairs_drone2sate_list = pairs_meta_data['pairs_drone2sate_list']
-            self.pairs_sate2drone_dict = pairs_meta_data[f'pairs_{mode}_sate2drone_dict']
-            self.pairs_drone2sate_dict = pairs_meta_data[f'pairs_{mode}_drone2sate_dict']
-            self.pairs_match_set = pairs_meta_data[f'pairs_{mode}_match_set']
-            for pairs_drone2sate in pairs_drone2sate_list:
-                if len(self.pairs_drone2sate_dict.get(pairs_drone2sate['drone_img'], [])) == 0:
-                    continue
-                self.images_path.append(os.path.join(pairs_drone2sate['drone_img_dir'], pairs_drone2sate['drone_img']))
-                self.images.append(pairs_drone2sate['drone_img'])
-                self.images_loc_xy.append(pairs_drone2sate['drone_loc_x_y'])
+            for pair_drone2sate in pairs_meta_data:
+                drone_img_name = pair_drone2sate['drone_img_name']
+                drone_img_dir = pair_drone2sate['drone_img_dir']
+                drone_loc_x_y = pair_drone2sate['drone_loc_x_y']
+                self.pairs_drone2sate_dict[drone_img_name] = []
+                pair_sate_img_list = pair_drone2sate[f'pair_{mode}_sate_img_list']
+                for pair_sate_img in pair_sate_img_list:
+                    self.pairs_drone2sate_dict.setdefault(drone_img_name, []).append(pair_sate_img)
+                    self.pairs_sate2drone_dict.setdefault(pair_sate_img, []).append(drone_img_name)
+                    self.pairs_match_set.add((drone_img_name, pair_sate_img))
+                if len(pair_sate_img_list) != 0:
+                    self.images_path.append(os.path.join(data_root, drone_img_dir, drone_img_name))
+                    self.images_name.append(drone_img_name)
+                    self.images_loc_xy.append((drone_loc_x_y[0], drone_loc_x_y[1]))
+
         elif view == 'sate':
             if query_mode == 'D2S':
                 sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
                 for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
-                    self.images_path.append(os.path.join(sate_img_dir, sate_img))
-                    self.images.append(sate_img)
+                    self.images_path.append(os.path.join(data_root, sate_img_dir, sate_img))
+                    self.images_name.append(sate_img)
 
                     sate_img_name = sate_img.replace('.png', '')
                     tile_zoom, tile_x, tile_y = sate_img_name.split('_')
@@ -810,8 +860,8 @@ class GTADatasetEval(Dataset):
                 for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
                     if sate_img not in pairs_sate2drone_dict.keys():
                         continue
-                    self.images_path.append(os.path.join(sate_img_dir, sate_img))
-                    self.images.append(sate_img)
+                    self.images_path.append(os.path.join(data_root, sate_img_dir, sate_img))
+                    self.images_name.append(sate_img)
 
                     sate_img_name = sate_img.replace('.png', '')
                     tile_zoom, tile_x, tile_y = sate_img_name.split('_')
@@ -829,18 +879,6 @@ class GTADatasetEval(Dataset):
         img = cv2.imread(img_path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
-        
-        #if self.mode == "sat":
-        
-        #    img90 = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-        #    img180 = cv2.rotate(img90, cv2.ROTATE_90_CLOCKWISE)
-        #    img270 = cv2.rotate(img180, cv2.ROTATE_90_CLOCKWISE)
-            
-        #    img_0_90 = np.concatenate([img, img90], axis=1)
-        #    img_180_270 = np.concatenate([img180, img270], axis=1)
-            
-        #    img = np.concatenate([img_0_90, img_180_270], axis=0)
-        
         # image transforms
         if self.transforms is not None:
             img = self.transforms(image=img)['image']
@@ -848,11 +886,8 @@ class GTADatasetEval(Dataset):
         return img
 
     def __len__(self):
-        return len(self.images)
+        return len(self.images_name)
     
-    def get_sample_ids(self):
-        return set(self.sample_ids)
-
     
 def get_transforms(img_size,
                    mean=[0.485, 0.456, 0.406],
@@ -938,9 +973,11 @@ def move_file():
 
 
 if __name__ == "__main__":
-    root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/same_h123456_z4567'
-    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], split_type='same')
+    write_json()
+
+    # root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area'
+    # save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/same_h123456_z4567'
+    # process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], split_type='same')
 
     # src_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/randcam2_std0_stable_all_resize'
     # dst_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/drone/meta_data'

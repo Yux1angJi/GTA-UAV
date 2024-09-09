@@ -52,17 +52,18 @@ class MLP(nn.Module):
         return x
 
 
-class TimmModel(nn.Module):
+class DesModel(nn.Module):
 
     def __init__(self, 
-                 model_name,
+                 model_name='vit',
                  pretrained=True,
                  img_size=384,
                  share_weights=True,
                  train_with_recon=False,
-                 train_with_offset=False):
+                 train_with_offset=False,
+                 model_hub='timm'):
                  
-        super(TimmModel, self).__init__()
+        super(DesModel, self).__init__()
         self.share_weights = share_weights
         self.model_name = model_name
         self.img_size = img_size
@@ -242,14 +243,31 @@ if __name__ == '__main__':
     # # print(model1)
     # print('flops(G)', flops/1e9, 'params(M)', params/1e6)
 
-    from transformers import CLIPProcessor, CLIPModel
-    model = CLIPModel.from_pretrained("/home/xmuairmud/jyx/clip-vit-base-patch16")
-    vision_model = model.vision_model
+    # from transformers import CLIPProcessor, CLIPModel
+    # model = CLIPModel.from_pretrained("/home/xmuairmud/jyx/clip-vit-base-patch16")
+    # vision_model = model.vision_model
     # print(vision_model)
 
-    x = torch.rand((1, 3, 224, 224))
-    # print(vision_model(x).pooler_output.shape)
-    flops, params = profile(vision_model, inputs=(x,))
-    print('flops(G)', flops/1e9, 'params(M)', params/1e6)
+    # dinov2_vitb14_reg = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14_reg')
+    # print(dinov2_vitb14_reg.set_grad_checkpointing(True))
+
+    # from transformers import ViTModel, ViTImageProcessor, AutoModelForImageClassification, AutoConfig
+    # config = AutoConfig.from_pretrained('facebook/dino-vitb16')
+    # config.image_size = 384
+    # model = ViTModel.from_pretrained('facebook/dino-vitb16', config=config, ignore_mismatched_sizes=True)
+    model = timm.create_model('vit_base_patch14_reg4_dinov2.lvd142m', pretrained=True, img_size=(384, 384))
+    data_config = timm.data.resolve_model_data_config(model)
+    print(data_config)
+    # processor = ViTImageProcessor.from_pretrained('facebook/dino-vitb16')
+
+
+    x = torch.rand((1, 3, 384, 384))
+    # inputs = processor(images=x, return_tensors="pt")
+    # print(inputs['pixel_values'].shape)
+    # outputs = model(**inputs)
+    # print(outputs.pooler_output.shape)
+    print(model(x).shape)
+    # flops, params = profile(dinov2_vitb14_reg, inputs=(x,))
+    # print('flops(G)', flops/1e9, 'params(M)', params/1e6)
 
 
