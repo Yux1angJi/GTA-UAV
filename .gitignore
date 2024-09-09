@@ -165,9 +165,7 @@ satellite/tiles
 
 
 *.png
-*.jpg
 *.pdf
-*.jpeg
 *.csv
 
 *work_dir/
