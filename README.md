@@ -15,12 +15,12 @@
 
 ## Table of contents
 
-- [Dataset Highlights](#dataset-hgihtlights)
-- [Dataset Structure](#dataset-hgihtlights)
+- [Dataset Highlights](#dataset-highlights)
+- [Dataset Structure](#dataset-structure)
 - [Train and Test](#train-and-test)
-- [Pre-trained Models](#pretrained-models)
+- [Pre-trained Models](#pre-trained-models)
 - [License](#license)
-- [Acknowledgments](#acknowledgement)
+- [Acknowledgments](#acknowledgments)
 - [Citation](#citation)
 
 
