@@ -124,7 +124,7 @@ class Configuration:
 
     train_pairs_meta_file = 'cross-area-drone2sate-train.json'
     test_pairs_meta_file = 'cross-area-drone2sate-test.json'
-    sate_img_dir = 'satellite'
+    sate_img_dir = 'satellite_z4'
 
 
 #-----------------------------------------------------------------------------#
