@@ -1,23 +1,42 @@
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=3
 # conda activate torch2
 
 # python train_university.py --log_to_file --log_path "nohup_train_university_lc_bs40_e5_fromgta.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5 --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0802121048/weights_end.pth"
-# python train_university.py --log_to_file --log_path "nohup_train_university_lc_bs40_e5.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5
+python train_university.py --log_to_file --log_path "nohup_train_university_lc_bs64_e5.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64 --epochs 5
 
 # python train_denseuav_extend.py --log_to_file --log_path "nohup_train_denseuav_lc_bs40_e5_fromgta.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5 --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0802121048/weights_end.pth"
-# python train_denseuav_extend.py --log_to_file --log_path "nohup_train_denseuav_lc_bs40_e5.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5
+python train_denseuav_extend.py --log_to_file --log_path "nohup_train_denseuav_lc_bs64_e5.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64 --epochs 5
 
 # python train_sues_extend.py --log_to_file --log_path "nohup_train_sues_lc_bs40_e5_fromgta.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5 --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0802121048/weights_end.pth"
-# python train_sues_extend.py --log_to_file --log_path "nohup_train_sues_lc_bs40_e5.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40 --epochs 5
+python train_sues_extend.py --log_to_file --log_path "nohup_train_sues_lc_bs64_e5.out" --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64 --epochs 5
 
 # python train_gta.py --data_dir "randcam2_5area/cross_h123456_z4567" --log_to_file --log_path "nohup_train_gta_h123456_z4567_cross_lc_bs40_e2_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 5 --epoch 2 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40
 # python train_gta.py --data_dir "randcam2_5area/cross_h123456_z456" --log_to_file --log_path "nohup_train_gta_h123456_z456_cross_lc_bs40_e2_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 5 --epoch 2 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40
+
+# python train_gta.py --data_dir "randcam2_std0_stable_allmap_resize/cross_h123456_z4567" --log_to_file --log_path "nohup_train_gta_allmap_h123456_z4567_cross_lc_bs64_e5_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --with_weight --k 5 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+# python train_gta.py --data_dir "randcam2_std0_stable_allmap_resize/cross_h123456_z4567" --log_to_file --log_path "nohup_train_gta_allmap_h123456_z4567_cross_lc_bs64_e5_s0.1_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+
+# python train_gta.py --data_dir "randcam2_std0_stable_5area_resize/same_h123456_z4567" --log_to_file --log_path "nohup_train_gta_5area_h123456_z4567_same_lc_bs64_e10_s0.05k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.05 --with_weight --k 5 --epoch 10 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+
+# python train_gta.py --data_dir "randcam2_std0_stable_5area_resize/cross_h123456_z4567" --log_to_file --log_path "nohup_train_gta_5area_h123456_z4567_cross_lc_bs64_e10_s0.05k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.05 --with_weight --k 5 --epoch 10 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+
+# python train_gta.py --data_dir "randcam2_std0_stable_5area_resize/same_h123456_z4567" --log_to_file --log_path "nohup_train_gta_5area_h123456_z4567_same_lc_bs64_e5_s0.1_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+
+# python train_gta.py --data_dir "randcam2_std0_stable_5area_resize/cross_h123456_z456" --log_to_file --log_path "nohup_train_gta_5area_h123456_z4567_same_lc_bs64_e5_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --with_weight --k 5 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+# python train_gta.py --data_dir "randcam2_std0_stable_5area_resize/same_h123456_z456" --log_to_file --log_path "nohup_train_gta_5area_h123456_z4567_same_lc_bs64_e5_s0.1_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+
+
+# python train_gta.py --data_dir "randcam2_std0_stable_5area_resize/cross_h123456_z4567" --log_to_file --log_path "nohup_train_gta_5area_h123456_z4567_cross_lc_bs64_e2_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --with_weight --k 10 --epoch 2 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+# python train_gta.py --data_dir "randcam2_std0_stable_5area_resize/cross_h123456_z4567" --log_to_file --log_path "nohup_train_gta_5area_h123456_z4567_cross_lc_bs64_e2_s0.1_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --epoch 2 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+
+# python train_gta.py --data_dir "randcam2_std0_stable_5area_resize/same_h123456_z4567" --log_to_file --log_path "nohup_train_gta_5area_h123456_z4567_same_lc_bs64_e5_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --with_weight --k 10 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+# python train_gta.py --data_dir "randcam2_std0_stable_5area_resize/same_h123456_z4567" --log_to_file --log_path "nohup_train_gta_5area_h123456_z4567_same_lc_bs64_e5_s0.1_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
 
 
 # python train_gta.py --data_dir "randcam2_5area/cross_h123456_z4567" --log_to_file --log_path "nohup_train_gta_h123456_z4567_cross_lc_bs40_e2_s0.1_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --epoch 2 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40
 # python train_gta.py --data_dir "randcam2_5area/cross_h123456_z456" --log_to_file --log_path "nohup_train_gta_h123456_z456_cross_lc_bs40_e2_s0.1_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --epoch 2 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 40
 
-# python train_visloc.py --data_dir "same_all_iou4_oc4_z3" --log_to_file --log_path "nohup_train_visloc_z3_lc_bs40_e10_s0.1k5_valiou_vit_fromgta.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 5 --epoch 10 --batch_size 40 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0904055002/weights_end.pth" --lr 0.0001
+# python train_visloc.py --data_dir "same_all_iou4_oc4_z3" --log_to_file --log_path "nohup_train_visloc_z3_lc_bs64_e10_s0.05k5_valiou_vit_fromgta.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.05 --with_weight --k 5 --epoch 10 --batch_size 64 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0912182831/weights_end.pth" --lr 0.0001
 # python train_visloc.py --data_dir "same_all_iou4_oc4_z3" --log_to_file --log_path "nohup_train_visloc_z3_lc_bs40_e10_s0.1k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 5 --epoch 10 --batch_size 40 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001
 
 # python train_visloc.py --data_dir "same_all_z31" --log_to_file --log_path "nohup_train_visloc_z31_lc_bs40_e10_s0.1k5_valiou_vit_fromgta.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0,1 --label_smoothing 0.1 --with_weight --k 5 --epoch 10 --batch_size 40 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0904055002/weights_end.pth" --lr 0.0001
@@ -105,6 +124,10 @@ export CUDA_VISIBLE_DEVICES=0,1
 # python train_gta.py --data_dir "randcam2_std0_stable_all/same_h23456_z41_iou4_oc4" --log_to_file --log_path "nohup_train_gta_z41_same_allsemiiou4_group2_lcspbwb_bs64_e10_s0.1_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --epoch 10 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64 --train_in_group --group_len 2 --loss_type "contrastive_slice" "part_block" "whole_block"
 # python train_gta.py --data_dir "randcam2_std0_stable_all/same_h23456_z41_iou4_oc4" --log_to_file --log_path "nohup_train_gta_z41_same_allsemiiou4_lc_bs64_e10_s0.1_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --epoch 10 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
 # python train_gta.py --data_dir "randcam2_std0_stable_all/same_h23456_z41_iou4_oc4" --log_to_file --log_path "nohup_train_gta_z41_same_allsemiiou4_lc_bs64_e10_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --epoch 10 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+
+# python train_visloc.py --data_dir "same_all_iou4_oc4_z31" --log_to_file --log_path "nohup_train_visloc_allsemiiou_bs64_e10_s0.05k5_valiou_vit_fromgta.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.05 --with_weight --k 5 --epoch 10 --batch_size 64 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0912182831/weights_end.pth" --lr 0.0001
+
+# python train_visloc.py --data_dir "same_all_iou4_oc4_z31" --log_to_file --log_path "nohup_train_visloc_allsemiiou_bs64_e10_s0.05k5_valiou_vit.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.05 --with_weight --k 5 --epoch 10 --batch_size 64 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001
 
 
 # python train_visloc.py --data_dir "same_all_iou4_oc4_z31" --log_to_file --log_path "nohup_train_visloc_allsemiiou_ls_bs64_e5_s0.1k3_valiou_vit_fromgta_freeze33270.out" --train_mode 'semi_iou' --test_mode 'iou' --gpu_ids 0 --label_smoothing 0.1 --with_weight --k 0.3 --epoch 5 --batch_size 64 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --checkpoint_start "work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0722110449/weights_end.pth" --lr 0.0001 --freeze_layers --frozen_stages 3 3 27 0
