@@ -27,13 +27,13 @@
 ## Dataset Highlights
 <b><i>GTA-UAV</i> dataset</b> provides a large continuous area dataset (covering 81.3km<sup>2</sup>) for UAV visual geo-localization, expanding the previously aligned drone-satellite pairs to **arbitrary drone-satellite pairs** to better align with real-world application scenarios. Our dataset contains:
 
-- 28,405 simulated drone-view images, from multiple altitudes (200-650m), multiple attitudes, multiple scenes (urban, mountain, seaside, forest, etc.).
+- 33,763 simulated drone-view images, from multiple altitudes (100-650m), multiple attitudes, multiple scenes (urban, mountain, seaside, forest, etc.).
 
-- 3,632 tiled satellite-view images from 3 zoom levels for arbitrarily pairing.
+- 14,640 tiled satellite-view images from 4 zoom levels for arbitrarily pairing.
 
 - IoU of FoV for each drone-satellite pair.
 
-- Drone (camera) pose labels for each drone image.
+- Drone (camera) 6-DoF labels for each drone image.
 
 ## Dataset Structure
 
@@ -41,14 +41,14 @@
 ```
 ├─ GTA-UAV
 |   ├── drone/
-|   |   ├──images/
-|   |   |   ├── 200_0001_0000000001.png
-|   |   |   ├── 200_0001_0000000002.png
-|   |   |   └── ...
-|   |   └──meta_data/
-|   |       ├── 200_0001_0000000001.txt
-|   |       ├── 200_0001_0000000002.txt
+|   |   └── images/
+|   |       ├── 200_0001_0000000001.png
+|   |       ├── 200_0001_0000000002.png
 |   |       └── ...
+|   ├── satellite/
+|   |   ├── 6_0_0.png
+|   |   ├── 6_0_1.png
+|   |   └── ...
 |   ├── cross-area-drone2sate-train.json
 |   ├── cross-area-drone2sate-test.json
 |   ├── same-area-drone2sate-train.json

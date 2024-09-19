@@ -182,6 +182,7 @@ Game4Loc/pretrained.zip
 *.out
 *.zip
 *.pdf
+*.mp4
 Game4Loc/university/
 */university/*
 
@@ -194,6 +195,7 @@ Game4Loc/university/
 */nohup/*
 */images/*
 *demo/
+
 
 *.out
 

@@ -31,8 +31,6 @@ def process():
                 # print(f'Processed {filename}')
 
 
-
-
 def copy_img():
     drone_dir = '/home/xmuairmud/data/visualization/drone_new'
     save_dir = '/home/xmuairmud/data/visualization/retrieval'

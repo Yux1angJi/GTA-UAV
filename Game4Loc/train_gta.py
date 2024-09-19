@@ -103,7 +103,7 @@ class Configuration:
     test_mode: str = "pos"                # Test with semi-positive pairs
 
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -199,6 +199,8 @@ def train_script(config):
     print("Image Size Ground:", img_size)
     print("Mean: {}".format(mean))
     print("Std:  {}\n".format(std)) 
+
+    print("Use custom sampling: {}".format(config.custom_sampling))
 
 
     #-----------------------------------------------------------------------------#
@@ -435,7 +437,7 @@ def parse_args():
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
-    parser.add_argument('--data_root', type=str, default='/home/xmuairmud/data/GTA-UAV-data', help='Data root')
+    parser.add_argument('--data_root', type=str, default='/home/xmuairmud/data/GTA-UAV-data/randcam2_5area', help='Data root')
 
     parser.add_argument('--train_pairs_meta_file', type=str, default='cross-area-drone2sate-train.json', help='Training metafile path')
    
@@ -482,6 +484,8 @@ def parse_args():
     parser.add_argument('--with_weight', action='store_true', help='Train with weight')
 
     parser.add_argument('--k', type=float, default=5, help='weighted k')
+
+    parser.add_argument('--no_custom_sampling', action='store_true', help='Train without custom sampling')
     
     parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
 
@@ -514,6 +518,7 @@ if __name__ == '__main__':
     config.model = args.model
     config.lr = args.lr
     config.share_weights = not(args.no_share_weights)
+    config.custom_sampling = not(args.no_custom_sampling)
     config.freeze_layers = args.freeze_layers
     config.frozen_stages = args.frozen_stages
     config.train_mode = args.train_mode
