@@ -15,7 +15,7 @@ from game4loc.utils import setup_system, Logger
 from game4loc.trainer import train, train_with_weight
 from game4loc.evaluate.gta import evaluate
 from game4loc.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE, TripletLoss
-from game4loc.model import TimmModel
+from game4loc.model import DesModel
 
 
 def parse_tuple(s):
@@ -30,25 +30,30 @@ class Configuration:
     
     # Model
     model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    model_hub: str = 'timm'
     
     # Override model image size
     img_size: int = 384
  
+    # Please Ignore
     freeze_layers: bool = False
-
     frozen_stages = [0,0,0,0]
 
+    # Training with sharing weights
     share_weights: bool = True
     
+    # Training with weighted-InfoNCE
     with_weight: bool = True
 
+    # Please Ignore
     train_in_group: bool = True
     group_len = 2
-
+    # Please Ignore
     loss_type = ["whole_slice", "part_slice"]
 
+    # Please Ignore
     train_with_mix_data: bool = False
-
+    # Please Ignore
     train_with_recon: bool = False
     recon_weight: float = 0.1
     
@@ -62,6 +67,7 @@ class Configuration:
     verbose: bool = False
     gpu_ids: tuple = (0,1)           # GPU ids for training
 
+    # Training with sparse data
     train_ratio: float = 1.0
 
     # Eval
@@ -81,24 +87,26 @@ class Configuration:
     
     # Learning Rate
     lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
-    scheduler: str = "cosine"           # "polynomial" | "cosine" | "constant" | None
+    scheduler: str = "cosine"            # "polynomial" | "cosine" | "constant" | None
     warmup_epochs: int = 0.1
     lr_end: float = 0.0001               #  only for "polynomial"
 
     # Augment Images
-    prob_flip: float = 0.5              # flipping the sat image and drone image simultaneously
+    prob_flip: float = 0.5               # flipping the sat image and drone image simultaneously
     
     # Savepath for model checkpoints
     model_path: str = "./work_dir/gta"
 
-    dataset: str= "GTA-D2S"
-    
+    query_mode: str = "D2S"               # Retrieval in Drone to Satellite
+
+    train_mode: str = "pos_semipos"       # Train with positive + semi-positive pairs
+    test_mode: str = "pos"                # Test with semi-positive pairs
+
     # Eval before training
     zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
-    # checkpoint_start = "/home/xmuairmud/jyx/ExtenGeo/Game4Loc/pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth"
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -112,9 +120,11 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
-    train_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_iou4/train_pair_meta.pkl'
-    test_pairs_meta_file = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_iou4/test_pair_meta.pkl'
-    sate_img_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/satellite'
+    data_root: str = "/home/xmuairmud/data/GTA-UAV-data"
+
+    train_pairs_meta_file = 'cross-area-drone2sate-train.json'
+    test_pairs_meta_file = 'cross-area-drone2sate-test.json'
+    sate_img_dir = 'satellite_z4'
 
 
 #-----------------------------------------------------------------------------#
@@ -122,11 +132,6 @@ class Configuration:
 #-----------------------------------------------------------------------------#
 
 def train_script(config):
-
-    config.train_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/train_pair_meta.pkl'
-    config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/test_pair_meta.pkl'
-    # config.test_pairs_meta_file = f'/home/xmuairmud/data/GTA-UAV-data/{config.data_dir}/test_pair_meta.pkl'
-    config.sate_img_dir = f'/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
 
     f = open(config.log_path, 'w')
     if config.log_to_file:
@@ -155,15 +160,13 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     # Model                                                                       #
     #-----------------------------------------------------------------------------#
-
     print("\nModel: {}".format(config.model))
 
-
-    model = TimmModel(config.model,
-                          pretrained=True,
-                          img_size=config.img_size,
-                          share_weights=config.share_weights)
-                          
+    model = DesModel(model_name=config.model, 
+                    pretrained=True,
+                    img_size=config.img_size,
+                    share_weights=config.share_weights)
+                        
     data_config = model.get_config()
     print(data_config)
     mean = data_config["mean"]
@@ -182,7 +185,7 @@ def train_script(config):
 
     print("Freeze model layers:", config.freeze_layers, config.frozen_stages)
     if config.freeze_layers:
-        model.freeze_layers(config.frozen_stages)  
+        model.freeze_layers(config.frozen_stages)
 
     # Data parallel
     print("GPUs available:", torch.cuda.device_count())  
@@ -197,6 +200,8 @@ def train_script(config):
     print("Mean: {}".format(mean))
     print("Std:  {}\n".format(std)) 
 
+    print("Use custom sampling: {}".format(config.custom_sampling))
+
 
     #-----------------------------------------------------------------------------#
     # DataLoader                                                                  #
@@ -206,15 +211,16 @@ def train_script(config):
     val_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
                                                                                                                                  
     # Train
-    train_dataset = GTADatasetTrain(pairs_meta_file=config.train_pairs_meta_file,
-                                      transforms_query=train_sat_transforms,
-                                      transforms_gallery=train_drone_transforms,
-                                      group_len=config.group_len,
-                                      prob_flip=config.prob_flip,
-                                      shuffle_batch_size=config.batch_size,
-                                      mode=config.train_mode,
-                                      train_ratio=config.train_ratio,
-                                      )
+    train_dataset = GTADatasetTrain(data_root=config.data_root,
+                                    pairs_meta_file=config.train_pairs_meta_file,
+                                    transforms_query=train_sat_transforms,
+                                    transforms_gallery=train_drone_transforms,
+                                    group_len=config.group_len,
+                                    prob_flip=config.prob_flip,
+                                    shuffle_batch_size=config.batch_size,
+                                    mode=config.train_mode,
+                                    train_ratio=config.train_ratio,
+                                    )
     
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=config.batch_size,
@@ -223,12 +229,21 @@ def train_script(config):
                                   pin_memory=True)
     
     # Test query
-    query_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                        view="drone",
+    if config.query_mode == 'D2S':
+        query_view = 'drone'
+        gallery_view = 'sate'
+    else:
+        query_view = 'sate'
+        gallery_view = 'drone'
+    query_dataset_test = GTADatasetEval(data_root=config.data_root,
+                                        pairs_meta_file=config.test_pairs_meta_file,
+                                        view=query_view,
                                         transforms=val_transforms,
                                         mode=config.test_mode,
+                                        sate_img_dir=config.sate_img_dir,
+                                        query_mode=config.query_mode,
                                         )
-    query_img_list = query_dataset_test.images
+    query_img_list = query_dataset_test.images_name
     query_loc_xy_list = query_dataset_test.images_loc_xy
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
     
@@ -239,13 +254,16 @@ def train_script(config):
                                        pin_memory=True)
     
     # Test gallery
-    gallery_dataset_test = GTADatasetEval(pairs_meta_file=config.test_pairs_meta_file,
-                                               view="sate",
-                                               transforms=val_transforms,
-                                               sate_img_dir=config.sate_img_dir,
-                                               )
+    gallery_dataset_test = GTADatasetEval(data_root=config.data_root,
+                                          pairs_meta_file=config.test_pairs_meta_file,
+                                          view=gallery_view,
+                                          transforms=val_transforms,
+                                          mode=config.test_mode,
+                                          sate_img_dir=config.sate_img_dir,
+                                          query_mode=config.query_mode,
+                                         )
     gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
-    gallery_img_list = gallery_dataset_test.images
+    gallery_img_list = gallery_dataset_test.images_name
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
                                        batch_size=config.batch_size_eval,
@@ -260,22 +278,13 @@ def train_script(config):
     # Loss                                                                        #
     #-----------------------------------------------------------------------------#
     print("Train with weight?", config.with_weight, "k=", config.k)
-    if config.train_in_group:
-        loss_function_group = GroupInfoNCE(
-            group_len=config.group_len,
-            label_smoothing=config.label_smoothing,
-            loss_type=config.loss_type,
-            device=config.device,
-        )
-        print("Train in group.")
-        print("Label Smoothing", config.label_smoothing)
-        print("Loss type", config.loss_type)
-    # loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
+    
     loss_function_normal = ContrastiveLoss(
         device=config.device,
         label_smoothing=config.label_smoothing,
         k=config.k,
     )
+    ## For TripletLoss
     # loss_function_normal = TripletLoss(device=config.device)
 
     if config.mixed_precision:
@@ -369,23 +378,13 @@ def train_script(config):
         
         print("\n{}[Epoch: {}]{}".format(30*"-", epoch, 30*"-"))
 
-        if config.train_in_group:
-            train_in_group = True
-            loss_function = loss_function_group
-        else:
-            train_in_group = False
-            loss_function = loss_function_normal
-
         if config.custom_sampling:
-            if train_in_group:
-                train_dataloader.dataset.shuffle_group()
-            else:
-                train_dataloader.dataset.shuffle()
+            train_dataloader.dataset.shuffle()
         
         train_loss = train_with_weight(config,
                            model,
                            dataloader=train_dataloader,
-                           loss_function=loss_function,
+                           loss_function=loss_function_normal,
                            optimizer=optimizer,
                            scheduler=scheduler,
                            scaler=scaler,
@@ -438,7 +437,11 @@ def parse_args():
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
-    parser.add_argument('--data_dir', type=str, default='randcam2_std0_stable/test', help='Data path')
+    parser.add_argument('--data_root', type=str, default='/home/xmuairmud/data/GTA-UAV-data/randcam2_5area', help='Data root')
+
+    parser.add_argument('--train_pairs_meta_file', type=str, default='cross-area-drone2sate-train.json', help='Training metafile path')
+   
+    parser.add_argument('--test_pairs_meta_file', type=str, default='cross-area-drone2sate-test.json', help='Test metafile path')
 
     parser.add_argument('--model', type=str, default='convnext_base.fb_in22k_ft_in1k_384', help='Model architecture')
 
@@ -458,9 +461,11 @@ def parse_args():
 
     parser.add_argument('--checkpoint_start', type=str, default=None, help='Training from checkpoint')
 
-    parser.add_argument('--train_mode', type=str, default='iou', help='Train with pair in iou or oc')
+    parser.add_argument('--train_mode', type=str, default='pos_semipos', help='Train with positive or positive+semi-positive pairs')
 
-    parser.add_argument('--test_mode', type=str, default='oc', help='Test with pair in iou or oc')
+    parser.add_argument('--test_mode', type=str, default='pos', help='Test with positive pairs')
+
+    parser.add_argument('--query_mode', type=str, default='D2S', help='Retrieval with drone to satellite')
 
     parser.add_argument('--train_with_recon', action='store_true', help='Train with reconstruction')
 
@@ -479,6 +484,8 @@ def parse_args():
     parser.add_argument('--with_weight', action='store_true', help='Train with weight')
 
     parser.add_argument('--k', type=float, default=5, help='weighted k')
+
+    parser.add_argument('--no_custom_sampling', action='store_true', help='Train without custom sampling')
     
     parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
 
@@ -490,7 +497,9 @@ if __name__ == '__main__':
     args = parse_args()
 
     config = Configuration()
-    config.data_dir = args.data_dir
+    config.data_root = args.data_root
+    config.train_pairs_meta_file = args.train_pairs_meta_file
+    config.test_pairs_meta_file = args.test_pairs_meta_file
     config.log_to_file = args.log_to_file
     config.log_path = args.log_path
     config.epochs = args.epochs
@@ -509,10 +518,12 @@ if __name__ == '__main__':
     config.model = args.model
     config.lr = args.lr
     config.share_weights = not(args.no_share_weights)
+    config.custom_sampling = not(args.no_custom_sampling)
     config.freeze_layers = args.freeze_layers
     config.frozen_stages = args.frozen_stages
     config.train_mode = args.train_mode
     config.test_mode = args.test_mode
+    config.query_mode = args.query_mode
     config.train_ratio = args.train_ratio
 
     train_script(config)

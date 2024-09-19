@@ -108,7 +108,7 @@ def evaluate(config,
                 disk_list=[1, 3, 5],
                 step_size=1000,
                 cleanup=True,
-                dis_threshold_list=[10*(i+1) for i in range(50)],
+                dis_threshold_list=[4*(i+1) for i in range(50)],
                 plot_acc_threshold=False,
                 top10_log=False):
     print("Extract Features and Compute Scores:")
@@ -283,20 +283,9 @@ def evaluate(config,
         plt.gca().spines['right'].set_visible(False)
 
         # 显示图表
-        plt.tight_layout()
-        plt.savefig('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/images/plot_acc_threshold_samearea.png')
+        # plt.tight_layout()
+        # plt.savefig('/home/xmuairmud/jyx/GTA-UAV-private/Game4Loc/images/plot_acc_threshold_samearea.png')
         print(y.tolist())
     
-    return cmc[0]
-
-
-
-        
-
-
-
-
-
-    
-        
+    return cmc[0]    
 

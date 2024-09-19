@@ -18,7 +18,7 @@ from game4loc.utils import setup_system, Logger
 from game4loc.trainer import train, train_with_weight
 from game4loc.evaluate.visloc import evaluate
 from game4loc.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE, ReconstructionLoss
-from game4loc.model import TimmModel
+from game4loc.model import DesModel
 
 
 def parse_tuple(s):
@@ -128,7 +128,7 @@ class Configuration:
 def train_script(config):
     config.train_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/train_pair_meta.pkl'
     config.test_pairs_meta_file = f'/home/xmuairmud/data/UAV_VisLoc_dataset/{config.data_dir}/test_pair_meta.pkl'
-    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/all_satellite_z31'
+    config.sate_img_dir = f'/home/xmuairmud/data/UAV_VisLoc_dataset/all_satellite_z3'
 
     loss_type_str = ""
     for loss_type in config.loss_type:
@@ -184,7 +184,7 @@ def train_script(config):
     print("\nModel: {}".format(config.model))
     print("Sharing weights? {}".format(config.share_weights))
 
-    model = TimmModel(config.model,
+    model = DesModel(config.model,
                         pretrained=True,
                         img_size=config.img_size,
                         share_weights=config.share_weights,

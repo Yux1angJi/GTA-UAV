@@ -54,7 +54,7 @@ def QueryTopN(
         query_path_list,
         gallery_loader,
         gallery_path_list,
-        top_n=10):
+        top_n=1):
     
     print("Extract Features:")
     img_features_query = predict(config, model, query_loader)

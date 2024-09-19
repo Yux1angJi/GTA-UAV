@@ -44,7 +44,7 @@ class CustomData(Dataset):
 
         self.transforms = transforms
         self.imgs_list = get_all_file_paths(root_dir)
-        print(self.imgs_list)
+        # print(self.imgs_list)
 
     def __getitem__(self, index):
         
