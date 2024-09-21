@@ -381,7 +381,7 @@ def process_per_image(drone_meta_data):
     zoom_list = [int(x) for x in zoom_list]
     zoom_list.sort()
     zoom_max = zoom_list[-1]
-    zoom_list = zoom_list[-3:]
+    zoom_list = zoom_list[-3:-1]
 
     cur_img_x, cur_img_y = geo_to_image_coords(lat, lon, sate_lt_lat, sate_lt_lon, sate_rb_lat, sate_rb_lon, sate_pix_h, sate_pix_w)
     p_img_xy = [
@@ -700,8 +700,8 @@ def get_subset(s, group_len):
 
 if __name__ == '__main__':
     root = '/home/xmuairmud/data/UAV_VisLoc_dataset'
-    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/cross_area'
-    process_visloc_data(root, save_root, 'cross_area')
+    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/same_area_z31'
+    process_visloc_data(root, save_root, 'same_area')
     # cp_tile()
 
     # tile_satellite()
