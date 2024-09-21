@@ -181,7 +181,13 @@ pip install -r requirements.txt
 Then you could simply run the training experiments by
 ```bash
 # run experiment (example: GTA-UAV cross-area setting)  
-python train_gta.py --data_root <The directory of the GTA-UAV dataset> --train_pairs_meta_file "cross-area-drone2sate-train.json" --test_pairs_meta_file "cross-area-drone2sate-test.json" --gpu_ids 0,1 --label_smoothing 0.05 --with_weight --k 5 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+python train_gta.py --data_root <The directory of the GTA-UAV dataset> \
+    --train_pairs_meta_file "cross-area-drone2sate-train.json" \
+    --test_pairs_meta_file "cross-area-drone2sate-test.json" \
+    --model "vit_base_patch16_rope_reg1_gap_256.sbb_in1k" \
+    --gpu_ids 0,1 --label_smoothing 0.05 \
+    --lr 0.0001 --batch_size 64 --epoch 5 \
+    --with_weight --k 5
 ```
 
 ## Pre-trained Models
