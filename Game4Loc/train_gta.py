@@ -133,8 +133,8 @@ class Configuration:
 
 def train_script(config):
 
-    f = open(config.log_path, 'w')
     if config.log_to_file:
+        f = open(config.log_path, 'w')
         sys.stdout = f
 
     save_time = "{}".format(time.strftime("%m%d%H%M%S"))
@@ -426,8 +426,9 @@ def train_script(config):
     else:
         torch.save(model.state_dict(), '{}/weights_end.pth'.format(model_path))  
 
-    f.close()
-    sys.stdout = sys.__stdout__          
+    if config.log_to_file:
+        f.close()
+        sys.stdout = sys.__stdout__          
 
 
 def parse_args():
