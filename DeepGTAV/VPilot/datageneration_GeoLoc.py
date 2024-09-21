@@ -119,15 +119,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('-l', '--host', default='localhost', help='The IP where DeepGTAV is running')
     parser.add_argument('-p', '--port', default=8000, help='The port where DeepGTAV is running')
-    parser.add_argument('-s', '--save_dir', default='D:\\data\\GTA-UAV\\Captured\\randcam2_std0_stable_allmap', help='The directory the generated data is saved to')
+    parser.add_argument('-s', '--save_dir', default='D:\\data\\GTA-UAV\\Captured\\randcam2_std0_stable_5area', help='The directory the generated data is saved to')
     args = parser.parse_args()
 
     client = Client(ip=args.host, port=args.port)
-    
+    # voltic
     # scenario = Scenario(drivingMode=786603, vehicle="buzzard", location=[245.23306274414062, -998.244140625, 29.205352783203125], spawnedEntitiesDespawnSeconds=200)
-    scenario = Scenario(drivingMode=[0,0], vehicle="voltic", location=[245.23306274414062, -998.244140625, 29.205352783203125], spawnedEntitiesDespawnSeconds=200)
+    scenario = Scenario(drivingMode=[786603,0], vehicle="voltic", location=[245.23306274414062, -998.244140625, 29.205352783203125], spawnedEntitiesDespawnSeconds=200)
     dataset = Dataset(location=True, time=True, exportBBox2D=True)
-
     client.sendMessage(Start(scenario=scenario, dataset=dataset))
     message = client.recvMessage()
     
@@ -137,16 +136,17 @@ if __name__ == '__main__':
     CAMERA_OFFSET_Z = -10
     CAMERA_OFFSET_ROT_Z = 20
     TRAVEL_HEIGHT = 200
-    TRAVEL_HEIGHT_LIST = [200, 300, 400, 500, 600]
+    # TRAVEL_HEIGHT_LIST = [100, 200, 300, 400, 500, 600]
+    TRAVEL_HEIGHT_LIST = [600]
     TRAVEL_HEIGHT_ATEMPT = 1000
 
-    CAMERA_ROT_X = 0  # [-70, 110]
-    CAMERA_ROT_X_L = -10
-    CAMERA_ROT_X_R = 10
+    CAMERA_ROT_X = -90  # [-70, 110]
+    CAMERA_ROT_X_L = -110
+    CAMERA_ROT_X_R = -70
 
-    CAMERA_ROT_Y = -90    # [-10, 10]
-    CAMERA_ROT_Y_L = -110
-    CAMERA_ROT_Y_R = -70
+    CAMERA_ROT_Y = 0    # [-10, 10]
+    CAMERA_ROT_Y_L = -10
+    CAMERA_ROT_Y_R = 10
 
     CAMERA_ROT_Z = 0    # [-180, 180]
     CAMERA_ROT_Z_L = -180
@@ -160,7 +160,9 @@ if __name__ == '__main__':
     rot_z = CAMERA_ROT_Z + CAMERA_OFFSET_ROT_Z
 
     step = 100
-    STEP_LIST = [100, 150, 200, 250, 300]
+    # STEP_LIST = [50, 100, 150, 200, 250, 300]
+    STEP_LIST = [300]
+
 
     # Adjustments for recording
     #  from UAV perspective
@@ -169,20 +171,21 @@ if __name__ == '__main__':
     message = client.recvMessage()
     print('start camera', message['CameraAngle'])
 
-    count = 0
 
     xAr_min, xAr_max, yAr_min, yAr_max = -3418, 3945, -3370, 7251
 
     x_step = step
     y_step = step
     x_y_list = [
-        [-2480, 1764, -3349, 1304],
-        [-361, 3171, 2283, 3889],
-        [1572, 3064, 4168, 5311],
-        [-1007, 798, 5761, 6745],
-        [-3316, -2135, -28, 1589]
+        # [-2480, 1764, -3349, 1304],
+        # [-361, 3171, 2283, 3889],
+        # [1572, 3064, 4168, 5311],
+        # [-1007, 798, 5761, 6745],
+        # [-3316, -2135, -28, 1589]
 
         # [-3418, 3945, -3370, 3740]
+
+        [-1431, x, -877, y]
     ]
     # x_start, x_end = -1700, 1599
     # y_start, y_end = -2586, 710
@@ -191,6 +194,10 @@ if __name__ == '__main__':
     z_loc = 0
     # x_target, y_target = generateNewTargetLocation(xAr_min, xAr_max, yAr_min, yAr_max)
 
+    # run_count = getRunCount(save_dir)
+    run_count = 1
+    # weather = random.choice(["CLEAR", "EXTRASUNNY", "CLOUDS", "OVERCAST"])
+    count = 28339
 
     for TRAVEL_HEIGHT, step in zip(TRAVEL_HEIGHT_LIST, STEP_LIST):
 
@@ -204,16 +211,10 @@ if __name__ == '__main__':
         if not os.path.exists(os.path.join(save_dir, 'meta_data')):
             os.makedirs(os.path.join(save_dir, 'meta_data'))
 
-        # run_count = getRunCount(save_dir)
-        run_count = 1
-        # weather = random.choice(["CLEAR", "EXTRASUNNY", "CLOUDS", "OVERCAST"])
-        count = 0
-
         for i in range(len(x_y_list)):
             x_start, x_end, y_start, y_end = x_y_list[i]
             for x_temp in range(x_start, x_end, x_step):
                 for y_temp in range(y_start, y_end, y_step):
-
 
                     for f in range(20):
                         if f == 1:
@@ -225,38 +226,46 @@ if __name__ == '__main__':
                             client.sendMessage(SetClockTime(12))
                             message = client.recvMessage()
 
-                        elif f == 6:
+                        elif f == 3:
                             client.sendMessage(TeleportToLocation(x_temp, y_temp, TRAVEL_HEIGHT_ATEMPT))
                             message = client.recvMessage()
-                            heightAboveGround = message['HeightAboveGround']
-                            z_loc = message['location'][2]
 
-                        elif f == 9:
-                            message = client.recvMessage()
                             heightAboveGround = message['HeightAboveGround']
                             z_loc = message['location'][2]
-                        elif f == 10:
                             z_ground = z_loc - heightAboveGround
                             z_loc = z_ground + TRAVEL_HEIGHT - CAMERA_OFFSET_Z
+                            z_temp = z_ground + TRAVEL_HEIGHT
+
+                        elif f == 4:
                             client.sendMessage(TeleportToLocation(x_temp, y_temp, z_loc))
                             message = client.recvMessage()
+
+                        # elif f == 4:
+                        #     rot_x = gaussin_random_truncted(CAMERA_ROT_X_L, CAMERA_ROT_X_R, CAMERA_ROT_X, STD_DEV)
+                        #     rot_y = gaussin_random_truncted(CAMERA_ROT_Y_L, CAMERA_ROT_Y_R, CAMERA_ROT_Y, STD_DEV)
+                        #     rot_z = random.randint(CAMERA_ROT_Z_L, CAMERA_ROT_Z_R)
+                        #     client.sendMessage(SetCameraPositionAndRotation(x=x_temp, y=y_temp, z=TRAVEL_HEIGHT, rot_x=rot_x, rot_y=rot_y, rot_z=rot_z))
+                            
+                        # elif f == 11:
+                        #     client.sendMessage(GoToLocation(x_temp, y_temp, z_loc))
+                        #     message = client.recvMessage()
                         
-                        elif f == 12:
+                        elif f == 7:
                             rot_x = gaussin_random_truncted(CAMERA_ROT_X_L, CAMERA_ROT_X_R, CAMERA_ROT_X, STD_DEV)
                             rot_y = gaussin_random_truncted(CAMERA_ROT_Y_L, CAMERA_ROT_Y_R, CAMERA_ROT_Y, STD_DEV)
-                            # rot_x = CAMERA_ROT_X
-                            # rot_y = CAMERA_ROT_Y
                             rot_z = random.randint(CAMERA_ROT_Z_L, CAMERA_ROT_Z_R)
-                            # print(f, count, rot_x, rot_y, rot_z)
+                            # print(z_loc, heightAboveGround, TRAVEL_HEIGHT, z_temp)
                             client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=rot_x, rot_y=rot_y, rot_z=rot_z))
                             message = client.recvMessage()
                             rot_x_m, rot_y_m, rot_z_m = message['CameraAngle']
-                            print('!!!!!', rot_x, rot_x_m, rot_y, rot_y_m, rot_z, rot_z_m)
-                        elif f == 13:
+                            pos_x_m, pos_y_m, pos_z_m = message['location']
+                            print('!!!!! rot', rot_x, rot_x_m, rot_y, rot_y_m, rot_z, rot_z_m)
+                            print('!!!!! pos', pos_x_m, pos_y_m, pos_z_m)
+                        elif f == 9:
                             client.sendMessage(StartRecording())
                             message = client.recvMessage()
                             heightAboveGround_1 = message['HeightAboveGround']
-                        elif f == 14:
+                        elif f == 13:
                             client.sendMessage(StopRecording())
                             message = client.recvMessage()
                             filename = f'{TRAVEL_HEIGHT}' + '_' + f'{run_count:04}' + '_' + f'{count:010}'
@@ -270,22 +279,28 @@ if __name__ == '__main__':
                                 continue
 
                             rot_x, rot_y, rot_z = message['CameraAngle']
+                            if rot_x > CAMERA_ROT_X_R or rot_x < CAMERA_ROT_X_L \
+                                or rot_y > CAMERA_ROT_Y_R or rot_y < CAMERA_ROT_Y_L \
+                                    or rot_z > CAMERA_ROT_Z_R or rot_z < CAMERA_ROT_Z_L:
+                                print(f'Warning!! camera rot error! rot_x={rot_x}, rot_y={rot_y}, rot_z={rot_z}')
+                                continue
                             proj_points = calculate_projection_points(heightAboveGround_1 + CAMERA_OFFSET_Z, rot_x, rot_y, rot_z, x_temp, y_temp)
                             save_image(save_dir, filename, frame2numpy(message['frame']))
                             save_meta_data(save_dir, filename, message["location"], message["HeightAboveGround"], proj_points, message["CameraPosition"], message["CameraAngle"], message["time"])
                             count += 1
                         
-                        elif f == 17:
+                        elif f == 15:
                             rot_x = gaussin_random_truncted(CAMERA_ROT_X_L, CAMERA_ROT_X_R, CAMERA_ROT_X, STD_DEV)
                             rot_y = gaussin_random_truncted(CAMERA_ROT_Y_L, CAMERA_ROT_Y_R, CAMERA_ROT_Y, STD_DEV)
-                            # rot_x = CAMERA_ROT_X
-                            # rot_y = CAMERA_ROT_Y
                             rot_z = random.randint(CAMERA_ROT_Z_L, CAMERA_ROT_Z_R)
-                            client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=rot_x, rot_y=rot_y, rot_z=rot_z))
+                            client.sendMessage(SetCameraPositionAndRotation(z=CAMERA_OFFSET_Z, rot_x=rot_x, rot_y=rot_y, rot_z=rot_z))
                             message = client.recvMessage()
                             rot_x_m, rot_y_m, rot_z_m = message['CameraAngle']
-                            print('!!!!!', rot_x, rot_x_m, rot_y, rot_y_m, rot_z, rot_z_m)
-                        elif f == 18:
+                            pos_x_m, pos_y_m, pos_z_m = message['location']
+                            print('!!!!! rot', rot_x, rot_x_m, rot_y, rot_y_m, rot_z, rot_z_m)
+                            print('!!!!! pos', pos_x_m, pos_y_m, pos_z_m)
+                            print('!!!!! heightAboveGround', message["HeightAboveGround"])
+                        elif f == 16:
                             client.sendMessage(StartRecording())
                             message = client.recvMessage()
                             heightAboveGround_3 = message['HeightAboveGround']
@@ -305,7 +320,12 @@ if __name__ == '__main__':
                                 continue
                             
                             rot_x, rot_y, rot_z = message['CameraAngle']
-                            print(rot_x, rot_y, rot_z)
+                            if rot_x > CAMERA_ROT_X_R or rot_x < CAMERA_ROT_X_L \
+                                or rot_y > CAMERA_ROT_Y_R or rot_y < CAMERA_ROT_Y_L \
+                                    or rot_z > CAMERA_ROT_Z_R or rot_z < CAMERA_ROT_Z_L:
+                                print(f'Warning!! camera rot error! rot_x={rot_x}, rot_y={rot_y}, rot_z={rot_z}')
+                                continue
+                            # print(rot_x, rot_y, rot_z)
                             proj_points = calculate_projection_points(heightAboveGround_2 + CAMERA_OFFSET_Z, rot_x, rot_y, rot_z, x_temp, y_temp)
                             save_image(save_dir, filename, frame2numpy(message['frame']))
                             save_meta_data(save_dir, filename, message["location"], message["HeightAboveGround"], proj_points, message["CameraPosition"], message["CameraAngle"], message["time"])

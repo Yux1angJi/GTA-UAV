@@ -47,7 +47,7 @@ void DataExport::initialize() {
 	//CAM::SET_CAM_COORD(camera, camPos.x + 40.0, camPos.y + 40.0, camPos.z + 40.0);
 
 
-	CAM::SET_CAM_INHERIT_ROLL_VEHICLE(camera, TRUE);
+	CAM::SET_CAM_INHERIT_ROLL_VEHICLE(camera, FALSE);
 
 
 }
@@ -249,13 +249,38 @@ void DataExport::setRenderingCam(Vehicle v) {
 	scriptWait(0);
 	GAMEPLAY::SET_GAME_PAUSED(true);
 
-	//std::ostringstream oss;
-	//oss << "EntityID/rotation/position: " << v << "\n" <<
-	//	position.x << ", " << position.y << ", " << position.z <<
-	//	"\n" << rotation.x << ", " << rotation.y << ", " << rotation.z <<
-	//	"\nOffset: " << offset.x << ", " << offset.y << ", " << offset.z <<
-	//	"\nOffsetworld: " << offsetWorld.x << ", " << offsetWorld.y << ", " << offsetWorld.z;
-	//log(oss.str());
+
+	// ///////////////////////////////////// JYX
+
+	// // log("DataExport::setRenderingCam");
+	// // Vector3 position;
+	// // Vector3 fVec, rVec, uVec;
+	// // Vector3 rotation = ENTITY::GET_ENTITY_ROTATION(v, 0);
+	// // ENTITY::GET_ENTITY_MATRIX(v, &fVec, &rVec, &uVec, &position);
+
+	// // Vector3 offsetWorld = camToWorld(cameraPositionOffset, fVec, rVec, uVec);
+	// // //Since it's offset need to subtract the cam position
+	// // offsetWorld.x -= s_camParams.pos.x;
+	// // offsetWorld.y -= s_camParams.pos.y;
+	// // offsetWorld.z -= s_camParams.pos.z;
+	// GAMEPLAY::SET_TIME_SCALE(0.0f);
+	// GAMEPLAY::SET_GAME_PAUSED(false);
+	// GAMEPLAY::SET_TIME_SCALE(0.0f);
+	// float waterZ;
+	// WATER::GET_WATER_HEIGHT(cameraPositionOffset.x, cameraPositionOffset.y, cameraPositionOffset.z, &waterZ);
+	// float heightAboveWater = cameraPositionOffset.z;
+	// // float height = std::min(heightAboveWater, cameraPositionOffset.z);
+	// d["HeightAboveGround"] = waterZ;
+	// CAM::SET_CAM_COORD(camera, cameraPositionOffset.x, cameraPositionOffset.y, cameraPositionOffset.z + waterZ);
+	// CAM::SET_CAM_ROT(camera, cameraRotationOffset.x, cameraRotationOffset.y, cameraRotationOffset.z, 0);
+	// //TODO fix pointer billiard, after making DataExport the owner of the camera
+	// // CAM::SET_CAM_COORD(camera, position.x + offsetWorld.x, position.y + offsetWorld.y, position.z + offsetWorld.z);
+	// // CAM::SET_CAM_ROT(camera, rotation.x + cameraRotationOffset.x, rotation.y + cameraRotationOffset.y, rotation.z + cameraRotationOffset.z, 0);
+	// // TODO this was added for simplicity, its ownership should be restrucutred.
+	// s_camParams.cameraRotationOffset = cameraRotationOffset;
+
+	// scriptWait(0);
+	// GAMEPLAY::SET_GAME_PAUSED(true);
 }
 
 
@@ -286,6 +311,14 @@ StringBuffer DataExport::generateMessage() {
 	GAMEPLAY::SET_TIME_SCALE(0.0f);
 
 	setRenderingCam((*m_ownVehicle));
+
+	ENTITY::SET_ENTITY_ROTATION(*m_ownVehicle, 0, 0, 0, 0, 0);
+	ENTITY::SET_ENTITY_VISIBLE(*m_ownVehicle, 0, 0);
+	ENTITY::SET_ENTITY_HAS_GRAVITY(*m_ownVehicle, 0);
+
+
+
+	// setRenderingCam((camera));
 
 	////Can check whether camera and vehicle are aligned
 	//Vector3 camRot2 = CAM::GET_CAM_ROT(camera, 0);

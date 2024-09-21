@@ -26,6 +26,14 @@ class Client:
         self.socket.close()
 
 
+if __name__ == '__main__':
+    a = Client()
+    # a.sendMessage(message=None)
+    a.close()
+
+    b = Client()
+
+
 
 
 
