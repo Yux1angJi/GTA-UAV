@@ -41,7 +41,7 @@
 
 <b><i>GTA-UAV</i> dataset</b> provides a large continuous area dataset (covering 81.3km<sup>2</sup>) for UAV visual geo-localization, expanding the previously aligned drone-satellite pairs to **arbitrary drone-satellite pairs** to better align with real-world application scenarios. Our dataset contains:
 
-- 33,763 simulated drone-view images, from multiple altitudes (100-650m), multiple attitudes, multiple scenes (urban, mountain, seaside, forest, etc.).
+- 33,763 simulated drone-view images, from multiple altitudes (80-650m), multiple attitudes, multiple scenes (urban, mountain, seaside, forest, etc.).
 
 - 14,640 tiled satellite-view images from 4 zoom levels for arbitrarily pairing.
 
