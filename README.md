@@ -6,12 +6,10 @@
 
 </p>
 
+
 <div style="text-align: center;">
-    <video width="600" controls>
-    <source src="resources/trajectory_demo_compress.mp4" type="video/mp4">
-    Your browser does not support the video tag.
-    </video>
-    <p style="margin-top: 10px;">Localization in flight trajectory after pre-trained on GTA-UAV dataset.</p>
+<img src="resources/trajectory_demo_compress.gif" alt="Demo">
+<p style="margin-top: 10px;">Localization in flight trajectory after pre-trained on GTA-UAV dataset.</p>
 
 <p align="center">
     <a href="https://yux1angji.github.io/game4loc/"><strong>Project Page »</strong></a>
@@ -198,4 +196,4 @@ This work draws inspiration from the following code as references. We extend our
 - [GTA-V-Wolrd-Map](https://github.com/Flamm64/GTA-V-World-Map)
 
 ## Citation
-
+To be released.
