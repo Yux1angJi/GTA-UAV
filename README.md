@@ -6,8 +6,17 @@
 
 </p>
 
-![](resources/GTA-UAV-data-construction.jpg)
-*GTA-UAV data construction*
+<div style="text-align: center;">
+    <video width="600" controls>
+    <source src="resources/trajectory_demo_compress.mp4" type="video/mp4">
+    Your browser does not support the video tag.
+    </video>
+    <p style="margin-top: 10px;">Localization in flight trajectory after pre-trained on GTA-UAV dataset.</p>
+
+<p align="center">
+    <a href="https://yux1angji.github.io/game4loc/"><strong>Project Page »</strong></a>
+</p>
+</div>
 
 - [x] Part I: Dataset
 - [x] Part II: Train and Test
@@ -16,6 +25,7 @@
 ## Table of contents
 
 - [Dataset Highlights](#dataset-highlights)
+- [Dataset Access](#dataset-access)
 - [Dataset Structure](#dataset-structure)
 - [Train and Test](#train-and-test)
 - [Pre-trained Models](#pre-trained-models)
@@ -25,6 +35,9 @@
 
 
 ## Dataset Highlights
+![](resources/GTA-UAV-data-construction.jpg)
+*GTA-UAV data construction*
+
 <b><i>GTA-UAV</i> dataset</b> provides a large continuous area dataset (covering 81.3km<sup>2</sup>) for UAV visual geo-localization, expanding the previously aligned drone-satellite pairs to **arbitrary drone-satellite pairs** to better align with real-world application scenarios. Our dataset contains:
 
 - 33,763 simulated drone-view images, from multiple altitudes (100-650m), multiple attitudes, multiple scenes (urban, mountain, seaside, forest, etc.).
@@ -34,6 +47,11 @@
 - IoU of FoV for each drone-satellite pair.
 
 - Drone (camera) 6-DoF labels for each drone image.
+
+## Dataset Access
+The low resolution dataset (13.4G) is released in [HuggingFace🤗](https://huggingface.co/datasets/Yux1ang/GTA-UAV-LR).
+
+The high resolution dataset will be released soon.
 
 ## Dataset Structure
 
@@ -141,8 +159,10 @@ This entry provides a detailed description and paired satellite images for a sin
 
 ### Collect Your Own Data
 
-You may want to collect your own data from simulated game environments, if so, you could refer x.
+You may want to collect your own data from simulated game environments, if so, you could refer [here](DeepGTAV/VPilot/datageneration_GeoLoc.py).
 
+To configure the simulation and collection environment, please refer [DeepGTA](https://github.com/David0tt/DeepGTAV).
+Notice that the compiled `DeepGTA` plugin for our GTA-UAV data simulation is located at [here](DeepGTAV/DeepGTAV-PreSIL/bin/Release/).
 
 ## Train and Test
 
@@ -151,15 +171,23 @@ You may want to collect your own data from simulated game environments, if so, y
 
 First, install dependencies   
 ```bash
+cd Game4Loc
 # install project   
 pip install -e .   
 pip install -r requirements.txt
 ```
 
-## Pre-trained Models
+Then you could simply run the training experiments by
+```bash
+# run experiment (example: GTA-UAV cross-area setting)  
+python train_gta.py --data_root <The directory of the GTA-UAV dataset> --train_pairs_meta_file "cross-area-drone2sate-train.json" --test_pairs_meta_file "cross-area-drone2sate-test.json" --gpu_ids 0,1 --label_smoothing 0.05 --with_weight --k 5 --epoch 5 --model 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k' --lr 0.0001 --batch_size 64
+```
 
+## Pre-trained Models
+To be released soon.
 
 ## License
+This project is licensed under the [Apache 2.0 license](LICENSE).
 
 
 ## Acknowledgments 

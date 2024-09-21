@@ -196,6 +196,7 @@ Game4Loc/university/
 */images/*
 *demo/
 
+Game4Loc/train_private.sh
 
 *.out
 
