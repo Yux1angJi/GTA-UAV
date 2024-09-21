@@ -66,7 +66,7 @@ if __name__ == "__main__":
     # input_directory = 'path/to/your/input_directory'
     # new_size = (512, 512)  # Example size
 
-    # process_images(input_directory, new_size)
+    process_images(input_directory, new_size)
 
     # lat1 = 29.774065
     # lon1 = 115.970635
