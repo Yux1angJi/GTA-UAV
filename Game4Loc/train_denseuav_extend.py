@@ -18,7 +18,7 @@ from game4loc.utils import setup_system, Logger
 from game4loc.trainer import train
 from game4loc.evaluate.university import evaluate
 from game4loc.loss import InfoNCE
-from game4loc.model import TimmModel
+from game4loc.model import DesModel
 
 def parse_tuple(s):
     try:
@@ -61,7 +61,7 @@ class Configuration:
     epochs: int = 10
     batch_size: int = 40                # keep in mind real_batch_size = 2 * batch_size
     verbose: bool = False
-    gpu_ids: tuple = (0,1)           # GPU ids for training
+    gpu_ids: tuple = (0,)           # GPU ids for training
 
     train_ratio: float = 1.0
 
@@ -164,7 +164,7 @@ def train_script(config):
     print("\nModel: {}".format(config.model))
 
 
-    model = TimmModel(config.model,
+    model = DesModel(config.model,
                           pretrained=True,
                           img_size=config.img_size)
 

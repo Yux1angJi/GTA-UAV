@@ -124,7 +124,7 @@ class Configuration:
 
     train_pairs_meta_file = 'cross-area-drone2sate-train.json'
     test_pairs_meta_file = 'cross-area-drone2sate-test.json'
-    sate_img_dir = 'satellite_z4'
+    sate_img_dir = 'satellite'
 
 
 #-----------------------------------------------------------------------------#
@@ -437,7 +437,7 @@ def parse_args():
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
-    parser.add_argument('--data_root', type=str, default='/home/xmuairmud/data/GTA-UAV-data/randcam2_5area', help='Data root')
+    parser.add_argument('--data_root', type=str, default='/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-official/GTA-UAV-LR', help='Data root')
 
     parser.add_argument('--train_pairs_meta_file', type=str, default='cross-area-drone2sate-train.json', help='Training metafile path')
    

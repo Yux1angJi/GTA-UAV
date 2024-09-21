@@ -16,7 +16,7 @@ from game4loc.utils import setup_system, Logger
 from game4loc.trainer import train
 from game4loc.evaluate.university import evaluate
 from game4loc.loss import InfoNCE
-from game4loc.model import TimmModel
+from game4loc.model import DesModel
 
 def parse_tuple(s):
     try:
@@ -160,7 +160,7 @@ def train_script(config):
     print("\nModel: {}".format(config.model))
 
 
-    model = TimmModel(config.model,
+    model = DesModel(config.model,
                           pretrained=True,
                           img_size=config.img_size)
                           

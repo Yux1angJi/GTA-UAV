@@ -3,18 +3,19 @@ import multiprocessing
 from PIL import Image
 import math
 
-def resize_image(image_path, size):
+def resize_image(image_path, save_path, size):
     with Image.open(image_path) as img:
         img = img.resize(size, Image.LANCZOS)
-        img.save(image_path)
+        img.save(save_path)
 
-def process_images(input_dir, size):
+def process_images(input_dir, save_dir, size):
     tasks = []
     for root, _, files in os.walk(input_dir):
         for file in files:
             if file.endswith('.png'):
                 input_path = os.path.join(root, file)
-                tasks.append((input_path, size))
+                save_path = os.path.join(save_dir, file)
+                tasks.append((input_path, save_path, size))
 
     with multiprocessing.Pool() as pool:
         pool.starmap(resize_image, tasks)
@@ -63,10 +64,11 @@ def area_of_rectangle(lat1, lon1, lat2, lon2):
     return abs(area)
 
 if __name__ == "__main__":
-    # input_directory = 'path/to/your/input_directory'
-    # new_size = (512, 512)  # Example size
+    input_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-official/randcam2_std0_stable_5area/images'
+    save_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-official/GTA-UAV-LR/drone/images'
+    new_size = (512, 384)  # Example size
 
-    # process_images(input_directory, new_size)
+    process_images(input_dir, save_dir, new_size)
 
     # lat1 = 29.774065
     # lon1 = 115.970635
@@ -78,10 +80,10 @@ if __name__ == "__main__":
     # lat2 = 29.725402
     # lon2 = 116.064566
 
-    lat1 = 32.355491
-    lon1 = 119.805926
-    lat2 = 32.290290
-    lon2 = 119.900052
+    # lat1 = 32.355491
+    # lon1 = 119.805926
+    # lat2 = 32.290290
+    # lon2 = 119.900052
 
-    area = area_of_rectangle(lat1, lon1, lat2, lon2)
-    print(f"矩形区域的面积为: {area:.2f} 平方公里")
+    # area = area_of_rectangle(lat1, lon1, lat2, lon2)
+    # print(f"矩形区域的面积为: {area:.2f} 平方公里")
