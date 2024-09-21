@@ -7,14 +7,17 @@
 </p>
 
 
-<div style="text-align: center;">
-<img src="resources/trajectory_demo_compress.gif" alt="Demo">
-<p style="margin-top: 10px;">Localization in flight trajectory after pre-trained on GTA-UAV dataset.</p>
+<p align="center">
+  <img src="resources/trajectory_demo_compress.gif" alt="Demo">
+</p>
 
 <p align="center">
-    <a href="https://yux1angji.github.io/game4loc/"><strong>Project Page »</strong></a>
+  Localization in flight trajectory after pre-trained on GTA-UAV dataset.
 </p>
-</div>
+
+<p align="center">
+  <a href="https://yux1angji.github.io/game4loc/"><strong>Project Page »</strong></a>
+</p>
 
 - [x] Part I: Dataset
 - [x] Part II: Train and Test
