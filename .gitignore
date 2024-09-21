@@ -165,15 +165,37 @@ satellite/tiles
 
 
 *.png
-*.jpg
-*.pdn
-*.jpeg
-
+*.pdf
+*.csv
 
 *work_dir/
 *pretrained/
 
+data/
+pretrained/
+.DS_Store
+
+Game4Loc/pretrained/
+Game4Loc/pretrained.zip
+
+*.png
+*.out
+*.zip
+*.pdf
+*.mp4
+Game4Loc/university/
+*/university/*
+
+*/visualization/*
+
+*/gen_feature.py
+
+*/visualization/*
+*/sues/*
+*/nohup/*
+*/images/*
 *demo/
+
 
 *.out
 
