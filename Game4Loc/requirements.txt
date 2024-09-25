@@ -6,3 +6,5 @@ scikit-learn>=1.2.1
 transformers>=4.27.0
 pandas
 tqdm
+shapely
+geopy
