@@ -9,11 +9,12 @@
 
 <p align="center">
   <img src="resources/trajectory_demo_compress.gif" alt="Demo">
+  <br>
+  <i>
+  Localization in flight trajectory after pre-trained on GTA-UAV dataset.
+  </i>
 </p>
 
-<p align="center">
-  Localization in flight trajectory after pre-trained on GTA-UAV dataset.
-</p>
 
 <p align="center">
   <a href="https://yux1angji.github.io/" target='_blank'>Yuxiang Ji*</a>,&nbsp;
@@ -58,7 +59,7 @@ The dataset is released in two versions: low resolution (512x384, 12.8G) and hig
 |                                      Low Resolution Version                                      |                                     High Resolution Version                                      |
 |:------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------:|
 | [HuggingFace🤗](https://huggingface.co/datasets/Yux1ang/GTA-UAV-LR) | Released soon |
-| [Baidu](https://pan.baidu.com/s/16Udd3TXUD3wOr7rLHPGSGQ?pwd=nghw) | Released soon |
+| [BaiduDisk](https://pan.baidu.com/s/1WyadL67Wxmij2be3qjrihg?pwd=gtav) | Released soon |
 
 
 The high resolution dataset will be released soon.
@@ -80,7 +81,7 @@ The high resolution dataset will be released soon.
 |   ├── cross-area-drone2sate-train.json
 |   ├── cross-area-drone2sate-test.json
 |   ├── same-area-drone2sate-train.json
-|   └── same-area-drone2sate-test.json
+└── └── same-area-drone2sate-test.json
 ```
 
 ### Example Entry in `x-area-drone2sate-x.json`

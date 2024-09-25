@@ -44,7 +44,7 @@ class InfoNCE(nn.Module):
 def f(x):
     return 0.9 / (1 + np.exp(-5 * x))
 
-class ContrastiveLoss(nn.Module):
+class WeightedInfoNCE(nn.Module):
     def __init__(self, label_smoothing, k=-5, device='cuda' if torch.cuda.is_available() else 'cpu'):
         super().__init__()
         self.label_smoothing = label_smoothing

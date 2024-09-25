@@ -102,7 +102,7 @@ def tile_expand(tile_xy_list, p_xy_list, offset_list, debug=False):
 
                     oc = intersect_area / min(poly_tile_area, poly_p_area)
                     iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
-                    loc_xy = sate2loc(zoom_level, offset, tile_x_i, tile_y_i)
+                    loc_xy = sate2loc(zoom_level, tile_x_i, tile_y_i, offset)
                     if iou > THRESHOLD:
                         tile_expand_list_iou.append((tile_x_i, tile_y_i, zoom_level, offset, iou, loc_xy))
                     if iou > SEMI_THRESHOLD:
@@ -469,7 +469,7 @@ def write_json(pickle_root, root, split_type):
                     "cam_yaw": cam_yaw,
                 }
             })
-        save_path = os.path.join(root, f'{split_type}-area-drone2sate-{type}.json')
+        save_path = os.path.join(root, f'offset13_{split_type}-area-drone2sate-{type}.json')
         with open(save_path, 'w', encoding='utf-8') as f:
             json.dump(data_drone2sate_json, f, indent=4, ensure_ascii=False)
 
@@ -478,8 +478,8 @@ if __name__ == "__main__":
     # rename_tile()
 
     root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/cross_h123456_z4567_off13'
-    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], offset_list=[0, 86, 171], split_type='cross')
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/same_h123456_z4567_off13'
+    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], offset_list=[0, 86, 171], split_type='same')
 
     # write_json(pickle_root=save_root, root=root, split_type='same')
 

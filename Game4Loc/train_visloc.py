@@ -17,7 +17,7 @@ from game4loc.dataset.mix_data import MixDatasetTrain
 from game4loc.utils import setup_system, Logger
 from game4loc.trainer import train, train_with_weight
 from game4loc.evaluate.visloc import evaluate
-from game4loc.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE, ReconstructionLoss
+from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, ReconstructionLoss
 from game4loc.model import DesModel
 
 
@@ -318,7 +318,7 @@ def train_script(config):
 
     print("Train with weight?", config.with_weight, "k=", config.k)
     # loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
-    loss_function_normal = ContrastiveLoss(
+    loss_function_normal = WeightedInfoNCE(
         device=config.device,
         label_smoothing=config.label_smoothing,
         k=config.k,

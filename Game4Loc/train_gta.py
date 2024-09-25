@@ -14,7 +14,7 @@ from game4loc.dataset.gta import GTADatasetEval, GTADatasetTrain, get_transforms
 from game4loc.utils import setup_system, Logger
 from game4loc.trainer import train, train_with_weight
 from game4loc.evaluate.gta import evaluate
-from game4loc.loss import InfoNCE, ContrastiveLoss, GroupInfoNCE, TripletLoss
+from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
 from game4loc.model import DesModel
 
 
@@ -103,7 +103,7 @@ class Configuration:
     test_mode: str = "pos"                # Test with semi-positive pairs
 
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -279,7 +279,7 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     print("Train with weight?", config.with_weight, "k=", config.k)
     
-    loss_function_normal = ContrastiveLoss(
+    loss_function_normal = WeightedInfoNCE(
         device=config.device,
         label_smoothing=config.label_smoothing,
         k=config.k,
