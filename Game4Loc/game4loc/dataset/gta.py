@@ -19,12 +19,13 @@ import json
 
 
 SATE_LENGTH = 24576
+TILE_LENGTH = 256
 
 
-def sate2loc(tile_zoom, tile_x, tile_y):
+def sate2loc(tile_zoom, offset, tile_x, tile_y):
     tile_pix = SATE_LENGTH / (2 ** tile_zoom)
-    loc_x = (tile_pix * (tile_x+1/2)) * 0.45
-    loc_y = (tile_pix * (tile_y+1/2)) * 0.45
+    loc_x = (tile_pix * (tile_x+1/2+offset/TILE_LENGTH)) * 0.45
+    loc_y = (tile_pix * (tile_y+1/2+offset/TILE_LENGTH)) * 0.45
     return loc_x, loc_y
 
 
@@ -399,11 +400,12 @@ class GTADatasetEval(Dataset):
                     self.images_name.append(sate_img)
 
                     sate_img_name = sate_img.replace('.png', '')
-                    tile_zoom, tile_x, tile_y = sate_img_name.split('_')
+                    tile_zoom, offset, tile_x, tile_y = sate_img_name.split('_')
                     tile_zoom = int(tile_zoom)
                     tile_x = int(tile_x)
                     tile_y = int(tile_y)
-                    self.images_loc_xy.append(sate2loc(tile_zoom, tile_x, tile_y))
+                    offset = int(offset)
+                    self.images_loc_xy.append(sate2loc(tile_zoom, offset, tile_x, tile_y))
             else:
                 sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
                 for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
@@ -413,11 +415,12 @@ class GTADatasetEval(Dataset):
                     self.images_name.append(sate_img)
 
                     sate_img_name = sate_img.replace('.png', '')
-                    tile_zoom, tile_x, tile_y = sate_img_name.split('_')
+                    tile_zoom, offset, tile_x, tile_y = sate_img_name.split('_')
                     tile_zoom = int(tile_zoom)
                     tile_x = int(tile_x)
                     tile_y = int(tile_y)
-                    self.images_loc_xy.append(sate2loc(tile_zoom, tile_x, tile_y))
+                    offset = int(offset)
+                    self.images_loc_xy.append(sate2loc(tile_zoom, offset, tile_x, tile_y))
 
         self.transforms = transforms
 

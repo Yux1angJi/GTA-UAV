@@ -50,7 +50,13 @@
 - Drone (camera) 6-DoF labels for each drone image.
 
 ## Dataset Access
-The low resolution dataset (13.4G) is released in [HuggingFace🤗](https://huggingface.co/datasets/Yux1ang/GTA-UAV-LR).
+The dataset is released in two versions: low resolution (512x384, 12.8G) and high resolution (1920x1440, 133.6G).
+
+|                                      Low Resolution Version                                      |                                     High Resolution Version                                      |
+|:------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------:|
+| [HuggingFace🤗](https://huggingface.co/datasets/Yux1ang/GTA-UAV-LR) | Released soon |
+| [Baidu](https://pan.baidu.com/s/16Udd3TXUD3wOr7rLHPGSGQ?pwd=nghw) | Released soon |
+
 
 The high resolution dataset will be released soon.
 
@@ -65,8 +71,8 @@ The high resolution dataset will be released soon.
 |   |       ├── 200_0001_0000000002.png
 |   |       └── ...
 |   ├── satellite/
-|   |   ├── 6_0_0.png
-|   |   ├── 6_0_1.png
+|   |   ├── 6_0_0_0.png
+|   |   ├── 6_0_0_1.png
 |   |   └── ...
 |   ├── cross-area-drone2sate-train.json
 |   ├── cross-area-drone2sate-test.json
@@ -163,7 +169,7 @@ This entry provides a detailed description and paired satellite images for a sin
 You may want to collect your own data from simulated game environments, if so, you could refer [here](DeepGTAV/VPilot/datageneration_GeoLoc.py).
 
 To configure the simulation and collection environment, please refer [DeepGTA](https://github.com/David0tt/DeepGTAV).
-Notice that the compiled `DeepGTA` plugin for our GTA-UAV data simulation is located at [here](DeepGTAV/DeepGTAV-PreSIL/bin/Release/).
+Notice that the compiled `DeepGTA` plugin for our GTA-UAV data simulation and collection is located at [here](DeepGTAV/DeepGTAV-PreSIL/bin/Release/).
 
 ## Train and Test
 
@@ -181,7 +187,8 @@ pip install -r requirements.txt
 Then you could simply run the training experiments by
 ```bash
 # run experiment (example: GTA-UAV cross-area setting)  
-python train_gta.py --data_root <The directory of the GTA-UAV dataset> \
+python train_gta.py \
+    --data_root <The directory of the GTA-UAV dataset> \
     --train_pairs_meta_file "cross-area-drone2sate-train.json" \
     --test_pairs_meta_file "cross-area-drone2sate-test.json" \
     --model "vit_base_patch16_rope_reg1_gap_256.sbb_in1k" \

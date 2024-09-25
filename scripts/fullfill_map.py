@@ -3,7 +3,7 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
 # 打开原始图片
-input_path = '../satellite/7.png'
+input_path = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-sate.png'
 img = Image.open(input_path)
 
 # 获取原始图片尺寸
@@ -24,7 +24,7 @@ y_offset = 0
 new_img.paste(img, (x_offset, y_offset))
 
 # 保存结果图片
-output_path = '../satellite/GTAV_satellite_square.png'
+output_path = '/home/xmuairmud/data/GTA-UAV-data/GTAV_satellite_square.png'
 new_img.save(output_path)
 
 print(f"New image saved at {output_path}")

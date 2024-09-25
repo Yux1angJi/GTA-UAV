@@ -13,6 +13,7 @@ import concurrent.futures
 import itertools
 import pickle
 import json
+import re
 
 
 GAME_TO_SATE_KX = 1.8206
@@ -20,19 +21,16 @@ GAME_TO_SATE_BX = 7539.39
 GAME_TO_SATE_KY = -1.8220
 GAME_TO_SATE_BY = 15287.16
 SATE_LENGTH = 24576
+TILE_LENGTH = 256
 
 THRESHOLD = 0.39
 SEMI_THRESHOLD = 0.14
 
-SATE_LENGTH = 24576
 
-NORM_LOC = 10000.
-
-
-def sate2loc(tile_zoom, tile_x, tile_y):
+def sate2loc(tile_zoom, tile_x, tile_y, offset):
     tile_pix = SATE_LENGTH / (2 ** tile_zoom)
-    loc_x = (tile_pix * (tile_x+1/2)) * 0.45
-    loc_y = (tile_pix * (tile_y+1/2)) * 0.45
+    loc_x = (tile_pix * (tile_x+1/2+offset/TILE_LENGTH)) * 0.45
+    loc_y = (tile_pix * (tile_y+1/2+offset/TILE_LENGTH)) * 0.45
     return loc_x, loc_y
 
 
@@ -67,7 +65,7 @@ def game_pos2tile_pos(game_pos_x, game_pos_y, zoom_list):
     return tile_xy_list
 
 
-def tile_expand(tile_xy_list, p_xy_list, debug=False):
+def tile_expand(tile_xy_list, p_xy_list, offset_list, debug=False):
     tile_expand_list_iou = []
     tile_expand_list_semi_iou = []
     tile_expand_list_oc = []
@@ -79,82 +77,52 @@ def tile_expand(tile_xy_list, p_xy_list, debug=False):
         p_xy_list_order = order_points(p_xy_list)
         poly_p = Polygon(p_xy_list_order)
         poly_p_area = poly_p.area
-        
-        tile_tmp = [((tile_x    ) * tile_length, (tile_y    ) * tile_length), 
-                    ((tile_x + 1) * tile_length, (tile_y    ) * tile_length), 
-                    ((tile_x    ) * tile_length, (tile_y + 1) * tile_length), 
-                    ((tile_x + 1) * tile_length, (tile_y + 1) * tile_length)]
-        tile_tmp_order = order_points(tile_tmp)
-        poly_tile = Polygon(tile_tmp_order)
-        poly_tile_area = poly_tile.area
-        intersect_area = calc_intersect_area(poly_p, poly_tile)
-        oc = intersect_area / min(poly_tile_area, poly_p_area)
-        iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
+
 
         if debug:
             print(tile_x, tile_y, iou, oc)
 
-        tile_l = max(0, tile_x - 5)
-        tile_r = min(tile_x + 5, tile_max_num)
-        tile_u = max(0, tile_y - 5)
-        tile_d = min(tile_y + 5, tile_max_num)
-        
-        # # To Left
-        # while tile_l >= 1:
-        #     tile_tmp = [((tile_l - 1) * tile_length, (tile_y - 1) * tile_length), 
-        #                 ((tile_l    ) * tile_length, (tile_y - 1) * tile_length), 
-        #                 ((tile_l - 1) * tile_length, (tile_y    ) * tile_length), 
-        #                 ((tile_l    ) * tile_length, (tile_y    ) * tile_length)]
-        #     intersect_area = calc_intersect_area(p_xy_list, tile_tmp)
-        #     if debug:
-        #         print('To Left')
-        #         print("tile_xy", tile_l, tile_y)
-        #         print("tile_tmp", tile_tmp)
-        #         print("intersect_area / tile_size", intersect_area, tile_size, intersect_area/tile_size)
-        #     tile_l -= 1
-        #     if intersect_area / tile_size < 0.4:
-        #         break
-        # tile_l += 1
+        tile_l = max(0, tile_x - 6)
+        tile_r = min(tile_x + 6, tile_max_num)
+        tile_u = max(0, tile_y - 6)
+        tile_d = min(tile_y + 6, tile_max_num)
 
         # Enumerate all LRUD
         for tile_x_i in range(tile_l, tile_r + 1):
             for tile_y_i in range(tile_u, tile_d + 1):
-                tile_tmp = [((tile_x_i    ) * tile_length, (tile_y_i    ) * tile_length), 
-                            ((tile_x_i + 1) * tile_length, (tile_y_i    ) * tile_length), 
-                            ((tile_x_i    ) * tile_length, (tile_y_i + 1) * tile_length), 
-                            ((tile_x_i + 1) * tile_length, (tile_y_i + 1) * tile_length)]
-                tile_tmp_order = order_points(tile_tmp)
-                poly_tile = Polygon(tile_tmp_order)
-                poly_tile_area = poly_tile.area
-                intersect_area = calc_intersect_area(poly_p, poly_tile)
+                for offset in offset_list:
+                    tile_tmp = [((tile_x_i    ) * tile_length + offset, (tile_y_i    ) * tile_length + offset), 
+                                ((tile_x_i + 1) * tile_length + offset, (tile_y_i    ) * tile_length + offset), 
+                                ((tile_x_i    ) * tile_length + offset, (tile_y_i + 1) * tile_length + offset), 
+                                ((tile_x_i + 1) * tile_length + offset, (tile_y_i + 1) * tile_length + offset)]
+                    tile_tmp_order = order_points(tile_tmp)
+                    poly_tile = Polygon(tile_tmp_order)
+                    poly_tile_area = poly_tile.area
+                    intersect_area = calc_intersect_area(poly_p, poly_tile)
 
-                # max_rate = max(intersect_area / tile_size, intersect_area / poly_p_area)
-                # if max_rate > 0.4:
-                #     # print('jyxjyx', intersect_area / tile_size, intersect_area / poly_p_area)
-                #     tile_expand_list.append((tile_x_i, tile_y_i, zoom_level, max_rate))
-                oc = intersect_area / min(poly_tile_area, poly_p_area)
-                iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
-                loc_xy = sate2loc(zoom_level, tile_x_i, tile_y_i)
-                if iou > THRESHOLD:
-                    tile_expand_list_iou.append((tile_x_i, tile_y_i, zoom_level, iou, loc_xy))
-                if iou > SEMI_THRESHOLD:
-                    tile_expand_list_semi_iou.append((tile_x_i, tile_y_i, zoom_level, iou, loc_xy))
-                if oc > THRESHOLD:
-                    tile_expand_list_oc.append((tile_x_i, tile_y_i, zoom_level, iou, loc_xy))
+                    oc = intersect_area / min(poly_tile_area, poly_p_area)
+                    iou = intersect_area / (poly_p_area + poly_tile_area - intersect_area)
+                    loc_xy = sate2loc(zoom_level, offset, tile_x_i, tile_y_i)
+                    if iou > THRESHOLD:
+                        tile_expand_list_iou.append((tile_x_i, tile_y_i, zoom_level, offset, iou, loc_xy))
+                    if iou > SEMI_THRESHOLD:
+                        tile_expand_list_semi_iou.append((tile_x_i, tile_y_i, zoom_level, offset, iou, loc_xy))
+                    # if oc > THRESHOLD:
+                    #     tile_expand_list_oc.append((tile_x_i, tile_y_i, zoom_level, iou, loc_xy))
 
-                # if debug:
-                    # print('enumerate')
-                    # print(tile_x_i, tile_y_i, intersect_area, tile_size, intersect_area / tile_size, poly_p_area, intersect_area/poly_p_area)
+                    # if debug:
+                        # print('enumerate')
+                        # print(tile_x_i, tile_y_i, intersect_area, tile_size, intersect_area / tile_size, poly_p_area, intersect_area/poly_p_area)
 
         # if debug:
         #     print('jyx tile lrud', zoom_level, tile_l, tile_r, tile_u, tile_d)
         #     print(tile_expand_list)
 
-    return tile_expand_list_iou, tile_expand_list_semi_iou, tile_expand_list_oc
+    return tile_expand_list_iou, tile_expand_list_semi_iou
 
 
 def process_per_drone_image(file_data):
-    img_file, dir_img, dir_meta, dir_satellite, root, save_root, zoom_list = file_data
+    img_file, dir_img, dir_meta, dir_satellite, root, save_root, zoom_list, offset_list = file_data
 
     meta_file_path = os.path.join(dir_meta, img_file.replace('.png', '.txt'))
     #### meta_data format
@@ -179,7 +147,7 @@ def process_per_drone_image(file_data):
     debug = False
     # debug = False
     # if not debug:  
-    tile_expand_list_iou, tile_expand_list_semi_iou, tile_expand_list_oc = tile_expand(tile_xy_list, p_xy_sate_list, debug)
+    tile_expand_list_iou, tile_expand_list_semi_iou = tile_expand(tile_xy_list, p_xy_sate_list, offset_list, debug)
 
     if len(tile_expand_list_semi_iou) == 0:
         return None
@@ -201,31 +169,31 @@ def process_per_drone_image(file_data):
         "pair_semi_iou_sate_img_list": [],
         "pair_semi_iou_sate_weight_list": [],
         "pair_semi_iou_sate_loc_xy_list": [],
-        "pair_oc_sate_img_list": [],
-        "pair_oc_sate_weight_list": [],
-        "pair_oc_sate_loc_xy_list": [],
+        # "pair_oc_sate_img_list": [],
+        # "pair_oc_sate_weight_list": [],
+        # "pair_oc_sate_loc_xy_list": [],
     }
-    for tile_x, tile_y, zoom_level, weight, loc_xy in tile_expand_list_iou:
+    for tile_x, tile_y, zoom_level, offset, weight, loc_xy in tile_expand_list_iou:
         # tile_img = os.path.join(dir_satellite, f'level_{zoom_level}/{zoom_level}_{tile_x}_{tile_y}.png')
         # save_drone_img = os.path.join(save_drone_dir, f'{h}_{img_file}')
         # save_sate_img = os.path.join(save_sate_dir, f'{h}_{zoom_level}_{tile_x}_{tile_y}.png')
-        result["pair_iou_sate_img_list"].append(f'{zoom_level}_{tile_x}_{tile_y}.png')
+        result["pair_iou_sate_img_list"].append(f'{zoom_level}_{offset}_{tile_x}_{tile_y}.png')
         result["pair_iou_sate_weight_list"].append(weight)
         result["pair_iou_sate_loc_xy_list"].append(loc_xy)
-    for tile_x, tile_y, zoom_level, weight, loc_xy in tile_expand_list_semi_iou:
+    for tile_x, tile_y, zoom_level, offset, weight, loc_xy in tile_expand_list_semi_iou:
         # tile_img = os.path.join(dir_satellite, f'level_{zoom_level}/{zoom_level}_{tile_x}_{tile_y}.png')
         # save_drone_img = os.path.join(save_drone_dir, f'{h}_{img_file}')
         # save_sate_img = os.path.join(save_sate_dir, f'{h}_{zoom_level}_{tile_x}_{tile_y}.png')
-        result["pair_semi_iou_sate_img_list"].append(f'{zoom_level}_{tile_x}_{tile_y}.png')
+        result["pair_semi_iou_sate_img_list"].append(f'{zoom_level}_{offset}_{tile_x}_{tile_y}.png')
         result["pair_semi_iou_sate_weight_list"].append(weight)
         result["pair_semi_iou_sate_loc_xy_list"].append(loc_xy)
-    for tile_x, tile_y, zoom_level, weight, loc_xy in tile_expand_list_oc:
-        # tile_img = os.path.join(dir_satellite, f'level_{zoom_level}/{zoom_level}_{tile_x}_{tile_y}.png')
-        # save_drone_img = os.path.join(save_drone_dir, f'{h}_{img_file}')
-        # save_sate_img = os.path.join(save_sate_dir, f'{h}_{zoom_level}_{tile_x}_{tile_y}.png')
-        result["pair_oc_sate_img_list"].append(f'{zoom_level}_{tile_x}_{tile_y}.png')
-        result["pair_oc_sate_weight_list"].append(weight)
-        result["pair_oc_sate_loc_xy_list"].append(loc_xy)
+    # for tile_x, tile_y, zoom_level, weight, loc_xy in tile_expand_list_oc:
+    #     # tile_img = os.path.join(dir_satellite, f'level_{zoom_level}/{zoom_level}_{tile_x}_{tile_y}.png')
+    #     # save_drone_img = os.path.join(save_drone_dir, f'{h}_{img_file}')
+    #     # save_sate_img = os.path.join(save_sate_dir, f'{h}_{zoom_level}_{tile_x}_{tile_y}.png')
+    #     result["pair_oc_sate_img_list"].append(f'{zoom_level}_{tile_x}_{tile_y}.png')
+    #     result["pair_oc_sate_weight_list"].append(weight)
+    #     result["pair_oc_sate_loc_xy_list"].append(loc_xy)
 
     if debug:
         print(p_xy_sate_list)
@@ -261,7 +229,7 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
         h = pairs_drone2sate["h"]
         pair_iou_sate_img_list = pairs_drone2sate["pair_iou_sate_img_list"]
         pair_semi_iou_sate_img_list = pairs_drone2sate["pair_semi_iou_sate_img_list"]
-        pair_oc_sate_img_list = pairs_drone2sate["pair_oc_sate_img_list"]
+        # pair_oc_sate_img_list = pairs_drone2sate["pair_oc_sate_img_list"]
         drone_img = pairs_drone2sate["drone_img"]
         drone_img_dir = pairs_drone2sate["drone_img_dir"]
         sate_img_dir = pairs_drone2sate["sate_img_dir"]
@@ -274,22 +242,22 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
         os.makedirs(sate_iou_save_path, exist_ok=True)
         sate_semi_iou_save_path = os.path.join(sate_semi_iou_save_dir, drone_img_name)
         os.makedirs(sate_semi_iou_save_path, exist_ok=True)
-        sate_oc_save_path = os.path.join(sate_oc_save_dir, drone_img_name)
-        os.makedirs(sate_oc_save_path, exist_ok=True)
+        # sate_oc_save_path = os.path.join(sate_oc_save_dir, drone_img_name)
+        # os.makedirs(sate_oc_save_path, exist_ok=True)
 
-        shutil.copy(os.path.join(drone_img_dir, drone_img), drone_save_path)
+        # shutil.copy(os.path.join(drone_img_dir, drone_img), drone_save_path)
         for sate_img in pair_iou_sate_img_list:
             pairs_iou_drone2sate_dict.setdefault(drone_img, []).append(sate_img)
             pairs_iou_sate2drone_dict.setdefault(sate_img, []).append(drone_img)
-            shutil.copy(os.path.join(sate_img_dir, sate_img), sate_iou_save_path)
+            # shutil.copy(os.path.join(sate_img_dir, sate_img), sate_iou_save_path)
         for sate_img in pair_semi_iou_sate_img_list:
             pairs_semi_iou_drone2sate_dict.setdefault(drone_img, []).append(sate_img)
             pairs_semi_iou_sate2drone_dict.setdefault(sate_img, []).append(drone_img)
-            shutil.copy(os.path.join(sate_img_dir, sate_img), sate_semi_iou_save_path)
-        for sate_img in pair_oc_sate_img_list:
-            pairs_oc_drone2sate_dict.setdefault(drone_img, []).append(sate_img)
-            pairs_oc_sate2drone_dict.setdefault(sate_img, []).append(drone_img)
-            shutil.copy(os.path.join(sate_img_dir, sate_img), sate_oc_save_path)
+            # shutil.copy(os.path.join(sate_img_dir, sate_img), sate_semi_iou_save_path)
+        # for sate_img in pair_oc_sate_img_list:
+        #     pairs_oc_drone2sate_dict.setdefault(drone_img, []).append(sate_img)
+        #     pairs_oc_sate2drone_dict.setdefault(sate_img, []).append(drone_img)
+        #     shutil.copy(os.path.join(sate_img_dir, sate_img), sate_oc_save_path)
 
     pairs_iou_match_set = set()
     for tile_img, tile2drone in pairs_iou_sate2drone_dict.items():
@@ -307,13 +275,13 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
         for tile_img in pairs_semi_iou_drone2sate_dict[drone_img]:
             pairs_semi_iou_match_set.add((drone_img, tile_img))
 
-    pairs_oc_match_set = set()
-    for tile_img, tile2drone in pairs_oc_sate2drone_dict.items():
-        pairs_oc_sate2drone_dict[tile_img] = list(set(tile2drone))
-    for drone_img, drone2tile in pairs_oc_drone2sate_dict.items():
-        pairs_oc_drone2sate_dict[drone_img] = list(set(drone2tile))
-        for tile_img in pairs_oc_drone2sate_dict[drone_img]:
-            pairs_oc_match_set.add((drone_img, tile_img))
+    # pairs_oc_match_set = set()
+    # for tile_img, tile2drone in pairs_oc_sate2drone_dict.items():
+    #     pairs_oc_sate2drone_dict[tile_img] = list(set(tile2drone))
+    # for drone_img, drone2tile in pairs_oc_drone2sate_dict.items():
+    #     pairs_oc_drone2sate_dict[drone_img] = list(set(drone2tile))
+    #     for tile_img in pairs_oc_drone2sate_dict[drone_img]:
+    #         pairs_oc_match_set.add((drone_img, tile_img))
 
 
     with open(pkl_save_path, 'wb') as f:
@@ -328,13 +296,13 @@ def save_pairs_meta_data(pairs_drone2sate_list, pkl_save_path, pair_save_dir):
             "pairs_semi_iou_drone2sate_dict": pairs_semi_iou_drone2sate_dict,
             "pairs_semi_iou_match_set": pairs_semi_iou_match_set,
 
-            "pairs_oc_sate2drone_dict": pairs_oc_sate2drone_dict,
-            "pairs_oc_drone2sate_dict": pairs_oc_drone2sate_dict,
-            "pairs_oc_match_set": pairs_oc_match_set,
+            # "pairs_oc_sate2drone_dict": pairs_oc_sate2drone_dict,
+            # "pairs_oc_drone2sate_dict": pairs_oc_drone2sate_dict,
+            # "pairs_oc_match_set": pairs_oc_match_set,
         }, f)
 
 
-def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7], split_type='same'):
+def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7], offset_list=[0], split_type='same'):
 
     processed_data = []
     processed_data_train = []
@@ -347,7 +315,7 @@ def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7
     dir_meta = os.path.join(root, 'drone', 'meta_data')
     dir_satellite = os.path.join(root, 'satellite')
     files = [f for f in os.listdir(dir_img)]
-    file_data_list.extend([(img_file, dir_img, dir_meta, dir_satellite, root, save_root, zoom_list)for img_file in files])
+    file_data_list.extend([(img_file, dir_img, dir_meta, dir_satellite, root, save_root, zoom_list, offset_list)for img_file in files])
     file_data_list_h = []
     for file_data in file_data_list:
         if int(file_data[0].split('_')[0]) in h_list:
@@ -448,6 +416,19 @@ def move_file():
     print("All directories moved successfully.")
 
 
+def rename_tile():
+    directory = '/home/xmuairmud/data/GTA-UAV-data/satellite_overlap'  # 替换为你的目录路径
+
+    for filename in os.listdir(directory):
+        if filename.endswith('.png'):
+            match = re.match(r'(\d+)_(\d+)_(\d+)\.png', filename)
+            if match:
+                new_filename = f"{match.group(1)}_0_{match.group(2)}_{match.group(3)}.png"
+                os.rename(os.path.join(directory, filename), os.path.join(directory, new_filename))
+
+    print("文件重命名完成！")
+
+
 def write_json(pickle_root, root, split_type):
     for type in ['train', 'test']:
         data_drone2sate_json = []
@@ -494,10 +475,11 @@ def write_json(pickle_root, root, split_type):
 
 
 if __name__ == "__main__":
+    # rename_tile()
 
     root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/cross_h23456_z4567'
-    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], split_type='cross')
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/cross_h123456_z4567_off13'
+    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], offset_list=[0, 86, 171], split_type='cross')
 
     # write_json(pickle_root=save_root, root=root, split_type='same')
 

@@ -21,7 +21,7 @@ class Configuration:
     # Evaluation
     batch_size: int = 128
     verbose: bool = True
-    gpu_ids: tuple = (0,)
+    gpu_ids: tuple = (0,1)
     normalize_features: bool = True
     eval_gallery_n: int = -1             # -1 for all or int
 
@@ -38,14 +38,15 @@ class Configuration:
     # Checkpoint to start from
     # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
     # checkpoint_start = 'work_dir/denseuav/convnext_base.fb_in22k_ft_in1k_384/0630155817/weights_end.pth'
-    checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0810002619/weights_end.pth'
+    # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0810002619/weights_end.pth'
     # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0809045532/weights_end.pth'
+    checkpoint_start = 'work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0912030534/weights_end.pth'
 
     data_root: str = "/home/xmuairmud/data/GTA-UAV-data/randcam2_5area"
 
-    train_pairs_meta_file = 'cross-area-drone2sate-train.json'
-    test_pairs_meta_file = 'cross-area-drone2sate-test.json'
-    sate_img_dir = 'satellite_z4'
+    train_pairs_meta_file = 'offset13_cross-area-drone2sate-train.json'
+    test_pairs_meta_file = 'offset13_cross-area-drone2sate-test.json'
+    sate_img_dir = 'satellite_overlap/offset_13'
 
 
 #-----------------------------------------------------------------------------#
