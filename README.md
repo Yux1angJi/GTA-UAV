@@ -6,6 +6,10 @@
 
 </p>
 
+<p align="center">
+  By <a href="https://yux1angji.github.io/" target='_blank'>Yuxiang Ji*</a>,&nbsp;
+  Boyong He*,&nbsp; Zhuoyue Tan,&nbsp; Liaoni Wu
+</p>
 
 <p align="center">
   <img src="resources/trajectory_demo_compress.gif" alt="Demo">
@@ -17,9 +21,6 @@
 
 
 <p align="center">
-  <a href="https://yux1angji.github.io/" target='_blank'>Yuxiang Ji*</a>,&nbsp;
-  Boyong He*,&nbsp; Zhuoyue Tan,&nbsp; Liaoni Wu
-  <br>
   <a href="https://yux1angji.github.io/game4loc/"><strong>Project Page »</strong></a>
 </p>
 
