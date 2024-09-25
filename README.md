@@ -1,5 +1,4 @@
 <!-- PROJECT LOGO -->
-<br />
 <p align="center">
 
   <h3 align="center">Game4Loc: A UAV Geo-Localization Benchmark from Game Data</h3>
