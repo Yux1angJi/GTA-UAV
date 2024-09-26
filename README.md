@@ -20,7 +20,8 @@
 
 
 <p align="center">
-  <a href="https://yux1angji.github.io/game4loc/"><strong>Project Page »</strong></a>
+  <a href="https://yux1angji.github.io/game4loc/"><strong>[Project Page]</strong></a> |
+  <a href="https://arxiv.org/abs/2409.16925"><strong>[Arxiv]</strong></a>
 </p>
 
 - [x] Part I: Dataset
