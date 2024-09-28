@@ -103,7 +103,7 @@ class Configuration:
     test_mode: str = "pos"                # Test with semi-positive pairs
 
     # Eval before training
-    zero_shot: bool = False
+    zero_shot: bool = True
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -124,7 +124,7 @@ class Configuration:
 
     train_pairs_meta_file = 'cross-area-drone2sate-train.json'
     test_pairs_meta_file = 'cross-area-drone2sate-test.json'
-    sate_img_dir = 'satellite_overlap/offset_13'
+    sate_img_dir = 'satellite'
 
 
 #-----------------------------------------------------------------------------#

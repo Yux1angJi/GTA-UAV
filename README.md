@@ -60,7 +60,7 @@ The dataset is released in two versions: low resolution (512x384, 12.8G) and hig
 |                                      Low Resolution Version                                      |                                     High Resolution Version                                      |
 |:------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------:|
 | [HuggingFace🤗](https://huggingface.co/datasets/Yux1ang/GTA-UAV-LR) | Released soon |
-| [BaiduDisk](https://pan.baidu.com/s/1WyadL67Wxmij2be3qjrihg?pwd=gtav) | Released soon |
+| [BaiduDisk](https://pan.baidu.com/s/1vjbyDh8sYz47GoP5KBRMZQ?pwd=gtav) | Released soon |
 
 
 The high resolution dataset will be released soon.

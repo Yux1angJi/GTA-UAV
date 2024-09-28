@@ -14,6 +14,7 @@ import itertools
 import pickle
 import json
 import re
+import math
 
 
 GAME_TO_SATE_KX = 1.8206
@@ -25,6 +26,103 @@ TILE_LENGTH = 256
 
 THRESHOLD = 0.39
 SEMI_THRESHOLD = 0.14
+
+
+def euler_to_rotation_matrix(pitch, roll, yaw):
+    # Convert angles from degrees to radians
+    pitch = np.radians(pitch)
+    roll = np.radians(roll)
+    yaw = np.radians(yaw)
+    
+    # Rotation matrix around x-axis (pitch)
+    Rx = np.array([
+        [1, 0, 0],
+        [0, np.cos(pitch), -np.sin(pitch)],
+        [0, np.sin(pitch), np.cos(pitch)]
+    ])
+    
+    # Rotation matrix around y-axis (roll)
+    Ry = np.array([
+        [np.cos(roll), 0, np.sin(roll)],
+        [0, 1, 0],
+        [-np.sin(roll), 0, np.cos(roll)]
+    ])
+    
+    # Rotation matrix around z-axis (yaw)
+    Rz = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+    
+    # Combined rotation matrix
+    R = Rz @ Ry @ Rx
+    return R
+
+
+def calculate_projection_points(height, rot_x, rot_y, rot_z, temp_x, temp_y, hfov=74, vfov=59):
+
+    # rot_x, rot_y, rot_z represents pitch, roll, and yaw in eular system
+
+    # Convert angles from degrees to radians
+    hfov_rad = math.radians(hfov)
+    vfov_rad = math.radians(vfov)
+    rot_x = abs(rot_x + 90)
+    tilt_angle_rad = math.radians(rot_x)
+
+    # print(hfov_rad, vfov_rad, tilt_angle_rad)
+    
+    # Calculate the width and length of the projection on the ground
+    W = 2 * height * math.tan(hfov_rad / 2)
+    L = 2 * height * math.tan(vfov_rad / 2)
+    
+    # Calculate the shift in the projection center due to the tilt angle
+    D = height * math.tan(tilt_angle_rad)
+    
+    # Calculate the four corner points
+    P1 = (-W / 2, -L / 2 + D)
+    P2 = (W / 2, -L / 2 + D)
+    P3 = (-W / 2, L / 2 + D)
+    P4 = (W / 2, L / 2 + D)
+    relative_points = [
+        [-W / 2, -L / 2 + D, 0],
+        [W / 2, -L / 2 + D, 0],
+        [-W / 2, L / 2 + D, 0],
+        [W / 2, L / 2 + D, 0]
+    ]
+    # print(relative_points)
+
+    R = euler_to_rotation_matrix(pitch=rot_x, roll=rot_y, yaw=rot_z)
+
+    actual_points = []
+    for point in relative_points:
+        rotated_point = R @ np.array(point)
+        actual_x = temp_x + rotated_point[0]
+        actual_y = temp_y + rotated_point[1]
+        actual_points.append(actual_x)
+        actual_points.append(actual_y)
+
+    return actual_points
+
+def correct_proj_points():
+    meta_data_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/drone/meta_data_bk'
+    meta_data_correct_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/drone/meta_data'
+
+    for filename in os.listdir(meta_data_dir):
+        with open(os.path.join(meta_data_dir, filename), 'r') as file:
+            line = file.readline().strip()
+            values = line.split()
+
+            height = float(values[3])    
+            cam_roll = float(values[7])
+            cam_pitch = float(values[8])
+            cam_yaw = float(values[9])
+            cam_pos_x = float(values[0])
+            cam_pos_y = float(values[1])
+            proj_points = calculate_projection_points(height, cam_roll, cam_pitch, cam_yaw, cam_pos_x, cam_pos_y)
+            meta_correct_text = f"{cam_pos_x} {cam_pos_y} {values[2]} {height - 10} {cam_pos_x} {cam_pos_y} {values[6]} {values[7]} {values[8]} {values[9]} {proj_points[0]} {proj_points[1]} {proj_points[2]} {proj_points[3]} {proj_points[4]} {proj_points[5]} {proj_points[6]} {proj_points[7]}"
+            with open(os.path.join(meta_data_correct_dir, filename), 'w') as file_correct:
+                file_correct.write(meta_correct_text)
 
 
 def sate2loc(tile_zoom, tile_x, tile_y, offset):
@@ -469,17 +567,18 @@ def write_json(pickle_root, root, split_type):
                     "cam_yaw": cam_yaw,
                 }
             })
-        save_path = os.path.join(root, f'offset13_{split_type}-area-drone2sate-{type}.json')
+        save_path = os.path.join(root, f'{split_type}-area-drone2sate-{type}.json')
         with open(save_path, 'w', encoding='utf-8') as f:
             json.dump(data_drone2sate_json, f, indent=4, ensure_ascii=False)
 
 
 if __name__ == "__main__":
+    # correct_proj_points()
     # rename_tile()
 
     root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/same_h123456_z4567_off13'
-    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], offset_list=[0, 86, 171], split_type='same')
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/same_h123456_z4567_correct'
+    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], offset_list=[0], split_type='same')
 
     # write_json(pickle_root=save_root, root=root, split_type='same')
 
