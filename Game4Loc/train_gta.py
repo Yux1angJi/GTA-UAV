@@ -120,7 +120,7 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
-    data_root: str = "./data/GTA-UAV"
+    data_root: str = "./data/GTA-UAV-data"
 
     train_pairs_meta_file = 'cross-area-drone2sate-train.json'
     test_pairs_meta_file = 'cross-area-drone2sate-test.json'
@@ -438,13 +438,13 @@ def parse_args():
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
-    parser.add_argument('--data_root', type=str, default='/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-official/GTA-UAV-LR-hf', help='Data root')
+    parser.add_argument('--data_root', type=str, default='./data/GTA-UAV-data', help='Data root')
 
     parser.add_argument('--train_pairs_meta_file', type=str, default='cross-area-drone2sate-train.json', help='Training metafile path')
    
     parser.add_argument('--test_pairs_meta_file', type=str, default='cross-area-drone2sate-test.json', help='Test metafile path')
 
-    parser.add_argument('--model', type=str, default='convnext_base.fb_in22k_ft_in1k_384', help='Model architecture')
+    parser.add_argument('--model', type=str, default='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', help='Model architecture')
 
     parser.add_argument('--no_share_weights', action='store_true', help='Train without sharing wieghts')
 
