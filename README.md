@@ -18,7 +18,6 @@
   </i>
 </p>
 
-
 <p align="center">
   <a href="https://yux1angji.github.io/game4loc/"><strong>Project Page »</strong></a>
 </p>
@@ -91,48 +90,43 @@ This entry provides a detailed description and paired satellite images for a sin
 ```json
 {
     "drone_img_dir": "drone/images",
-    "drone_img_name": "400_0001_0000019853.png",
-    "drone_loc_x_y": [
-        4398.2345699437265, 7743.059007970046
-    ],
+    "drone_img_name": "500_0001_0000025682.png",
+    "drone_loc_x_y": [4472.2036708036, 9460.91532053518],
     "sate_img_dir": "satellite",
     "pair_pos_sate_img_list": [
-        "5_0_12_22.png"
+        "4_0_6_13.png"
     ],
     "pair_pos_sate_weight_list": [
-        0.4923079286001371
+        0.47341428718085427
     ],
     "pair_pos_sate_loc_x_y_list": [
-        [4320.0, 7776.0]
+        [4492.8, 9331.2]
     ],
     "pair_pos_semipos_sate_img_list": [
-        "4_0_6_11.png",
-        "5_0_12_22.png",
-        "6_0_25_44.png",
-        "6_0_25_45.png"
+        "4_0_6_13.png",
+        "5_0_12_27.png",
+        "5_0_13_27.png"
     ],
     "pair_pos_semipos_sate_weight_list": [
-        0.16504440259875908,
-        0.4923079286001371,
-        0.33077424066935046,
-        0.24444984927508234
+        0.47341428718085427,
+        0.27864086433392504,
+        0.2149980058725643
     ],
     "pair_pos_semipos_sate_loc_x_y_list": [
-        [4492.8, 7948.8],
-        [4320.0, 7776.0],
-        [4406.4, 7689.6],
-        [4406.4, 7862.4]
+        [4492.8, 9331.2],
+        [4320.0, 9504.0],
+        [4665.6, 9504.0]
     ],
     "drone_metadata": {
-        "height": 405.9933166503906,
-        "drone_roll": -1.237579345703125,
-        "drone_pitch": 3.1808385848999023,
-        "drone_yaw": -122.0,
-        "cam_roll": -91.23757934570312,
-        "cam_pitch": 3.1808385848999023,
-        "cam_yaw": -122.0
+        "height": 494.70794677734375,
+        "drone_roll": -0.2723846435546875,
+        "drone_pitch": 1.981452226638794,
+        "drone_yaw": 84.99999237060547,
+        "cam_roll": -90.27238464355469,
+        "cam_pitch": 1.981452226638794,
+        "cam_yaw": 84.99999237060547
     }
-}
+},
 ```
 
 ### Metadata Details
@@ -141,7 +135,7 @@ This entry provides a detailed description and paired satellite images for a sin
 
 - `pair_pos_sate_img(weight/loc_x_y)_list`: Provides the positive paired satellite image / weight(IOU) / 2D location list.
 
-- `pair_pos_semipos_sate_img(weight/loc_x_y)_list`: Provides the semi-positive paired satellite image / weight(IOU) / 2D location list.
+- `pair_pos_semipos_sate_img(weight/loc_x_y)_list`: Provides the positive & semi-positive paired satellite image / weight(IOU) / 2D location list.
 
 - `drone_metadata`: Provides the height (altitude above ground level), drone pose (roll, pitch, yaw), and camera pose (roll, pitch, yaw) information.
 
@@ -174,7 +168,7 @@ python train_gta.py \
     --train_pairs_meta_file "cross-area-drone2sate-train.json" \
     --test_pairs_meta_file "cross-area-drone2sate-test.json" \
     --model "vit_base_patch16_rope_reg1_gap_256.sbb_in1k" \
-    --gpu_ids 0,1 --label_smoothing 0.05 \
+    --gpu_ids 0 --label_smoothing 0.05 \
     --lr 0.0001 --batch_size 64 --epoch 5 \
     --with_weight --k 5
 ```
