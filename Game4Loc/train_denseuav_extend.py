@@ -18,7 +18,7 @@ from game4loc.utils import setup_system, Logger
 from game4loc.trainer import train
 from game4loc.evaluate.university import evaluate
 from game4loc.loss import InfoNCE
-from game4loc.model import DesModel
+from game4loc.models.model import DesModel
 
 def parse_tuple(s):
     try:

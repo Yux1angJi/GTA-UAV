@@ -15,7 +15,7 @@ from game4loc.utils import setup_system, Logger
 from game4loc.trainer import train, train_with_weight
 from game4loc.evaluate.gta import evaluate
 from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
-from game4loc.model import DesModel
+from game4loc.models.model import DesModel
 
 
 def parse_tuple(s):

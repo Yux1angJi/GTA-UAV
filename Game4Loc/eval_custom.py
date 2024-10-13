@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 from game4loc.dataset.gta import get_transforms
 from game4loc.dataset.custom_query import CustomData
-from game4loc.model import DesModel
+from game4loc.models.model import DesModel
 
 from game4loc.evaluate.query_topn import QueryTopN
 

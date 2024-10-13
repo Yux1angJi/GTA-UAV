@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 from game4loc.dataset.visloc import VisLocDatasetEval, get_transforms
 from game4loc.evaluate.visloc import evaluate
-from game4loc.model import TimmModel
+from game4loc.models.model import DesModel
 
 
 @dataclass
