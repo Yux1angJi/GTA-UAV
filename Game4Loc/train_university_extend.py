@@ -16,7 +16,7 @@ from game4loc.utils import setup_system, Logger
 from game4loc.trainer import train
 from game4loc.evaluate.university import evaluate
 from game4loc.loss import InfoNCE
-from game4loc.model import TimmModel
+from game4loc.models.model import DesModel
 
 
 @dataclass
@@ -138,7 +138,7 @@ if __name__ == '__main__':
     print("\nModel: {}".format(config.model))
 
 
-    model = TimmModel(config.model,
+    model = DesModel(config.model,
                           pretrained=True,
                           img_size=config.img_size)
                           

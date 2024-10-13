@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 from game4loc.dataset.gta import GTADatasetEval, get_transforms
 from game4loc.evaluate.gta import evaluate
-from game4loc.model import DesModel
+from game4loc.models.model import DesModel
 
 
 @dataclass

@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 from game4loc.dataset.sues_extend import SUESDatasetEval, get_transforms
 from game4loc.evaluate.university import evaluate
-from game4loc.model import TimmModel
+from game4loc.models.model import DesModel
 
 
 @dataclass

@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import pickle
 
-from game4loc.model import TimmModel
+from game4loc.models.model import DesModel
 from game4loc.dataset.gta import GTADatasetEval, get_transforms
 
 def query_match(drone_img):
@@ -24,7 +24,7 @@ def query_match(drone_img):
 
 
 def visualization():
-    model = TimmModel(model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k')
+    model = DesModel(model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k')
     checkpoint_start = 'work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0722010320/weights_end.pth'
     model_state_dict = torch.load(checkpoint_start)  
     model.load_state_dict(model_state_dict, strict=False) 

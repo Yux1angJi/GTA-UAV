@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 from game4loc.dataset.university import get_transforms
 from game4loc.dataset.custom_query import CustomData
-from game4loc.model import TimmModel
+from game4loc.models.model import DesModel
 from torch.cuda.amp import autocast
 # from game4loc.evaluate.query_topn import QueryTopN
 import torch.nn.functional as F
@@ -242,7 +242,7 @@ if __name__ == '__main__':
     print("\nModel: {}".format(config.model))
 
 
-    model = TimmModel(config.model,
+    model = DesModel(config.model,
                           pretrained=True,
                           img_size=config.img_size)
     
