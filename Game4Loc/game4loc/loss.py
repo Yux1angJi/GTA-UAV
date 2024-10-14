@@ -206,12 +206,6 @@ class GroupInfoNCE(nn.Module):
             eps = 1. - (1. - self.label_smoothing) / (1 + torch.exp(-self.k * positive_weights))
         else:
             eps = [self.label_smoothing for _ in range(image_features1.shape[0])]
-
-        # I_g = torch.eye(G)
-        # # 创建一个 n x n 的单位矩阵
-        # I_n = torch.ones(N, N)
-        # # 使用 Kronecker 积生成目标矩阵
-        # labels = torch.kron(I_g, I_n).to(device=self.device)
         
         logits_per_image1 = logit_scale * image_features1 @ image_features2.T
         
@@ -279,6 +273,61 @@ class TripletLoss(nn.Module):
         hard_pairs_all = self.miner(embeddings_all, labels_all)
         return {"triplet": self.criterion(embeddings_all, labels_all, hard_pairs_all)}
 
+
+class MMWeightedInfoNCE(nn.Module):
+    def __init__(self, label_smoothing, k=5, device='cuda' if torch.cuda.is_available() else 'cpu'):
+        super().__init__()
+        self.label_smoothing = label_smoothing
+        self.device = device
+        self.k = k
+
+    def loss(self, similarity_matrix, eps_all):
+        n = similarity_matrix.shape[0]
+        total_loss = 0.0
+        for i in range(n):
+            eps = eps_all[i]
+            total_loss += (1 - eps) * (-1. * similarity_matrix[i, i] + torch.logsumexp(similarity_matrix[i, :], dim=0))
+            total_loss += eps * (-1. / n * similarity_matrix[i, :].sum() + torch.logsumexp(similarity_matrix[i, :], dim=0))
+        total_loss /= n
+        return total_loss
+
+    def forward(self, 
+                drone_img_features, 
+                drone_lidar_features, 
+                satellite_img_features, 
+                logit_scale, 
+                positive_weights=None
+                ):
+        # Normalize the features
+        drone_img_features = F.normalize(drone_img_features, dim=-1)
+        drone_pc_features = F.normalize(drone_pc_features, dim=-1)
+        satellite_img_features = F.normalize(satellite_img_features, dim=-1)
+
+        # Apply positive weights if provided
+        if positive_weights is not None:
+            eps = 1. - (1. - self.label_smoothing) / (1 + torch.exp(-self.k * positive_weights))
+        else:
+            eps = [self.label_smoothing for _ in range(drone_img_features.shape[0])]
+        
+        # Compute similarity logits
+        logits_drone_img2satellite_img = logit_scale * drone_img_features @ satellite_img_features.T
+        logits_satellite_img2drone_img = logits_drone_img2satellite_img.T
+
+        logits_drone_img2drone_lidar = logit_scale * drone_img_features @ drone_lidar_features
+        logits_drone_lidar2drone_img = logits_drone_img2drone_lidar.T
+
+        logits_drone_lidar2satellite_img = logit_scale * drone_lidar_features @ satellite_img_features
+        logits_satellite_img2drone_lidar = logits_drone_lidar2satellite_img.T
+
+        loss_drone_img_drone_lidar = (self.loss(logits_drone_img2drone_lidar, eps) + self.loss(logits_drone_lidar2drone_img, eps)) / 2
+        loss_drone_img_satellite_img = (self.loss(logits_drone_img2satellite_img, eps) + self.loss(logits_satellite_img2drone_img, eps)) / 2
+        loss_drone_lidar_satellite_img = (self.loss(logits_drone_lidar2satellite_img, eps) + self.loss(logits_satellite_img2drone_lidar, eps)) / 2
+
+        return {
+            "contrastive_drone_img_drone_lidar": loss_drone_img_drone_lidar,
+            "contrastive_drone_lidar_satellite_img": loss_drone_lidar_satellite_img,
+            "contrastive_drone_img_satellite_img": loss_drone_img_satellite_img,
+            }
 
 if __name__ == '__main__':
     loss = GroupInfoNCE(group_len=2, label_smoothing=0.00)

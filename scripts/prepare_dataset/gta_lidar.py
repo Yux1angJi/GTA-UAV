@@ -408,7 +408,6 @@ def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7
 
     file_data_list = []
 
-
     dir_img = os.path.join(root, 'drone', 'images')
     dir_lidar = os.path.join(root, 'drone', 'lidars')
     dir_meta = os.path.join(root, 'drone', 'meta_data')
@@ -587,9 +586,9 @@ if __name__ == "__main__":
     # correct_proj_points()
     # rename_tile()
 
-    root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/randcam2_5area/same_h123456_z4567_correct'
-    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], offset_list=[0], split_type='same')
+    root = '/home/xmuairmud/data/GTA-UAV-data/Lidar'
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/Lidar/cross_lidar_200'
+    process_gta_data(root, save_root, h_list=[200], zoom_list=[4, 5, 6, 7], offset_list=[0], split_type='cross')
 
     # write_json(pickle_root=save_root, root=root, split_type='same')
 

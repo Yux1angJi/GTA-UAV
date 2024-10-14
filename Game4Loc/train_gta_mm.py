@@ -10,12 +10,12 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from transformers import get_constant_schedule_with_warmup, get_polynomial_decay_schedule_with_warmup, get_cosine_schedule_with_warmup
 
-from game4loc.dataset.gta import GTADatasetEval, GTADatasetTrain, get_transforms
+from game4loc.dataset.gta_mm import GTAMMDatasetEval, GTAMMDatasetTrain, get_transforms
 from game4loc.utils import setup_system, Logger
-from game4loc.trainer import train, train_with_weight
-from game4loc.evaluate.gta import evaluate
-from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
-from game4loc.models.model import DesModel
+from game4loc.trainer_mm import train_mm_with_weight
+from game4loc.evaluate.gta_mm import evaluate
+from game4loc.loss import InfoNCE, MMWeightedInfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
+from game4loc.models.model_lidar import DesModelWithPC
 
 
 def parse_tuple(s):
@@ -162,7 +162,7 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     print("\nModel: {}".format(config.model))
 
-    model = DesModel(model_name=config.model, 
+    model = DesModelWithPC(model_name=config.model, 
                     pretrained=True,
                     img_size=config.img_size,
                     share_weights=config.share_weights)
@@ -209,12 +209,12 @@ def train_script(config):
 
     # Transforms
     val_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
-                                                                                                                                 
+                                                                                                              
     # Train
-    train_dataset = GTADatasetTrain(data_root=config.data_root,
+    train_dataset = GTAMMDatasetTrain(data_root=config.data_root,
                                     pairs_meta_file=config.train_pairs_meta_file,
-                                    transforms_query=train_drone_transforms,
-                                    transforms_gallery=train_sat_transforms,
+                                    transforms_satellite=train_sat_transforms,
+                                    transforms_drone=train_drone_transforms,
                                     group_len=config.group_len,
                                     prob_flip=config.prob_flip,
                                     shuffle_batch_size=config.batch_size,
@@ -229,13 +229,13 @@ def train_script(config):
                                   pin_memory=True)
     
     # Test query
-    if config.query_mode == 'D2S':
-        query_view = 'drone'
-        gallery_view = 'sate'
+    if config.query_mode == 'DImg2SImg':
+        query_view = 'drone_img'
+        gallery_view = 'sate_img'
     else:
-        query_view = 'sate'
-        gallery_view = 'drone'
-    query_dataset_test = GTADatasetEval(data_root=config.data_root,
+        query_view = 'sate_img'
+        gallery_view = 'drone_img'
+    query_dataset_test = GTAMMDatasetEval(data_root=config.data_root,
                                         pairs_meta_file=config.test_pairs_meta_file,
                                         view=query_view,
                                         transforms=val_transforms,
@@ -243,8 +243,8 @@ def train_script(config):
                                         sate_img_dir=config.sate_img_dir,
                                         query_mode=config.query_mode,
                                         )
-    query_img_list = query_dataset_test.images_name
-    query_loc_xy_list = query_dataset_test.images_loc_xy
+    query_img_list = query_dataset_test.drone_img_names
+    query_loc_xy_list = query_dataset_test.drone_loc_xys
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
     
     query_dataloader_test = DataLoader(query_dataset_test,
@@ -254,7 +254,7 @@ def train_script(config):
                                        pin_memory=True)
     
     # Test gallery
-    gallery_dataset_test = GTADatasetEval(data_root=config.data_root,
+    gallery_dataset_test = GTAMMDatasetEval(data_root=config.data_root,
                                           pairs_meta_file=config.test_pairs_meta_file,
                                           view=gallery_view,
                                           transforms=val_transforms,
@@ -262,8 +262,8 @@ def train_script(config):
                                           sate_img_dir=config.sate_img_dir,
                                           query_mode=config.query_mode,
                                          )
-    gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
-    gallery_img_list = gallery_dataset_test.images_name
+    gallery_loc_xy_list = gallery_dataset_test.satellite_loc_xys
+    gallery_img_list = gallery_dataset_test.satellite_img_names
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
                                        batch_size=config.batch_size_eval,
@@ -279,7 +279,7 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     print("Train with weight?", config.with_weight, "k=", config.k)
     
-    loss_function_normal = WeightedInfoNCE(
+    loss_function_normal = MMWeightedInfoNCE(
         device=config.device,
         label_smoothing=config.label_smoothing,
         k=config.k,
@@ -350,6 +350,9 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     # Zero Shot                                                                   #
     #-----------------------------------------------------------------------------#
+    if config.query_mode == 'DImg2SImg':
+        query_view = 'drone_img_features'
+        gallery_view = 'satellite_img_features'
     if config.zero_shot:
         print("\n{}[{}]{}".format(30*"-", "Zero Shot", 30*"-"))  
 
@@ -358,7 +361,9 @@ def train_script(config):
                            query_loader=query_dataloader_test,
                            gallery_loader=gallery_dataloader_test, 
                            query_list=query_img_list,
+                           query_view=query_view,
                            gallery_list=gallery_img_list,
+                           gallery_view=gallery_view,
                            pairs_dict=pairs_drone2sate_dict,
                            ranks_list=[1, 5, 10],
                            query_loc_xy_list=query_loc_xy_list,
@@ -381,7 +386,7 @@ def train_script(config):
         if config.custom_sampling:
             train_dataloader.dataset.shuffle()
         
-        train_loss = train_with_weight(config,
+        train_loss = train_mm_with_weight(config,
                            model,
                            dataloader=train_dataloader,
                            loss_function=loss_function_normal,
@@ -405,6 +410,8 @@ def train_script(config):
                                 gallery_loader=gallery_dataloader_test, 
                                 query_list=query_img_list,
                                 gallery_list=gallery_img_list,
+                                query_view=query_view,
+                                gallery_view=gallery_view,
                                 pairs_dict=pairs_drone2sate_dict,
                                 ranks_list=[1, 5, 10],
                                 query_loc_xy_list=query_loc_xy_list,
@@ -466,7 +473,7 @@ def parse_args():
 
     parser.add_argument('--test_mode', type=str, default='pos', help='Test with positive pairs')
 
-    parser.add_argument('--query_mode', type=str, default='D2S', help='Retrieval with drone to satellite')
+    parser.add_argument('--query_mode', type=str, default='DImg2SImg', help='Retrieval with drone image to satellite image')
 
     parser.add_argument('--train_with_recon', action='store_true', help='Train with reconstruction')
 
