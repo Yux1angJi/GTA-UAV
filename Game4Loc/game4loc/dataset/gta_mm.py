@@ -55,7 +55,7 @@ class GTAMMDatasetTrain(Dataset):
                  mode='pos_semipos',
                  train_ratio=1.0,
                  group_len=2,
-                 augment_pc=True):
+                 augment_pc=False):
         super().__init__()
         
         with open(os.path.join(data_root, pairs_meta_file), 'r', encoding='utf-8') as f:
@@ -423,7 +423,7 @@ class GTAMMDatasetEval(Dataset):
         pc = pc / m
         return pc
 
-    
+
 def get_transforms(img_size,
                    mean=[0.485, 0.456, 0.406],
                    std=[0.229, 0.224, 0.225]):

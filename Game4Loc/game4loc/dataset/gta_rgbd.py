@@ -16,6 +16,7 @@ import concurrent.futures
 import itertools
 import pickle
 import json
+import torch
 
 
 SATE_LENGTH = 24576
@@ -39,7 +40,7 @@ def get_sate_data(root_dir):
     return sate_img_dir_list, sate_img_list
 
 
-class GTADatasetTrain(Dataset):
+class GTARGBDDatasetTrain(Dataset):
     
     def __init__(self,
                  pairs_meta_file,
@@ -65,6 +66,7 @@ class GTADatasetTrain(Dataset):
 
         for pair_drone2sate in pairs_meta_data:
             drone_img_dir = pair_drone2sate['drone_img_dir']
+            drone_img_dir = drone_img_dir.replace('images', 'rgbd')
             drone_img_name = pair_drone2sate['drone_img_name']
             sate_img_dir = pair_drone2sate['sate_img_dir']
             # Training with Positive-only data or Positive+Semi-positive data
@@ -102,19 +104,24 @@ class GTADatasetTrain(Dataset):
         query_img_path, gallery_img_path, positive_weight = self.samples[index]
         
         # for query there is only one file in folder
-        query_img = cv2.imread(query_img_path)
-        query_img = cv2.cvtColor(query_img, cv2.COLOR_BGR2RGB)
+        query_img = cv2.imread(query_img_path, cv2.IMREAD_UNCHANGED)
         
         gallery_img = cv2.imread(gallery_img_path)
         gallery_img = cv2.cvtColor(gallery_img, cv2.COLOR_BGR2RGB)
         
         if np.random.random() < self.prob_flip:
             query_img = cv2.flip(query_img, 1)
-            gallery_img = cv2.flip(gallery_img, 1) 
         
         # image transforms
         if self.transforms_query is not None:
-            query_img = self.transforms_query(image=query_img)['image']
+            image_rgb = query_img[:, :, :3]
+            image_d = query_img[:, :, 3]
+            transformed = self.transforms_query(image=image_rgb, image_d=image_d)
+            image_rgb_transformed = transformed['image']
+            image_d_transformed = transformed['image_d']
+            if image_d_transformed.ndim == 2:
+                image_d_transformed = image_d_transformed.unsqueeze(0)
+            query_img = torch.cat((image_rgb_transformed, image_d_transformed), dim=0)  # 形状为 (4, H, W)
             
         if self.transforms_gallery is not None:
             gallery_img = self.transforms_gallery(image=gallery_img)['image']
@@ -123,142 +130,6 @@ class GTADatasetTrain(Dataset):
 
     def __len__(self):
         return len(self.samples)
-
-    def shuffle_group(self, ):
-        '''
-        Implementation of Mutually Exclusive Sampling process with group
-        '''
-        print("\nShuffle Dataset in Batches:")
-        
-        pair_pool = copy.deepcopy(self.pairs)
-        # Shuffle pairs order
-        random.shuffle(pair_pool)
-        
-        sate_batch = set()
-        drone_batch = set()
-        
-        # Lookup if already used in epoch
-        pairs_epoch = set()   
-
-        # buckets
-        batches = []
-        current_batch = []
-        
-        # counter
-        break_counter = 0
-
-        while True:
-            # pbar.update()
-            # print(break_counter)
-            if len(pair_pool) > 0:
-                if break_counter >= 16384:
-                    break
-
-                pair = pair_pool.pop(0)
-                
-                drone_img_path, sate_img_path, _ = pair
-                drone_img_dir = os.path.dirname(drone_img_path)
-                sate_img_dir = os.path.dirname(sate_img_path)
-
-                drone_img_name_i = drone_img_path.split('/')[-1]
-                sate_img_name_i = sate_img_path.split('/')[-1]
-
-                pair_name = (drone_img_name_i, sate_img_name_i)
-
-                if drone_img_name_i in drone_batch or pair_name in pairs_epoch:
-                    if pair_name not in pairs_epoch:
-                            pair_pool.append(pair)
-                    break_counter += 1
-                    continue
-
-                pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name_i]
-                random.shuffle(pairs_drone2sate)
-
-                subset_sate_len = itertools.combinations(pairs_drone2sate, self.group_len)
-                
-                subset_drone = None
-                subset_sate = None
-                for subset_sate_i in subset_sate_len:
-                    flag = True
-                    sate2drone_inter_set = None
-
-                    #### Check for sate
-                    for sate_img in subset_sate_i:
-                        if sate_img in sate_batch:
-                            flag = False
-                            break
-                        
-                        if sate2drone_inter_set == None:
-                            sate2drone_inter_set = set(self.pairs_sate2drone_dict[sate_img])
-                        else:
-                            sate2drone_inter_set = sate2drone_inter_set.intersection(self.pairs_sate2drone_dict[sate_img])
-                    
-                        
-                    if not flag or sate2drone_inter_set == None or len(sate2drone_inter_set) < self.group_len:
-                        continue
-
-                    sate2drone_inter_set = list(sate2drone_inter_set)
-                    random.shuffle(sate2drone_inter_set)
-                    subset_drone_len = itertools.combinations(sate2drone_inter_set, self.group_len)
-                    #### Check for drone
-                    for subset_drone_i in subset_drone_len:
-                        if drone_img_name_i not in subset_drone_i:
-                            continue
-                        flag = True
-                        for drone_img in subset_drone_i:
-                            if drone_img in drone_batch or flag == False:
-                                flag = False
-                                break
-                            for sate_img in subset_sate_i:
-                                pair_tmp = (drone_img, sate_img)
-                                if pair_tmp in pairs_epoch:
-                                    flag = False
-                                    break
-                        if flag:
-                            subset_drone = subset_drone_i
-                            subset_sate = subset_sate_i
-                            break
-                
-                if subset_drone != None and subset_sate != None:
-                    # random.shuffle(subset_drone)
-                    # random.shuffle(subset_sate)
-                    for drone_img_name, sate_img_name in zip(subset_drone, subset_sate):
-                        drone_img_path = os.path.join(self.data_root, drone_img_dir, drone_img_name)
-                        sate_img_path = os.path.join(self.data_root, sate_img_dir, sate_img_name)
-                        current_batch.append((drone_img_path, sate_img_path, 1.0))
-                        pairs_epoch.add((drone_img_name, sate_img_name))
-                    for drone_img in subset_drone:
-                        pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name]
-                        for sate in pairs_drone2sate:
-                            sate_batch.add(sate)
-                    for sate_img in subset_sate:
-                        pairs_sate2drone = self.pairs_sate2drone_dict[sate_img_name]
-                        for drone in pairs_sate2drone:
-                            drone_batch.add(drone)
-                else:
-                    if pair_name not in pairs_epoch:
-                            pair_pool.append(pair)        
-                    break_counter += 1
-
-                if break_counter >= 16384:
-                    break
-            else:
-                break
-            if len(current_batch) >= self.shuffle_batch_size:
-                # empty current_batch bucket to batches
-                batches.extend(current_batch)
-                sate_batch = set()
-                drone_batch = set()
-                current_batch = []
-        
-        self.samples = batches
-        
-        print("Original Length: {} - Length after Shuffle: {}".format(len(self.pairs), len(self.samples))) 
-        print("Break Counter:", break_counter)
-        print("Pairs left out of last batch to avoid creating noise:", len(self.pairs) - len(self.samples))
-        print("First Element: {} - Last Element: {}".format(self.samples[0][0], self.samples[-1][0]))  
-        print("First Element: {} - Last Element: {}".format(self.samples[0][1], self.samples[-1][1]))  
-    
 
     def shuffle(self, ):
         '''
@@ -349,7 +220,7 @@ class GTADatasetTrain(Dataset):
         print("First Element: {} - Last Element: {}".format(self.samples[0][1], self.samples[-1][1]))  
         
 
-class GTADatasetEval(Dataset):
+class GTARGBDDatasetEval(Dataset):
     
     def __init__(self,
                  pairs_meta_file,
@@ -376,10 +247,13 @@ class GTADatasetEval(Dataset):
         self.pairs_drone2sate_dict = {}
         self.pairs_match_set = set()
 
+        self.view = view
+
         if view == 'drone':
             for pair_drone2sate in pairs_meta_data:
                 drone_img_name = pair_drone2sate['drone_img_name']
                 drone_img_dir = pair_drone2sate['drone_img_dir']
+                drone_img_dir = drone_img_dir.replace('images', 'rgbd')
                 drone_loc_x_y = pair_drone2sate['drone_loc_x_y']
                 self.pairs_drone2sate_dict[drone_img_name] = []
                 pair_sate_img_list = pair_drone2sate[f'pair_{mode}_sate_img_list']
@@ -428,11 +302,21 @@ class GTADatasetEval(Dataset):
         
         img_path = self.images_path[index]
         
-        img = cv2.imread(img_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        
-        # image transforms
-        if self.transforms is not None:
+        if self.view == 'drone':
+            img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+            image_rgb = img[:, :, :3]
+            image_d = img[:, :, 3]
+            transformed = self.transforms(image=image_rgb, image_d=image_d)
+            image_rgb_transformed = transformed['image']
+            image_d_transformed = transformed['image_d']
+            if image_d_transformed.ndim == 2:
+                image_d_transformed = image_d_transformed.unsqueeze(0)
+            img = torch.cat((image_rgb_transformed, image_d_transformed), dim=0)  # 形状为 (4, H, W)
+
+
+        else:
+            img = cv2.imread(img_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img = self.transforms(image=img)['image']
         
         return img
@@ -444,12 +328,19 @@ class GTADatasetEval(Dataset):
 def get_transforms(img_size,
                    mean=[0.485, 0.456, 0.406],
                    std=[0.229, 0.224, 0.225]):
+
+    mean_rgbd = mean + [0.5]
+    std_rgbd = std + [0.5]
     
 
-    val_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+    val_sat_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
                                 A.Normalize(mean, std),
                                 ToTensorV2(),
                                 ])
+    val_drone_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                A.Normalize(mean_rgbd, std_rgbd),
+                                ToTensorV2(),
+                                ],additional_targets={'image_d': 'image'})
                                 
 
     train_sat_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
@@ -469,7 +360,6 @@ def get_transforms(img_size,
                                                                min_width=int(0.1*img_size[0]),
                                                                p=1.0),
                                               ], p=0.3),
-                                      # A.RandomRotate90(p=1.0),
                                       A.Normalize(mean, std),
                                       ToTensorV2(),
                                       ])
@@ -492,11 +382,12 @@ def get_transforms(img_size,
                                                                  p=1.0),
                                               ], p=0.3),
                                         A.RandomRotate90(p=1.0),
-                                        A.Normalize(mean, std),
+                                        A.Normalize(mean_rgbd, std_rgbd),
                                         ToTensorV2(),
-                                        ])
+                                        ],
+                                        additional_targets={'image_d': 'image'})
     
-    return val_transforms, train_sat_transforms, train_drone_transforms
+    return val_sat_transforms, val_drone_transforms, train_sat_transforms, train_drone_transforms
 
 
 if __name__ == "__main__":

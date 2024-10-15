@@ -88,47 +88,8 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
             if train_config.scheduler == "polynomial" or train_config.scheduler == "cosine" or train_config.scheduler ==  "constant":
                 scheduler.step()
     
-        # else:
-        
-        #     query = query.to(train_config.device)
-            # reference = reference.to(train_config.device)
-            # weight = weight.to(train_config.device)
-        
-            # # # Forward pass
-            # loss = {}
-
-            # features1, features2 = model(img1=query, img2=reference)
-
-            # if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
-            #     if with_weight:
-            #         loss_sim = loss_function(features1, features2, model.module.logit_scale.exp(), weight)
-            #     else:
-            #         loss_sim = loss_function(features1, features2, model.module.logit_scale.exp())
-            # else:
-            #     if with_weight:
-            #         loss_sim = loss_function(features1, features2, model.logit_scale.exp(), weight)
-            #     else: 
-            #         loss_sim = loss_function(features1, features2, model.logit_scale.exp()) 
-            
-            # loss.update(loss_sim)
-            
-            # loss_total = sum(loss.values())
-            # losses.update(loss_total.item())
-            
-            # loss_total.backward()
-            
-            # # Gradient clipping 
-            # if train_config.clip_grad:
-            #     torch.nn.utils.clip_grad_value_(model.parameters(), train_config.clip_grad)                  
-            
-            # # Update model parameters (weights)
-            # optimizer.step()
-            # # Zero gradients for next step
-            # optimizer.zero_grad()
-            
-            # # Scheduler
-            # if train_config.scheduler == "polynomial" or train_config.scheduler == "cosine" or train_config.scheduler ==  "constant":
-            #     scheduler.step()
+        else:
+            raise NotImplementedError
         
         if train_config.verbose:
             
