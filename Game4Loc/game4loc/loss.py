@@ -298,9 +298,11 @@ class MMWeightedInfoNCE(nn.Module):
                 logit_scale, 
                 positive_weights=None
                 ):
+        
+        # print('jyxjyxjyx drone_lidar_features nan num', torch.isnan(drone_lidar_features).sum())
         # Normalize the features
         drone_img_features = F.normalize(drone_img_features, dim=-1)
-        drone_pc_features = F.normalize(drone_pc_features, dim=-1)
+        drone_lidar_features = F.normalize(drone_lidar_features, dim=-1)
         satellite_img_features = F.normalize(satellite_img_features, dim=-1)
 
         # Apply positive weights if provided
@@ -313,10 +315,10 @@ class MMWeightedInfoNCE(nn.Module):
         logits_drone_img2satellite_img = logit_scale * drone_img_features @ satellite_img_features.T
         logits_satellite_img2drone_img = logits_drone_img2satellite_img.T
 
-        logits_drone_img2drone_lidar = logit_scale * drone_img_features @ drone_lidar_features
+        logits_drone_img2drone_lidar = logit_scale * drone_img_features @ drone_lidar_features.T
         logits_drone_lidar2drone_img = logits_drone_img2drone_lidar.T
 
-        logits_drone_lidar2satellite_img = logit_scale * drone_lidar_features @ satellite_img_features
+        logits_drone_lidar2satellite_img = logit_scale * drone_lidar_features @ satellite_img_features.T
         logits_satellite_img2drone_lidar = logits_drone_lidar2satellite_img.T
 
         loss_drone_img_drone_lidar = (self.loss(logits_drone_img2drone_lidar, eps) + self.loss(logits_drone_lidar2drone_img, eps)) / 2

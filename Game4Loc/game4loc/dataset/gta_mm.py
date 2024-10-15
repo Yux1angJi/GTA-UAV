@@ -115,9 +115,15 @@ class GTAMMDatasetTrain(Dataset):
         drone_img = cv2.cvtColor(drone_img, cv2.COLOR_BGR2RGB)
 
         drone_lidar = o3d.io.read_point_cloud(drone_lidar_path)
-        drone_lidar = np.array(drone_lidar.points)
-        drone_lidar = farthest_point_sample(drone_lidar, 10000)
+        drone_lidar = np.array(drone_lidar.points, dtype=np.float32)
+
+        N = drone_lidar.shape[0]
+        indices = np.random.choice(N, 10000, replace=False)
+
+        drone_lidar = drone_lidar[indices]
+        drone_lidar = self.pc_norm(drone_lidar)
         drone_lidar = torch.from_numpy(drone_lidar)
+
         if self.augment_pc:
             drone_lidar = random_scale_point_cloud(drone_lidar[None, ...])
             drone_lidar = shift_point_cloud(drone_lidar)
@@ -152,6 +158,14 @@ class GTAMMDatasetTrain(Dataset):
 
     def __len__(self):
         return len(self.samples)
+    
+    def pc_norm(self, pc):
+        """ pc: NxC, return NxC """
+        centroid = np.mean(pc, axis=0)
+        pc = pc - centroid
+        m = np.max(np.sqrt(np.sum(pc ** 2, axis=1)))
+        pc = pc / m
+        return pc
     
     def shuffle(self, ):
         '''
@@ -364,8 +378,11 @@ class GTAMMDatasetEval(Dataset):
             lidar_path = self.drone_lidar_paths[index]
             
             lidar = o3d.io.read_point_cloud(lidar_path)
-            lidar = np.array(lidar.points)
-            lidar = farthest_point_sample(lidar, 10000)
+            lidar = np.array(lidar.points, dtype=np.float32)
+
+            N = lidar.shape[0]
+            indices = np.random.choice(N, 10000, replace=False)
+            lidar = lidar[indices]
             lidar = torch.from_numpy(lidar)
             
             lidar = self.pc_norm(lidar)
