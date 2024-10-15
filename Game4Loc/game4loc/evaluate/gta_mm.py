@@ -55,7 +55,7 @@ def get_top10(index, gallery_list):
     return top10
 
 
-def predict(config, model, query_view, dataloader):
+def predict(config, model, query_feature, dataloader):
     
     model.eval()
     
@@ -78,7 +78,7 @@ def predict(config, model, query_view, dataloader):
                     sample[k] = v.to(config.device)
                 
                 features = model(**sample)
-                features = features[query_view]             
+                features = features[query_feature]             
             
                 # normalize is calculated in fp32
                 if config.normalize_features:
@@ -102,10 +102,10 @@ def evaluate(config,
                 gallery_loader,
                 query_list,
                 query_loc_xy_list,
-                query_view,
+                query_feature,
                 gallery_list,
                 gallery_loc_xy_list,
-                gallery_view,
+                gallery_feature,
                 pairs_dict,
                 ranks_list=[1, 5, 10],
                 sdmk_list=[1, 3, 5],
@@ -116,7 +116,7 @@ def evaluate(config,
                 plot_acc_threshold=False,
                 top10_log=False):
     print("Extract Features and Compute Scores:")
-    features_query = predict(config, model, query_view, query_loader)
+    features_query = predict(config, model, query_feature, query_loader)
 
     all_scores = []
     model.eval()
@@ -126,7 +126,7 @@ def evaluate(config,
                 for k, v in sample.items():
                     sample[k] = v.to(config.device)
                 gallery_features_batch = model(**sample)
-                gallery_features_batch = gallery_features_batch[gallery_view]
+                gallery_features_batch = gallery_features_batch[gallery_feature]
                 if config.normalize_features:
                     gallery_features_batch = F.normalize(gallery_features_batch, dim=-1)
 

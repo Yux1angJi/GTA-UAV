@@ -329,7 +329,7 @@ class GTAMMDatasetEval(Dataset):
                     self.drone_loc_xys.append((drone_loc_x_y[0], drone_loc_x_y[1]))
 
         elif view == 'sate_img':
-            if query_mode == 'DImg2SImg':
+            if query_mode == 'DImg2SImg' or query_mode == 'DLidar2SImg':
                 sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
                 for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
                     self.satellite_img_paths.append(os.path.join(data_root, sate_img_dir, sate_img))
@@ -383,9 +383,9 @@ class GTAMMDatasetEval(Dataset):
             N = lidar.shape[0]
             indices = np.random.choice(N, 10000, replace=False)
             lidar = lidar[indices]
-            lidar = torch.from_numpy(lidar)
             
             lidar = self.pc_norm(lidar)
+            lidar = torch.from_numpy(lidar)
 
             sample = {
                 "drone_lidar_pts": lidar,

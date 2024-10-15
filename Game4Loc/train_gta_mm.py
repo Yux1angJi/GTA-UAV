@@ -103,7 +103,7 @@ class Configuration:
     test_mode: str = "pos"                # Test with semi-positive pairs
 
     # Eval before training
-    zero_shot: bool = False
+    zero_shot: bool = True
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -232,9 +232,9 @@ def train_script(config):
     if config.query_mode == 'DImg2SImg':
         query_view = 'drone_img'
         gallery_view = 'sate_img'
-    else:
-        query_view = 'sate_img'
-        gallery_view = 'drone_img'
+    elif config.query_mode == 'DLidar2SImg':
+        query_view = 'drone_lidar'
+        gallery_view = 'sate_img'
     query_dataset_test = GTAMMDatasetEval(data_root=config.data_root,
                                         pairs_meta_file=config.test_pairs_meta_file,
                                         view=query_view,
@@ -351,8 +351,11 @@ def train_script(config):
     # Zero Shot                                                                   #
     #-----------------------------------------------------------------------------#
     if config.query_mode == 'DImg2SImg':
-        query_view = 'drone_img_features'
-        gallery_view = 'satellite_img_features'
+        query_feature = 'drone_img_features'
+        gallery_feature = 'satellite_img_features'
+    elif config.query_mode == 'DLidar2SImg':
+        query_feature = 'drone_lidar_features'
+        gallery_feature = 'satellite_img_features'
     if config.zero_shot:
         print("\n{}[{}]{}".format(30*"-", "Zero Shot", 30*"-"))  
 
@@ -361,9 +364,9 @@ def train_script(config):
                            query_loader=query_dataloader_test,
                            gallery_loader=gallery_dataloader_test, 
                            query_list=query_img_list,
-                           query_view=query_view,
+                           query_feature=query_feature,
                            gallery_list=gallery_img_list,
-                           gallery_view=gallery_view,
+                           gallery_feature=gallery_feature,
                            pairs_dict=pairs_drone2sate_dict,
                            ranks_list=[1, 5, 10],
                            query_loc_xy_list=query_loc_xy_list,
@@ -410,8 +413,8 @@ def train_script(config):
                                 gallery_loader=gallery_dataloader_test, 
                                 query_list=query_img_list,
                                 gallery_list=gallery_img_list,
-                                query_view=query_view,
-                                gallery_view=gallery_view,
+                                query_feature=query_feature,
+                                gallery_feature=gallery_feature,
                                 pairs_dict=pairs_drone2sate_dict,
                                 ranks_list=[1, 5, 10],
                                 query_loc_xy_list=query_loc_xy_list,

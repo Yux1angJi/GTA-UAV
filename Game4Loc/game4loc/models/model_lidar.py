@@ -285,7 +285,7 @@ class DesModelWithPC(nn.Module):
         self.drone_lidar_model = PointcloudEncoder(point_transformer)
 
         if pretrained:
-            checkpoint = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/checkpoints/uni3d.pt')
+            checkpoint = torch.load('./pretrained/uni3d/model.pt')
             state_dict = checkpoint['module']
             state_dict_new = {}
             for k, v in state_dict.items():
