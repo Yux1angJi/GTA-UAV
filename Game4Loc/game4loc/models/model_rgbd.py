@@ -6,6 +6,8 @@ from PIL import Image
 from urllib.request import urlopen
 from thop import profile
 
+from .vit_adapter import ViTAdapter
+
 
 class MLP(nn.Module):
     def __init__(self, input_size=2048, hidden_size=512, output_size=2):
@@ -42,7 +44,8 @@ class DesModelWithRGBD(nn.Module):
         if share_weights:
             if "vit" in model_name or "swin" in model_name:
                 # automatically change interpolate pos-encoding to img_size
-                self.model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
+                # self.model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
+                self.model = ViTAdapter()
             else:
                 self.model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
         else:
