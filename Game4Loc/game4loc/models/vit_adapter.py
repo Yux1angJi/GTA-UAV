@@ -47,7 +47,7 @@ class CrossAttentionBlock(nn.Module):
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor, rope=None) -> torch.Tensor:
         # Perform cross-attention between x1 and x2
         x1 = x1 + self.drop_path1(self.ls1(self.cross_attn(self.norm1(x1), self.norm1(x2))))
         x1 = x1 + self.drop_path2(self.ls2(self.mlp(self.norm2(x1))))
@@ -60,7 +60,7 @@ class CrossAttention(nn.Module):
         head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
 
-        # Separate linear layers for query (x1) and key/value (x2)
+        # Query 来自 x1，Key 和 Value 来自 x2
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
         self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
 
@@ -68,36 +68,41 @@ class CrossAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor, rope=None) -> torch.Tensor:
         B, N, C = x1.shape
-        
-        # Query from x1
+
+        # 从 x1 提取 query
         q = self.q(x1).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
-        
-        # Key and Value from x2
+
+        # 从 x2 提取 key 和 value
         kv = self.kv(x2).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
 
-        # Cross attention: query (x1) attends to key (x2)
+        # 应用 ROPE 到 query 和 key
+        if rope is not None:
+            q = rope(q)
+            k = rope(k)
+
+        # 计算注意力得分
         attn_scores = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn_scores.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
-        # Weighted sum of values (from x2)
+        # 使用 value 计算加权和
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         return self.proj_drop(x)
 
 
 class ViTAdapter(nn.Module):
-    def __init__(self, vit_model_name='timm/vit_base_patch16_224.augreg_in1k', img_size=(384, 384), *args, **kwargs):
+    def __init__(self, vit_model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', img_size=(384, 384), *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.depth_encoder = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size, in_chans=1)
         for param in self.depth_encoder.parameters():
             param.requires_grad = False
         
-        self.vit_model = timm.create_model(vit_model_name, pretrained=True, num_classes=0, img_size=img_size)
+        self.vit_model = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size)
         
         self.depth_adapters = nn.Sequential(*[
             CrossAttentionBlock()
@@ -113,17 +118,15 @@ class ViTAdapter(nn.Module):
             d = x[:, 3:, :, :]
 
         rgb = self.vit_model.patch_embed(rgb)
-        rgb = self.vit_model._pos_embed(rgb)
-        rgb = self.vit_model.patch_drop(rgb)
-        rgb = self.vit_model.norm_pre(rgb)
+        rgb, rot_pos_embed = self.vit_model._pos_embed(rgb)
 
         if d != None:
             d = self.depth_encoder.forward_features(d)
 
         for i in range(len(self.vit_model.blocks)):
-            rgb = self.vit_model.blocks[i](rgb)
+            rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
             if d != None:
-                rgb = self.depth_adapters[i](d, rgb)
+                rgb = self.depth_adapters[i](d, rgb, rope=rot_pos_embed)
         rgb = self.vit_model.norm(rgb)
         rgb = self.vit_model.forward_head(rgb)
         
@@ -132,7 +135,7 @@ class ViTAdapter(nn.Module):
 
 
 if __name__ == '__main__':
-    # model = timm.create_model(model_name='timm/vit_base_patch16_224.augreg_in1k', pretrained=True, num_classes=0, img_size=(384, 384))
+    # model = timm.create_model(model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', pretrained=True, num_classes=0, img_size=(384, 384))
     # print(model.__class__)
     # print(model.blocks[0].attn.q_norm)
 
