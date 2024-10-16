@@ -45,7 +45,8 @@ class GTARGBDDatasetTrain(Dataset):
     def __init__(self,
                  pairs_meta_file,
                  data_root,
-                 transforms_query=None,
+                 transforms_query_rgb=None,
+                 transforms_query_depth=None,
                  transforms_gallery=None,
                  prob_flip=0.5,
                  shuffle_batch_size=128,
@@ -86,7 +87,8 @@ class GTARGBDDatasetTrain(Dataset):
                 self.pairs_sate2drone_dict.setdefault(pair_sate_img, []).append(drone_img_name)
                 self.pairs_match_set.add((drone_img_name, pair_sate_img))
 
-        self.transforms_query = transforms_query
+        self.transforms_query_rgb = transforms_query_rgb
+        self.transforms_query_depth = transforms_query_depth
         self.transforms_gallery = transforms_gallery
         self.prob_flip = prob_flip
         self.shuffle_batch_size = shuffle_batch_size
@@ -113,12 +115,11 @@ class GTARGBDDatasetTrain(Dataset):
             query_img = cv2.flip(query_img, 1)
         
         # image transforms
-        if self.transforms_query is not None:
+        if self.transforms_query_depth is not None and self.transforms_query_rgb is not None:
             image_rgb = query_img[:, :, :3]
             image_d = query_img[:, :, 3]
-            transformed = self.transforms_query(image=image_rgb, image_d=image_d)
-            image_rgb_transformed = transformed['image']
-            image_d_transformed = transformed['image_d']
+            image_rgb_transformed = self.transforms_query_rgb(image=image_rgb)['image']
+            image_d_transformed = self.transforms_query_depth(image=image_d)['image']
             if image_d_transformed.ndim == 2:
                 image_d_transformed = image_d_transformed.unsqueeze(0)
             query_img = torch.cat((image_rgb_transformed, image_d_transformed), dim=0)  # 形状为 (4, H, W)
@@ -304,16 +305,8 @@ class GTARGBDDatasetEval(Dataset):
         
         if self.view == 'drone':
             img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
-            image_rgb = img[:, :, :3]
-            image_d = img[:, :, 3]
-            transformed = self.transforms(image=image_rgb, image_d=image_d)
-            image_rgb_transformed = transformed['image']
-            image_d_transformed = transformed['image_d']
-            if image_d_transformed.ndim == 2:
-                image_d_transformed = image_d_transformed.unsqueeze(0)
-            img = torch.cat((image_rgb_transformed, image_d_transformed), dim=0)  # 形状为 (4, H, W)
-
-
+            img = self.transforms(image=img)['image']
+            
         else:
             img = cv2.imread(img_path)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -329,6 +322,8 @@ def get_transforms(img_size,
                    mean=[0.485, 0.456, 0.406],
                    std=[0.229, 0.224, 0.225]):
 
+    mean_d = [0.5]
+    std_d = [0.5]
     mean_rgbd = mean + [0.5]
     std_rgbd = std + [0.5]
     
@@ -340,7 +335,7 @@ def get_transforms(img_size,
     val_drone_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
                                 A.Normalize(mean_rgbd, std_rgbd),
                                 ToTensorV2(),
-                                ],additional_targets={'image_d': 'image'})
+                                ])
                                 
 
     train_sat_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
@@ -365,7 +360,7 @@ def get_transforms(img_size,
                                       ToTensorV2(),
                                       ])
     
-    train_drone_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
+    train_drone_rgb_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
                                         A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
                                         A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.15, always_apply=False, p=0.5),
                                         A.OneOf([
@@ -382,14 +377,42 @@ def get_transforms(img_size,
                                                                  min_width=int(0.1*img_size[0]),
                                                                  p=1.0),
                                               ], p=0.3),
-                                        # A.RandomRotate90(p=1.0),
-                                        A.Normalize(mean_rgbd, std_rgbd),
+                                        A.Normalize(mean, std),
                                         ToTensorV2(),
                                         ],
-                                        additional_targets={'image_d': 'image'})
+                                    )
+    train_drone_depth_transforms = A.Compose([
+                                        A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                        A.Normalize(mean_d, std_d),
+                                        ToTensorV2(),
+                                        ],
+                                    )
     
-    return val_sat_transforms, val_drone_transforms, train_sat_transforms, train_drone_transforms
+    return val_sat_transforms, val_drone_transforms, train_sat_transforms, train_drone_rgb_transforms, train_drone_depth_transforms
 
 
 if __name__ == "__main__":
-    pass
+    _, transforms_rgbd, _, transforms_rgb, transforms_depth = get_transforms((384, 384))
+    rgbd = cv2.imread('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/rgbd/200_0001_0000001542.png', cv2.IMREAD_UNCHANGED)
+
+    rgbd_trans = transforms_rgbd(image=rgbd)['image']
+
+    rgb = rgbd[:, :, :3]
+    d = rgbd[:, :, 3]
+
+    d_resize = cv2.resize(d, (384, 384), cv2.INTER_NEAREST)
+
+    d_color = cv2.applyColorMap(d_resize, cv2.COLORMAP_JET)
+    cv2.imwrite('vis_d_ori.png', d_color)
+
+
+    image_rgb_transformed = transforms_rgb(image=rgb)['image']
+    image_d_transformed = transforms_depth(image=d)['image']
+
+    image_d_transformed_color = cv2.applyColorMap(image_d_transformed, cv2.COLORMAP_JET)
+
+    cv2.imwrite('vis_rgb.png', image_rgb_transformed)
+    cv2.imwrite('vis_d.png', image_d_transformed_color)
+
+
+    

@@ -208,12 +208,15 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
 
     # Transforms
-    val_sat_transforms, val_drone_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
+    val_sat_transforms, val_drone_transforms, train_sat_transforms, \
+        train_drone_rgb_transforms, train_drone_depth_transforms \
+            = get_transforms(img_size, mean=mean, std=std)
                                                                                                                                  
     # Train
     train_dataset = GTARGBDDatasetTrain(data_root=config.data_root,
                                     pairs_meta_file=config.train_pairs_meta_file,
-                                    transforms_query=train_drone_transforms,
+                                    transforms_query_rgb=train_drone_rgb_transforms,
+                                    transforms_query_depth=train_drone_depth_transforms,
                                     transforms_gallery=train_sat_transforms,
                                     group_len=config.group_len,
                                     prob_flip=config.prob_flip,
