@@ -207,7 +207,6 @@ def train_script(config):
     # DataLoader                                                                  #
     #-----------------------------------------------------------------------------#
 
-    print('jyxjyxjyx input', mean, std)
     # Transforms
     val_sat_transforms, val_drone_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
                                                                                                                                  

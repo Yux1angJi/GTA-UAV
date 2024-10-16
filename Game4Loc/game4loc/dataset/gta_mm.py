@@ -474,6 +474,7 @@ def get_transforms(img_size,
                                                                  min_width=int(0.1*img_size[0]),
                                                                  p=1.0),
                                               ], p=0.3),
+                                        A.RandomRotate90(p=1.0),
                                         A.Normalize(mean, std),
                                         ToTensorV2(),
                                         ])

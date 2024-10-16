@@ -65,7 +65,22 @@ class DesModelWithRGBD(nn.Module):
                 
                 self.model2 = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
             else:
-                self.model1 = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
+                model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
+                old_conv = model.stem[0]
+                new_conv = torch.nn.Conv2d(4, old_conv.out_channels, 
+                                        kernel_size=old_conv.kernel_size, 
+                                        stride=old_conv.stride, 
+                                        padding=old_conv.padding, 
+                                        bias=old_conv.bias is not None)
+
+                # 初始化新卷积层的前3个通道使用原始权重，第四通道使用0初始化
+                new_conv.weight.data[:, :3, :, :] = old_conv.weight.data
+                new_conv.weight.data[:, 3:, :, :] = 0
+
+                # 替换模型中的第一个卷积层
+                model.stem[0] = new_conv
+                self.model1 = model
+
                 self.model2 = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
 
         if train_with_offset:

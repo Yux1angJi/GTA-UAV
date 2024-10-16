@@ -171,7 +171,10 @@ if __name__ == "__main__":
 
     rgbd = cv2.imread('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/rgbd/200_0001_0000004776.png', cv2.IMREAD_UNCHANGED)
     bgr = cv2.imread('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/images/200_0001_0000004776.png')
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
-    print((rgbd[:, :, 0]==bgr[:, :, 2]).sum(), (rgbd[:, :, 1]==bgr[:, :, 1]).sum(), (rgbd[:, :, 2]==bgr[:, :, 0]).sum())
-    print(rgbd.shape, bgr.shape)
+    print((rgbd[:, :, 0]==rgb[:, :, 0]).sum(), (rgbd[:, :, 1]==rgb[:, :, 1]).sum(), (rgbd[:, :, 2]==rgb[:, :, 2]).sum())
+    print(rgbd[:, :, 0].min(), rgbd[:, :, 0].max())
+    print(rgbd[:, :, 3].min(), rgbd[:, :, 3].max())
+    print(rgbd.shape, rgb.shape)
 
