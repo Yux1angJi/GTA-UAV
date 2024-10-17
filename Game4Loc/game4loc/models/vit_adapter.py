@@ -68,7 +68,7 @@ class CrossAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor, rope=None) -> torch.Tensor:
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
         B, N, C = x1.shape
 
         # 从 x1 提取 query
@@ -77,11 +77,6 @@ class CrossAttention(nn.Module):
         # 从 x2 提取 key 和 value
         kv = self.kv(x2).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
-
-        # 应用 ROPE 到 query 和 key
-        if rope is not None:
-            q = rope(q)
-            k = rope(k)
 
         # 计算注意力得分
         attn_scores = (q @ k.transpose(-2, -1)) * self.scale
@@ -129,16 +124,16 @@ class ViTAdapter(nn.Module):
         rgb = self.vit_model.patch_embed(rgb)
         rgb, rot_pos_embed = self.vit_model._pos_embed(rgb)
 
-        if d != None:
-            d = self.depth_encoder.forward_features(d)
-
         for i in range(len(self.vit_model.blocks)):
             rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
-            if d != None:
-                rgb = self.depth_adapters[i](d, rgb, rope=rot_pos_embed)
-
         rgb = self.vit_model.norm(rgb)
         rgb = self.vit_model.forward_head(rgb)
+
+        if d != None:
+            d = self.depth_encoder.forward_features(d)
+            rgb = self.depth_adapters[0](d, rgb)
+            for i in range(1, len(self.depth_adapters)):
+                rgb = self.depth_adapters[i](rgb, rgb)
         
         return rgb
 
@@ -152,7 +147,7 @@ if __name__ == '__main__':
     model = ViTAdapter()
     model.cuda()
     x1 = torch.rand((1, 3, 384, 384)).cuda()
-    x2 = torch.rand((1, 4, 384, 384)).cuda()
+    x2 = torch.rand((1, 6, 384, 384)).cuda()
 
     x1 = model(x1)
     x2 = model(x2)
