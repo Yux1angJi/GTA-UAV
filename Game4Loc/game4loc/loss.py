@@ -279,8 +279,12 @@ class MMWeightedInfoNCE(nn.Module):
                  label_smoothing=0.05, 
                  k=5,
                  dimg2simg=True,
-                 dlidar2simg=True,
-                 dimg2dlidar=True,
+                 dlidar2simg=False,
+                 ddepth2dimg=True,
+                 ddepth2simg=True,
+                 dimg2dlidar=False,
+                 with_depth=True,
+                 with_lidar=False,
                  device='cuda' if torch.cuda.is_available() else 'cpu'):
         super().__init__()
         self.label_smoothing = label_smoothing
@@ -289,6 +293,10 @@ class MMWeightedInfoNCE(nn.Module):
         self.dimg2simg = dimg2simg
         self.dlidar2simg = dlidar2simg
         self.dimg2dlidar = dimg2dlidar
+        self.ddepth2dimg = ddepth2dimg
+        self.ddepth2simg = ddepth2simg
+        self.with_depth = with_depth
+        self.with_lidar = with_lidar
 
     def loss(self, similarity_matrix, eps_all):
         n = similarity_matrix.shape[0]
@@ -302,52 +310,81 @@ class MMWeightedInfoNCE(nn.Module):
 
     def forward(self, 
                 drone_img_features, 
-                drone_lidar_features, 
                 satellite_img_features, 
                 logit_scale, 
+                drone_lidar_features=None,
+                drone_depth_features=None, 
                 positive_weights=None
                 ):
         
         # print('jyxjyxjyx drone_lidar_features nan num', torch.isnan(drone_lidar_features).sum())
         # Normalize the features
         drone_img_features = F.normalize(drone_img_features, dim=-1)
-        drone_lidar_features = F.normalize(drone_lidar_features, dim=-1)
         satellite_img_features = F.normalize(satellite_img_features, dim=-1)
+
+        if self.with_lidar:
+            drone_lidar_features = F.normalize(drone_lidar_features, dim=-1)
+        if self.with_depth:
+            drone_depth_features = F.normalize(drone_depth_features, dim=-1)
 
         # Apply positive weights if provided
         if positive_weights is not None:
-            eps = 1. - (1. - self.label_smoothing) / (1 + torch.exp(-self.k * positive_weights))
+            eps_weight = 1. - (1. - self.label_smoothing) / (1 + torch.exp(-self.k * positive_weights))
+            eps = [self.label_smoothing for _ in range(drone_img_features.shape[0])]
         else:
+            eps_weight = [self.label_smoothing for _ in range(drone_img_features.shape[0])]
             eps = [self.label_smoothing for _ in range(drone_img_features.shape[0])]
         
         # Compute similarity logits
         logits_drone_img2satellite_img = logit_scale * drone_img_features @ satellite_img_features.T
         logits_satellite_img2drone_img = logits_drone_img2satellite_img.T
 
-        logits_drone_img2drone_lidar = logit_scale * drone_img_features @ drone_lidar_features.T
-        logits_drone_lidar2drone_img = logits_drone_img2drone_lidar.T
+        if self.with_lidar:
+            logits_drone_img2drone_lidar = logit_scale * drone_img_features @ drone_lidar_features.T
+            logits_drone_lidar2drone_img = logits_drone_img2drone_lidar.T
 
-        logits_drone_lidar2satellite_img = logit_scale * drone_lidar_features @ satellite_img_features.T
-        logits_satellite_img2drone_lidar = logits_drone_lidar2satellite_img.T
+            logits_drone_lidar2satellite_img = logit_scale * drone_lidar_features @ satellite_img_features.T
+            logits_satellite_img2drone_lidar = logits_drone_lidar2satellite_img.T
 
-        if self.dimg2dlidar:
-            loss_drone_img_drone_lidar = (self.loss(logits_drone_img2drone_lidar, eps) + self.loss(logits_drone_lidar2drone_img, eps)) / 2
-        else:
-            loss_drone_img_drone_lidar = 0.
+        if self.with_depth:
+            logits_drone_depth2drone_img = logit_scale * drone_depth_features @ drone_img_features.T
+            logits_drone_img2drone_depth = logits_drone_depth2drone_img.T
+
+            logits_drone_depth2satellite_img = logit_scale * drone_depth_features @ satellite_img_features.T
+            logits_satellite_img2drone_depth = logits_drone_depth2satellite_img.T
+
         if self.dimg2simg:
-            loss_drone_img_satellite_img = (self.loss(logits_drone_img2satellite_img, eps) + self.loss(logits_satellite_img2drone_img, eps)) / 2
+            loss_drone_img_satellite_img = (self.loss(logits_drone_img2satellite_img, eps_weight) + self.loss(logits_satellite_img2drone_img, eps_weight)) / 2
         else:
             loss_drone_img_satellite_img = 0.
+
+        if self.dimg2dlidar:
+                loss_drone_img_drone_lidar = (self.loss(logits_drone_img2drone_lidar, eps) + self.loss(logits_drone_lidar2drone_img, eps)) / 2
+        else:
+            loss_drone_img_drone_lidar = 0.
+
         if self.dlidar2simg:
-            loss_drone_lidar_satellite_img = (self.loss(logits_drone_lidar2satellite_img, eps) + self.loss(logits_satellite_img2drone_lidar, eps)) / 2
+            loss_drone_lidar_satellite_img = (self.loss(logits_drone_lidar2satellite_img, eps_weight) + self.loss(logits_satellite_img2drone_lidar, eps_weight)) / 2
         else:
             loss_drone_lidar_satellite_img = 0.
+
+        if self.ddepth2dimg:
+            loss_drone_depth_drone_img = (self.loss(logits_drone_img2drone_depth, eps) + self.loss(logits_drone_depth2drone_img, eps)) / 2
+        else:
+            loss_drone_depth_drone_img = 0.
+
+        if self.ddepth2simg:
+            loss_drone_depth_satellite_img = (self.loss(logits_satellite_img2drone_depth, eps_weight) + self.loss(logits_drone_depth2satellite_img, eps_weight)) / 2
+        else:
+            loss_drone_depth_satellite_img = 0.
 
         return {
             "contrastive_drone_img_drone_lidar": loss_drone_img_drone_lidar,
             "contrastive_drone_lidar_satellite_img": loss_drone_lidar_satellite_img,
             "contrastive_drone_img_satellite_img": loss_drone_img_satellite_img,
-            }
+            "contrastive_drone_depth_drone_img": loss_drone_depth_drone_img,
+            "contrastive_drone_depth_satellite_img": loss_drone_depth_satellite_img,
+        }
 
 if __name__ == '__main__':
     loss = GroupInfoNCE(group_len=2, label_smoothing=0.00)

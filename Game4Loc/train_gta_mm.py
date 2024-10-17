@@ -15,7 +15,7 @@ from game4loc.utils import setup_system, Logger
 from game4loc.trainer_mm import train_mm_with_weight
 from game4loc.evaluate.gta_mm import evaluate
 from game4loc.loss import InfoNCE, MMWeightedInfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
-from game4loc.models.model_lidar import DesModelWithPC
+from game4loc.models.model_mm import DesModelWithMM
 
 
 def parse_tuple(s):
@@ -162,15 +162,15 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     print("\nModel: {}".format(config.model))
 
-    model = DesModelWithPC(model_name=config.model, 
+    model = DesModelWithMM(model_name=config.model, 
                     pretrained=True,
                     img_size=config.img_size,
                     share_weights=config.share_weights)
                         
     data_config = model.get_config()
     print(data_config)
-    mean = data_config["mean"]
-    std = data_config["std"]
+    mean = list(data_config["mean"])
+    std = list(data_config["std"])
     img_size = (config.img_size, config.img_size)
     
     # Activate gradient checkpointing
@@ -208,13 +208,16 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
 
     # Transforms
-    val_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
+    val_sat_transforms, val_drone_img_transforms, val_drone_depth_transforms, \
+        train_sat_transforms, train_drone_rgb_transforms, train_drone_depth_transforms \
+            = get_transforms(img_size, mean=mean, std=std)
                                                                                                               
     # Train
     train_dataset = GTAMMDatasetTrain(data_root=config.data_root,
                                     pairs_meta_file=config.train_pairs_meta_file,
                                     transforms_satellite=train_sat_transforms,
-                                    transforms_drone=train_drone_transforms,
+                                    transforms_drone_img=train_drone_rgb_transforms,
+                                    transforms_drone_depth=train_drone_depth_transforms,
                                     group_len=config.group_len,
                                     prob_flip=config.prob_flip,
                                     shuffle_batch_size=config.batch_size,
@@ -235,10 +238,13 @@ def train_script(config):
     elif config.query_mode == 'DLidar2SImg':
         query_view = 'drone_lidar'
         gallery_view = 'sate_img'
+    elif config.query_mode == 'DDepth2SImg':
+        query_view = 'drone_depth'
+        gallery_view = 'sate_img'
     query_dataset_test = GTAMMDatasetEval(data_root=config.data_root,
                                         pairs_meta_file=config.test_pairs_meta_file,
                                         view=query_view,
-                                        transforms=val_transforms,
+                                        transforms=val_drone_depth_transforms,
                                         mode=config.test_mode,
                                         sate_img_dir=config.sate_img_dir,
                                         query_mode=config.query_mode,
@@ -257,7 +263,7 @@ def train_script(config):
     gallery_dataset_test = GTAMMDatasetEval(data_root=config.data_root,
                                           pairs_meta_file=config.test_pairs_meta_file,
                                           view=gallery_view,
-                                          transforms=val_transforms,
+                                          transforms=val_sat_transforms,
                                           mode=config.test_mode,
                                           sate_img_dir=config.sate_img_dir,
                                           query_mode=config.query_mode,
@@ -283,9 +289,13 @@ def train_script(config):
         device=config.device,
         label_smoothing=config.label_smoothing,
         k=config.k,
-        dimg2simg=False,
+        dimg2simg=True,
         dlidar2simg=False,
-        dimg2dlidar=True,
+        dimg2dlidar=False,
+        ddepth2dimg=True,
+        ddepth2simg=True,
+        with_depth=True,
+        with_lidar=False
     )
     ## For TripletLoss
     # loss_function_normal = TripletLoss(device=config.device)
@@ -358,6 +368,9 @@ def train_script(config):
         gallery_feature = 'satellite_img_features'
     elif config.query_mode == 'DLidar2SImg':
         query_feature = 'drone_lidar_features'
+        gallery_feature = 'satellite_img_features'
+    elif config.query_mode == 'DDepth2SImg':
+        query_feature = 'drone_depth_features'
         gallery_feature = 'satellite_img_features'
     if config.zero_shot:
         print("\n{}[{}]{}".format(30*"-", "Zero Shot", 30*"-"))  

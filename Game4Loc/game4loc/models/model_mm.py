@@ -251,7 +251,7 @@ class MLP(nn.Module):
         return x
 
 
-class DesModelWithPC(nn.Module):
+class DesModelWithMM(nn.Module):
 
     def __init__(self, 
                  model_name='vit',
@@ -260,41 +260,54 @@ class DesModelWithPC(nn.Module):
                  drop_path_rate=0.,
                  img_size=384,
                  share_weights=True,
+                 with_depth=True,
+                 with_lidar=False,
                  train_with_offset=False,
                  ):
                  
-        super(DesModelWithPC, self).__init__()
+        super(DesModelWithMM, self).__init__()
         self.share_weights = share_weights
         self.model_name = model_name
         self.img_size = img_size
+        self.with_depth = with_depth
+        self.with_lidar = with_lidar
         if share_weights:
             if "vit" in model_name or "swin" in model_name:
                 # automatically change interpolate pos-encoding to img_size
                 self.img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
+                if with_depth:
+                    self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size, in_chans=1)
             else:
                 self.img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
+                if with_depth:
+                    self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, in_chans=1)
         else:
             if "vit" in model_name or "swin" in model_name:
                 self.drone_img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size)
-                self.satellite_img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
+                self.satellite_img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size)
+                if with_depth:
+                    self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size, in_chans=1) 
             else:
                 self.drone_img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
                 self.satellite_img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
+                if with_depth:
+                    self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, in_chans=1)
 
-        point_transformer = timm.create_model(pc_model_name, pretrained=pretrained, drop_path_rate=drop_path_rate)
-        self.drone_lidar_model = PointcloudEncoder(point_transformer)
+        if with_lidar:
+            point_transformer = timm.create_model(pc_model_name, pretrained=pretrained, drop_path_rate=drop_path_rate)
+            self.drone_lidar_model = PointcloudEncoder(point_transformer)
 
-        if pretrained:
-            checkpoint = torch.load('./pretrained/uni3d/model.pt')
-            state_dict = checkpoint['module']
-            state_dict_new = {}
-            for k, v in state_dict.items():
-                state_dict_new[k.replace('point_encoder.', '')] = v
-            for k, v in state_dict_new.items():
-                if k in self.drone_lidar_model.state_dict() and v.shape == self.drone_lidar_model.state_dict()[k].shape:
-                    self.drone_lidar_model.state_dict()[k] = v
-                else:
-                    print(f"Skipping layer: {k}")
+            if pretrained:
+                checkpoint = torch.load('./pretrained/uni3d/model.pt')
+                state_dict = checkpoint['module']
+                state_dict_new = {}
+                for k, v in state_dict.items():
+                    state_dict_new[k.replace('point_encoder.', '')] = v
+                for k, v in state_dict_new.items():
+                    if k in self.drone_lidar_model.state_dict() and v.shape == self.drone_lidar_model.state_dict()[k].shape:
+                        self.drone_lidar_model.state_dict()[k] = v
+                    else:
+                        print(f"Skipping layer: {k}")
 
         if train_with_offset:
             self.MLP = MLP()
@@ -314,17 +327,23 @@ class DesModelWithPC(nn.Module):
         else:
             self.drone_img_model.set_grad_checkpointing(enable)
             self.satellite_img_model.set_grad_checkpointing(enable)
-        self.drone_lidar_model.set_grad_checkpointing(enable)
+        
+        if self.with_lidar:
+            self.drone_lidar_model.set_grad_checkpointing(enable)
+        if self.with_depth:
+            self.drone_depth_model.set_grad_checkpointing(enable)
 
     def forward(
             self, 
             drone_img=None, 
             drone_lidar_pts=None,
             drone_lidar_clr=None,
+            drone_depth=None,
             satellite_img=None
         ):  
 
         drone_img_features = None
+        drone_depth_features = None
         drone_lidar_features = None
         satellite_img_features = None
 
@@ -338,12 +357,15 @@ class DesModelWithPC(nn.Module):
                 drone_img_features = self.drone_img_model(drone_img)
             if satellite_img is not None:
                 satellite_img_features = self.satellite_img_model(satellite_img)
-        if drone_lidar_pts is not None and drone_lidar_clr is not None:
+        if self.with_depth and drone_depth is not None:
+            drone_depth_features = self.drone_depth_model(drone_depth)
+        if self.with_lidar and drone_lidar_pts is not None and drone_lidar_clr is not None:
             drone_lidar_features = self.drone_lidar_model(drone_lidar_pts, drone_lidar_clr)
         
         result = {
             "drone_img_features": drone_img_features,
             "drone_lidar_features": drone_lidar_features,
+            "drone_depth_features": drone_depth_features,
             "satellite_img_features": satellite_img_features,
         }
 
@@ -368,7 +390,7 @@ if __name__ == '__main__':
     from dataset.pc_utils import *
     import open3d as o3d
 
-    model = DesModelWithPC(model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', 
+    model = DesModelWithMM(model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', 
                            pc_model_name='eva02_base_patch14_448.mim_in22k_ft_in1k',
                            img_size=384)
     model.cuda()
