@@ -47,7 +47,7 @@ class CrossAttentionBlock(nn.Module):
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor, rope=None) -> torch.Tensor:
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
         # Perform cross-attention between x1 and x2
         x1 = x1 + self.drop_path1(self.ls1(self.cross_attn(self.norm1(x1), self.norm1(x2))))
         x1 = x1 + self.drop_path2(self.ls2(self.mlp(self.norm2(x1))))
@@ -91,18 +91,26 @@ class CrossAttention(nn.Module):
         # 使用 value 计算加权和
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
-        return self.proj_drop(x)
+        return self.proj_drop(x) + x2
 
 
 class ViTAdapter(nn.Module):
     def __init__(self, vit_model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', img_size=(384, 384), *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.depth_encoder = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size, in_chans=1)
+        self.depth_encoder = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size)
         for param in self.depth_encoder.parameters():
             param.requires_grad = False
         
         self.vit_model = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size)
+        if True:  
+            model_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1016011311/weights_end.pth')  
+            model_state_dict_new = {}
+            for k, v in model_state_dict.items():
+                model_state_dict_new[k.replace('model.', '')] = v
+            self.vit_model.load_state_dict(model_state_dict_new, strict=False)
+        for param in self.vit_model.parameters():
+            param.requires_grad = False
         
         self.depth_adapters = nn.Sequential(*[
             CrossAttentionBlock()
@@ -116,6 +124,7 @@ class ViTAdapter(nn.Module):
         else:
             rgb = x[:, :3, :, :]
             d = x[:, 3:, :, :]
+            d = d.repeat(1, 3, 1, 1)
 
         rgb = self.vit_model.patch_embed(rgb)
         rgb, rot_pos_embed = self.vit_model._pos_embed(rgb)
@@ -127,6 +136,7 @@ class ViTAdapter(nn.Module):
             rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
             if d != None:
                 rgb = self.depth_adapters[i](d, rgb, rope=rot_pos_embed)
+
         rgb = self.vit_model.norm(rgb)
         rgb = self.vit_model.forward_head(rgb)
         
@@ -141,8 +151,8 @@ if __name__ == '__main__':
 
     model = ViTAdapter()
     model.cuda()
-    x1 = torch.rand((1, 4, 384, 384)).cuda()
-    x2 = torch.rand((1, 3, 384, 384)).cuda()
+    x1 = torch.rand((1, 3, 384, 384)).cuda()
+    x2 = torch.rand((1, 4, 384, 384)).cuda()
 
     x1 = model(x1)
     x2 = model(x2)

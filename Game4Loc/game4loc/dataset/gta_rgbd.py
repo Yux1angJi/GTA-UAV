@@ -324,8 +324,8 @@ def get_transforms(img_size,
 
     mean_d = [0.5]
     std_d = [0.5]
-    mean_rgbd = mean + [0.5]
-    std_rgbd = std + [0.5]
+    mean_rgbd = mean + mean_d
+    std_rgbd = std + std_d
     
 
     val_sat_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
@@ -392,27 +392,32 @@ def get_transforms(img_size,
 
 
 if __name__ == "__main__":
-    _, transforms_rgbd, _, transforms_rgb, transforms_depth = get_transforms((384, 384))
-    rgbd = cv2.imread('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/rgbd/200_0001_0000001542.png', cv2.IMREAD_UNCHANGED)
+    _, transforms_rgbd, _, transforms_rgb, transforms_depth = get_transforms(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5], img_size=(384, 384))
 
-    rgbd_trans = transforms_rgbd(image=rgbd)['image']
+    a = np.ones((500, 500, 4)) * 255
+    a = transforms_rgbd(image=a)['image']
+    print(a)
 
-    rgb = rgbd[:, :, :3]
-    d = rgbd[:, :, 3]
+    # rgbd = cv2.imread('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/rgbd/200_0001_0000001542.png', cv2.IMREAD_UNCHANGED)
 
-    d_resize = cv2.resize(d, (384, 384), cv2.INTER_NEAREST)
+    # rgbd_trans = transforms_rgbd(image=rgbd)['image']
 
-    d_color = cv2.applyColorMap(d_resize, cv2.COLORMAP_JET)
-    cv2.imwrite('vis_d_ori.png', d_color)
+    # rgb = rgbd[:, :, :3]
+    # d = rgbd[:, :, 3]
+
+    # d_resize = cv2.resize(d, (384, 384), cv2.INTER_NEAREST)
+
+    # d_color = cv2.applyColorMap(d_resize, cv2.COLORMAP_JET)
+    # cv2.imwrite('vis_d_ori.png', d_color)
 
 
-    image_rgb_transformed = transforms_rgb(image=rgb)['image']
-    image_d_transformed = transforms_depth(image=d)['image']
+    # image_rgb_transformed = transforms_rgb(image=rgb)['image']
+    # image_d_transformed = transforms_depth(image=d)['image']
 
-    image_d_transformed_color = cv2.applyColorMap(image_d_transformed, cv2.COLORMAP_JET)
+    # image_d_transformed_color = cv2.applyColorMap(image_d_transformed, cv2.COLORMAP_JET)
 
-    cv2.imwrite('vis_rgb.png', image_rgb_transformed)
-    cv2.imwrite('vis_d.png', image_d_transformed_color)
+    # cv2.imwrite('vis_rgb.png', image_rgb_transformed)
+    # cv2.imwrite('vis_d.png', image_d_transformed_color)
 
 
     
