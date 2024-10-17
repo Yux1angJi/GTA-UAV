@@ -443,7 +443,9 @@ class GTADatasetEval(Dataset):
     
 def get_transforms(img_size,
                    mean=[0.485, 0.456, 0.406],
-                   std=[0.229, 0.224, 0.225]):
+                   std=[0.229, 0.224, 0.225],
+                   drone_rot=False,
+                   sat_rot=False):
     
 
     val_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
@@ -451,29 +453,36 @@ def get_transforms(img_size,
                                 ToTensorV2(),
                                 ])
                                 
-
+    if sat_rot:
+        p_rot = 1.0
+    else:
+        p_rot = 0.0
     train_sat_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
-                                      A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
-                                      A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.15, always_apply=False, p=0.5),
-                                      A.OneOf([
-                                               A.AdvancedBlur(p=1.0),
-                                               A.Sharpen(p=1.0),
-                                              ], p=0.3),
-                                      A.OneOf([
-                                               A.GridDropout(ratio=0.4, p=1.0),
-                                               A.CoarseDropout(max_holes=25,
-                                                               max_height=int(0.2*img_size[0]),
-                                                               max_width=int(0.2*img_size[0]),
-                                                               min_holes=10,
-                                                               min_height=int(0.1*img_size[0]),
-                                                               min_width=int(0.1*img_size[0]),
-                                                               p=1.0),
-                                              ], p=0.3),
-                                      A.RandomRotate90(p=1.0),
-                                      A.Normalize(mean, std),
-                                      ToTensorV2(),
-                                      ])
-    
+                                    A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                    A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.15, always_apply=False, p=0.5),
+                                    A.OneOf([
+                                            A.AdvancedBlur(p=1.0),
+                                            A.Sharpen(p=1.0),
+                                            ], p=0.3),
+                                    A.OneOf([
+                                            A.GridDropout(ratio=0.4, p=1.0),
+                                            A.CoarseDropout(max_holes=25,
+                                                            max_height=int(0.2*img_size[0]),
+                                                            max_width=int(0.2*img_size[0]),
+                                                            min_holes=10,
+                                                            min_height=int(0.1*img_size[0]),
+                                                            min_width=int(0.1*img_size[0]),
+                                                            p=1.0),
+                                            ], p=0.3),
+                                    A.RandomRotate90(p=p_rot),
+                                    A.Normalize(mean, std),
+                                    ToTensorV2(),
+                                    ])
+
+    if drone_rot:
+        p_rot = 1.0
+    else:
+        p_rot = 0.0
     train_drone_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
                                         A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
                                         A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.15, always_apply=False, p=0.5),
@@ -491,7 +500,7 @@ def get_transforms(img_size,
                                                                  min_width=int(0.1*img_size[0]),
                                                                  p=1.0),
                                               ], p=0.3),
-                                        # A.RandomRotate90(p=1.0),
+                                        A.RandomRotate90(p=p_rot),
                                         A.Normalize(mean, std),
                                         ToTensorV2(),
                                         ])

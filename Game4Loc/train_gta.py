@@ -208,8 +208,14 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
 
     # Transforms
-    val_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
-                                                                                                                                 
+    drone_rot = False
+    if 'cross-area' in config.train_pairs_meta_file:
+        sat_rot = True
+    else:
+        sat_rot = False
+    val_transforms, train_sat_transforms, train_drone_transforms = \
+        get_transforms(img_size, mean=mean, std=std, drone_rot=drone_rot, sat_rot=sat_rot)
+                                                                                                                
     # Train
     train_dataset = GTADatasetTrain(data_root=config.data_root,
                                     pairs_meta_file=config.train_pairs_meta_file,
