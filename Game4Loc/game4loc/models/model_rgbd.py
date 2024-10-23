@@ -33,6 +33,7 @@ class DesModelWithRGBD(nn.Module):
                  pretrained=True,
                  img_size=384,
                  share_weights=False,
+                 diff_guidance=-1.0,
                  train_with_recon=False,
                  train_with_offset=False,
                  model_hub='timm'):
@@ -88,6 +89,8 @@ class DesModelWithRGBD(nn.Module):
 
         if train_with_offset:
             self.MLP = MLP()
+
+        self.diff_guidance = diff_guidance
         
         self.logit_scale = torch.nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
         
@@ -104,56 +107,41 @@ class DesModelWithRGBD(nn.Module):
         self.model.set_grad_checkpointing(enable)
 
 
-    def forward(self, img1=None, img2=None, forward_features=False):
+    def forward(self, img1=None, img2=None):
 
         if self.share_weights:
             if img1 is not None and img2 is not None:
-                if forward_features:
-                    x1, x1_feature = self.model.forward_with_feature(img1)
-                    x2, x2_feature = self.model.forward_with_feature(img2)
-                    return x1, x1_feature, x2, x2_feature
-                else:
-                    image_features1 = self.model(img1)     
+                if self.diff_guidance > 0.0:
+                    image_features1_rgb = self.model(img1[:, :3, :, :])
+                    image_features1_rgbd = self.model(img1)
+                    image_features1 = self.diff_guidance * (image_features1_rgbd - image_features1_rgb) + image_features1_rgb
                     image_features2 = self.model(img2)
-                    return image_features1, image_features2            
+                else:
+                    image_features1 = self.model(img1)
+                    image_features2 = self.model(img2)
+                return image_features1, image_features2            
             elif img1 is not None:
-                if forward_features:
-                    x1, x1_feature = self.model.forward_with_feature(img1)
-                    return x1, x1_feature
+                if self.diff_guidance > 0.0:
+                    image_features1_rgb = self.model(img1[:, :3, :, :])
+                    image_features1_rgbd = self.model(img1)
+                    image_features = self.diff_guidance * (image_features1_rgbd - image_features1_rgb) + image_features1_rgb
                 else:
                     image_features = self.model(img1)
-                    return image_features
+                return image_features
             else:
-                if forward_features:
-                    x2, x2_feature = self.model.forward_with_feature(img1)
-                    return x2, x2_feature
-                else:
-                    image_features = self.model(img2)
-                    return image_features
+                image_features = self.model(img2)
+                return image_features
         else:
             if img1 is not None and img2 is not None:
-                if forward_features:
-                    x1, x1_feature = self.model1.forward_with_feature(img1)
-                    x2, x2_feature = self.model2.forward_with_feature(img2)
-                    return x1, x1_feature, x2, x2_feature
-                else:
-                    image_features1 = self.model1(img1)     
-                    image_features2 = self.model2(img2)
-                    return image_features1, image_features2            
+                image_features1 = self.model1(img1)     
+                image_features2 = self.model2(img2)
+                return image_features1, image_features2            
             elif img1 is not None:
-                if forward_features:
-                    x1, x1_feature = self.model1.forward_with_feature(img1)
-                    return x1, x1_feature
-                else:
-                    image_features = self.model1(img1)
-                    return image_features
+                image_features = self.model1(img1)
+                return image_features
             else:
-                if forward_features:
-                    x2, x2_feature = self.model2.forward_with_feature(img1)
-                    return x2, x2_feature
-                else:
-                    image_features = self.model2(img2)
-                    return image_features
+                image_features = self.model2(img2)
+                return image_features
 
     def offset_pred(self, img_feature1, img_feature2):
         offset = self.MLP(torch.cat((img_feature1, img_feature2), dim=1))

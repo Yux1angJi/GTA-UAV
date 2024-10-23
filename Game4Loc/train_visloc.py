@@ -15,7 +15,7 @@ from game4loc.dataset.visloc import VisLocDatasetEval, VisLocDatasetTrain, get_t
 from game4loc.dataset.gta import GTADatasetTrain
 from game4loc.dataset.mix_data import MixDatasetTrain
 from game4loc.utils import setup_system, Logger
-from game4loc.trainer import train, train_with_weight
+from game4loc.trainer.trainer import train, train_with_weight
 from game4loc.evaluate.visloc import evaluate
 from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, ReconstructionLoss
 from game4loc.models.model import DesModel

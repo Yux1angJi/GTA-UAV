@@ -180,10 +180,16 @@ def train_script(config):
     # Load pretrained Checkpoint    
     if config.checkpoint_start is not None:  
         print("Start from:", config.checkpoint_start)
-        model_state_dict = torch.load(config.checkpoint_start)  
-        model.load_state_dict(model_state_dict, strict=False)     
+        model_state_dict = torch.load(config.checkpoint_start)
+        model_state_dict_new = {}
+        for k, v in model_state_dict.items():
+            if 'model' in k:
+                model_state_dict_new[k.replace('model', 'img_model')] = v
+        model.load_state_dict(model_state_dict, strict=False)
+        for param in model.img_model.parameters():
+            param.requires_grad = False 
 
-    print("Freeze model layers:", config.freeze_layers, config.frozen_stages)
+    print("Freeze model:", config.freeze_layers, config.frozen_stages)
     if config.freeze_layers:
         model.freeze_layers(config.frozen_stages)
 
@@ -241,6 +247,12 @@ def train_script(config):
     elif config.query_mode == 'DDepth2SImg':
         query_view = 'drone_depth'
         gallery_view = 'sate_img'
+    elif config.query_mode == 'DDepth2DImg':
+        query_view = 'drone_depth'
+        gallery_view = 'drone_img'
+    elif config.query_mode == 'DImg2DDepth':
+        query_view = 'drone_img'
+        gallery_view = 'drone_depth'
     query_dataset_test = GTAMMDatasetEval(data_root=config.data_root,
                                         pairs_meta_file=config.test_pairs_meta_file,
                                         view=query_view,
@@ -268,8 +280,13 @@ def train_script(config):
                                           sate_img_dir=config.sate_img_dir,
                                           query_mode=config.query_mode,
                                          )
-    gallery_loc_xy_list = gallery_dataset_test.satellite_loc_xys
-    gallery_img_list = gallery_dataset_test.satellite_img_names
+
+    if '2SImg' in config.query_mode:
+        gallery_img_list = gallery_dataset_test.satellite_img_names
+        gallery_loc_xy_list = gallery_dataset_test.satellite_loc_xys
+    elif '2DImg' in config.query_mode or '2DDepth' in config.query_mode:
+        gallery_img_list = gallery_dataset_test.drone_img_names
+        gallery_loc_xy_list = gallery_dataset_test.drone_loc_xys
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
                                        batch_size=config.batch_size_eval,
@@ -289,7 +306,7 @@ def train_script(config):
         device=config.device,
         label_smoothing=config.label_smoothing,
         k=config.k,
-        dimg2simg=True,
+        dimg2simg=False,
         dlidar2simg=False,
         dimg2dlidar=False,
         ddepth2dimg=True,
@@ -359,19 +376,39 @@ def train_script(config):
     print("Warmup Epochs: {} - Warmup Steps: {}".format(str(config.warmup_epochs).ljust(2), warmup_steps))
     print("Train Epochs:  {} - Train Steps:  {}".format(config.epochs, train_steps))
         
+    #-----------------------------------------------------------------------------#
+    # Query Mode                                                                  #
+    #-----------------------------------------------------------------------------#
+
+    self_dict = {}
+    for k in pairs_drone2sate_dict.keys():
+        self_dict[k] = [k]
+
+    if config.query_mode == 'DImg2SImg':
+        query_feature = 'drone_img_features'
+        gallery_feature = 'satellite_img_features'
+        pairs_dict = pairs_drone2sate_dict
+    elif config.query_mode == 'DLidar2SImg':
+        query_feature = 'drone_lidar_features'
+        gallery_feature = 'satellite_img_features'
+        pairs_dict = pairs_drone2sate_dict
+    elif config.query_mode == 'DDepth2SImg':
+        query_feature = 'drone_depth_features'
+        gallery_feature = 'satellite_img_features'
+        pairs_dict = pairs_drone2sate_dict
+    elif config.query_mode == 'DDepth2DImg':
+        query_feature = 'drone_depth_features'
+        gallery_feature = 'drone_img_features'
+        pairs_dict = self_dict
+    elif config.query_mode == 'DImg2DDepth':
+        query_feature = 'drone_img_features'
+        gallery_feature = 'drone_depth_features'
+        pairs_dict = self_dict
         
     #-----------------------------------------------------------------------------#
     # Zero Shot                                                                   #
     #-----------------------------------------------------------------------------#
-    if config.query_mode == 'DImg2SImg':
-        query_feature = 'drone_img_features'
-        gallery_feature = 'satellite_img_features'
-    elif config.query_mode == 'DLidar2SImg':
-        query_feature = 'drone_lidar_features'
-        gallery_feature = 'satellite_img_features'
-    elif config.query_mode == 'DDepth2SImg':
-        query_feature = 'drone_depth_features'
-        gallery_feature = 'satellite_img_features'
+
     if config.zero_shot:
         print("\n{}[{}]{}".format(30*"-", "Zero Shot", 30*"-"))  
 
@@ -383,7 +420,7 @@ def train_script(config):
                            query_feature=query_feature,
                            gallery_list=gallery_img_list,
                            gallery_feature=gallery_feature,
-                           pairs_dict=pairs_drone2sate_dict,
+                           pairs_dict=pairs_dict,
                            ranks_list=[1, 5, 10],
                            query_loc_xy_list=query_loc_xy_list,
                            gallery_loc_xy_list=gallery_loc_xy_list,
@@ -431,7 +468,7 @@ def train_script(config):
                                 gallery_list=gallery_img_list,
                                 query_feature=query_feature,
                                 gallery_feature=gallery_feature,
-                                pairs_dict=pairs_drone2sate_dict,
+                                pairs_dict=pairs_dict,
                                 ranks_list=[1, 5, 10],
                                 query_loc_xy_list=query_loc_xy_list,
                                 gallery_loc_xy_list=gallery_loc_xy_list,

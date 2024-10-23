@@ -1,10 +1,10 @@
 import time
 import torch
 from tqdm import tqdm
-from .utils import AverageMeter
 from torch.cuda.amp import autocast
 import torch.nn.functional as F
 
+from ..utils import AverageMeter
 
 
 def train_mm_with_weight(train_config, model, dataloader, loss_function, optimizer, 

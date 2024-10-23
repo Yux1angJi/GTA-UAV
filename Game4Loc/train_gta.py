@@ -12,7 +12,7 @@ from transformers import get_constant_schedule_with_warmup, get_polynomial_decay
 
 from game4loc.dataset.gta import GTADatasetEval, GTADatasetTrain, get_transforms
 from game4loc.utils import setup_system, Logger
-from game4loc.trainer import train, train_with_weight
+from game4loc.trainer.trainer import train, train_with_weight
 from game4loc.evaluate.gta import evaluate
 from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
 from game4loc.models.model import DesModel

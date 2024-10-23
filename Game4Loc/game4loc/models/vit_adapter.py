@@ -198,14 +198,21 @@ class ViTAdapter(nn.Module):
                  img_size=(384, 384), 
                  embed_dim=768,
                  num_heads=12,
-                 num_blocks=2,
-                 *args, 
+                 num_blocks=3,
+                 *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.depth_encoder = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size, in_chans=3)
-        for param in self.depth_encoder.parameters():
-            param.requires_grad = False
+        self.depth_encoder = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size, in_chans=1)
+        pretrained_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1021075644/weights_end.pth')
+        depth_state_dict = {}
+        for k, v in pretrained_state_dict.items():
+            if 'drone_depth_model.' in k:
+                depth_state_dict[k.replace('drone_depth_model.', '')] = v
+        self.depth_encoder.load_state_dict(depth_state_dict)
+
+        # for param in self.depth_encoder.parameters():
+        #     param.requires_grad = False
         
         self.vit_model = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size)
         if True:
@@ -220,6 +227,7 @@ class ViTAdapter(nn.Module):
         self.depth_adapters = nn.Sequential(*[
             EvaCrossAttentionBlock(dim=embed_dim, num_heads=num_heads)
             for i in range(num_blocks)
+            # for i in range(len(self.vit_model.blocks))
         ])
 
         self.fc_norm = LayerNorm(embed_dim)
@@ -227,11 +235,12 @@ class ViTAdapter(nn.Module):
     def forward(self, x):
         if x.shape[1] == 3:
             rgb = x[:, :3, :, :]
-            d = None
+            N, C, H, W = rgb.shape
+            d = torch.zeros((N, 1, H, W)).to(device=x.device, dtype=x.dtype)
         else:
             rgb = x[:, :3, :, :]
             d = x[:, 3:, :, :]
-            d = d.repeat(1, 3, 1, 1)
+            # d = d.repeat(1, 3, 1, 1)
 
         rgb = self.vit_model.patch_embed(rgb)
         rgb, rot_pos_embed = self.vit_model._pos_embed(rgb)
@@ -239,22 +248,30 @@ class ViTAdapter(nn.Module):
         if d != None:
             d = self.depth_encoder.forward_features(d)
 
-        for i in range(len(self.vit_model.blocks)):
-            rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
-            # if d != None:
-            #     rgb = self.depth_adapters[i](d, rgb, rope=rot_pos_embed)
+
+        ####################
+        ## Mid Adapter
+        # for i in range(len(self.vit_model.blocks)):
+        #     rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
+        #     if d != None:
+        #         rgb = self.depth_adapters[i](d, rgb, rope=rot_pos_embed)
         # rgb = self.vit_model.norm(rgb)
         # rgb = self.vit_model.forward_head(rgb)
+        ####################
 
+        #####################
+        ## Last Adapter
+        for i in range(len(self.vit_model.blocks)):
+            rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
         if d != None:
             rgb = self.depth_adapters[0](d, rgb, rope=rot_pos_embed)
             for i in range(1, len(self.depth_adapters)):
                 rgb = self.depth_adapters[i](rgb, rgb, rope=rot_pos_embed)
         rgb = self.fc_norm(rgb)
         rgb = rgb[:, 1:].mean(dim=1)
+        #######################
         
         return rgb
-
 
 
 if __name__ == '__main__':

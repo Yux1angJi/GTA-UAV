@@ -12,8 +12,8 @@ from transformers import get_constant_schedule_with_warmup, get_polynomial_decay
 
 from game4loc.dataset.gta_rgbd import GTARGBDDatasetEval, GTARGBDDatasetTrain, get_transforms
 from game4loc.utils import setup_system, Logger
-from game4loc.trainer import train, train_with_weight
-from game4loc.evaluate.gta import evaluate
+from game4loc.trainer.trainer import train, train_with_weight
+from game4loc.evaluate.gta_rgbd import evaluate
 from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
 from game4loc.models.model_rgbd import DesModelWithRGBD
 
@@ -103,7 +103,7 @@ class Configuration:
     test_mode: str = "pos"                # Test with semi-positive pairs
 
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -161,12 +161,14 @@ def train_script(config):
     # Model                                                                       #
     #-----------------------------------------------------------------------------#
     print("\nModel: {}".format(config.model))
+    print(f"Drone and satellite image encoder share weights? {config.share_weights}")
 
     model = DesModelWithRGBD(model_name=config.model, 
                     pretrained=True,
                     img_size=config.img_size,
-                    share_weights=config.share_weights)
-                        
+                    share_weights=config.share_weights,
+                    diff_guidance=5.0)
+
     data_config = model.get_config()
     print(data_config)
     mean = list(data_config["mean"])
@@ -218,8 +220,8 @@ def train_script(config):
                                     transforms_query_rgb=train_drone_rgb_transforms,
                                     transforms_query_depth=train_drone_depth_transforms,
                                     transforms_gallery=train_sat_transforms,
-                                    group_len=config.group_len,
                                     prob_flip=config.prob_flip,
+                                    prob_drop_depth=0.2,
                                     shuffle_batch_size=config.batch_size,
                                     mode=config.train_mode,
                                     train_ratio=config.train_ratio,

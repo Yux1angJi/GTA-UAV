@@ -274,7 +274,7 @@ class DesModelWithMM(nn.Module):
         if share_weights:
             if "vit" in model_name or "swin" in model_name:
                 # automatically change interpolate pos-encoding to img_size
-                self.img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
+                self.img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size)
                 if with_depth:
                     self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size, in_chans=1)
             else:

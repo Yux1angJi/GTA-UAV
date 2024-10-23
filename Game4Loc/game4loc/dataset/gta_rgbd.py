@@ -52,13 +52,13 @@ class GTARGBDDatasetTrain(Dataset):
                  shuffle_batch_size=128,
                  mode='pos_semipos',
                  train_ratio=1.0,
-                 group_len=2):
+                 prob_drop_depth=0.0,
+                 ):
         super().__init__()
         
         with open(os.path.join(data_root, pairs_meta_file), 'r', encoding='utf-8') as f:
             pairs_meta_data = json.load(f)
         self.data_root = data_root
-        self.group_len = group_len
 
         self.pairs = []
         self.pairs_sate2drone_dict = {}
@@ -92,6 +92,7 @@ class GTARGBDDatasetTrain(Dataset):
         self.transforms_gallery = transforms_gallery
         self.prob_flip = prob_flip
         self.shuffle_batch_size = shuffle_batch_size
+        self.prob_drop_depth = prob_drop_depth
 
         # Training with sparse data
         num_pairs = len(self.pairs)
@@ -123,6 +124,10 @@ class GTARGBDDatasetTrain(Dataset):
             if image_d_transformed.ndim == 2:
                 image_d_transformed = image_d_transformed.unsqueeze(0)
             query_img = torch.cat((image_rgb_transformed, image_d_transformed), dim=0)  # 形状为 (4, H, W)
+
+        if np.random.random() < self.prob_drop_depth:
+            zero_d = torch.zeros_like(query_img[3:, :, :])
+            query_img[3, :, :] = zero_d
             
         if self.transforms_gallery is not None:
             gallery_img = self.transforms_gallery(image=gallery_img)['image']

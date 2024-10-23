@@ -15,7 +15,7 @@ from transformers import get_constant_schedule_with_warmup, get_polynomial_decay
 # from game4loc.dataset.university import U1652DatasetEval, U1652DatasetTrain, get_transforms
 from game4loc.dataset.denseuav_extend import DenseUAVEDatasetTrain, DenseUAVDatasetEval, get_transforms
 from game4loc.utils import setup_system, Logger
-from game4loc.trainer import train
+from game4loc.trainer.trainer import train
 from game4loc.evaluate.university import evaluate
 from game4loc.loss import InfoNCE
 from game4loc.models.model import DesModel

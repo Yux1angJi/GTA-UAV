@@ -16,7 +16,7 @@ from game4loc.dataset.sues_extend import SUESDatasetEval
 # from game4loc.dataset.university import U1652DatasetEval, U1652DatasetTrain, get_transforms
 from game4loc.dataset.sues_extend import SUESEDatasetTrain, SUESDatasetEval, get_transforms
 from game4loc.utils import setup_system, Logger
-from game4loc.trainer import train
+from game4loc.trainer.trainer import train
 from game4loc.evaluate.university import evaluate
 from game4loc.loss import InfoNCE
 from game4loc.models.model import DesModel

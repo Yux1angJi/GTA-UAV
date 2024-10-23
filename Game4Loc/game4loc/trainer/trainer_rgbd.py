@@ -1,9 +1,10 @@
 import time
 import torch
 from tqdm import tqdm
-from .utils import AverageMeter
 from torch.cuda.amp import autocast
 import torch.nn.functional as F
+
+from ..utils import AverageMeter
 
 
 def train_with_weight_dis(train_config, model, dataloader, loss_function, optimizer, 
@@ -180,7 +181,7 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
                     loss.update(loss_recon_value)
 
                 else:
-                    features1, features2 = model(img1=query, img2=reference)
+                    features1, features2 = model(query, reference)
 
                 if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
                     if with_weight:
@@ -347,9 +348,6 @@ def train(train_config, model, dataloader, loss_function, optimizer, scheduler=N
                     # print(features1.shape, features2.shape)
                 features1 = torch.cat(features1_all, dim=0)
                 features2 = torch.cat(features2_all, dim=0)
-            
-                # # Forward pass
-                # features1, features2 = model(query, reference)
 
                 if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
                     loss = loss_function(features1, features2, model.module.logit_scale.exp())
@@ -377,36 +375,7 @@ def train(train_config, model, dataloader, loss_function, optimizer, scheduler=N
                 scheduler.step()
    
         else:
-        
-            # data (batches) to device   
-            query = query.to(train_config.device)
-            reference = reference.to(train_config.device)
-
-            # Forward pass
-            features1, features2 = model(query, reference)
-            if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
-                loss = loss_function(features1, features2, model.module.logit_scale.exp())
-            else:
-                loss = loss_function(features1, features2, model.logit_scale.exp()) 
-            losses.update(loss.item())
-
-            # Calculate gradient using backward pass
-            loss.backward()
-            
-            # Gradient clipping 
-            if train_config.clip_grad:
-                torch.nn.utils.clip_grad_value_(model.parameters(), train_config.clip_grad)                  
-            
-            # Update model parameters (weights)
-            optimizer.step()
-            # Zero gradients for next step
-            optimizer.zero_grad()
-            
-            # Scheduler
-            if train_config.scheduler == "polynomial" or train_config.scheduler == "cosine" or train_config.scheduler ==  "constant":
-                scheduler.step()
-        
-        
+            raise NotImplementedError
         
         if train_config.verbose:
             
