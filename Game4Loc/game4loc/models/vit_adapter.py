@@ -263,7 +263,7 @@ class ViTAdapter(nn.Module):
                  img_size=(384, 384), 
                  embed_dim=768,
                  num_heads=12,
-                 num_blocks=1,
+                 num_blocks=2,
                  lamda_drop_rate=0.,
                  *args,
                  **kwargs):
@@ -296,11 +296,11 @@ class ViTAdapter(nn.Module):
             # else:
             #     print('not freeze', name)
 
-        # self.depth_adapters = nn.Sequential(*[
-        #     EvaCrossAttentionBlock(dim=embed_dim, num_heads=num_heads)
-        #     for i in range(num_blocks)
-        #     # for i in range(len(self.vit_model.blocks))
-        # ])
+        self.depth_adapters = nn.Sequential(*[
+            EvaCrossAttentionBlock(dim=embed_dim, num_heads=num_heads)
+            for i in range(num_blocks)
+            # for i in range(len(self.vit_model.blocks))
+        ])
 
         self.lamda_norm = LayerNorm(embed_dim)
         self.lamda_drop = nn.Dropout(lamda_drop_rate)
@@ -329,7 +329,7 @@ class ViTAdapter(nn.Module):
 
         ##################################
         ## Inter Adapter
-        rgb = self.vit_model(rgb, d)
+        # rgb = self.vit_model(rgb, d)
             
         ##################################
 
@@ -362,33 +362,42 @@ class ViTAdapter(nn.Module):
         #         rgb.requires_grad_(True)
         #         # rgb = checkpoint(forward_sa_with_rope, blk, rgb, rot_pos_embed, use_reentrant=False)
         #         rgb = checkpoint(
-        #                 forward_sa_adapter_with_rope, self.vit_model.blocks[i], rgb, 
-        #                 self.serial_adapters[i], self.parallel_adapters[i], 
+        #                 self.vit_model.blocks[i], rgb, d,
         #                 rot_pos_embed, use_reentrant=False
         #             )
         #     else:
         #         # rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
         #         rgb = self.vit_model.blocks[i](rgb, self.serial_adapters[i], self.parallel_adapters[i], rope=rot_pos_embed)
-        # if d != None:
-        #     if self.grad_checkpointing and not torch.jit.is_scripting():
-        #         d.requires_grad_(True)
-        #         rgb1 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], rgb, d, rot_pos_embed, use_reentrant=False)
-        #         rgb2 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], d, rgb, rot_pos_embed, use_reentrant=False)
-        #         rgb = rgb1 + rgb2
-        #     else:
-        #         rgb1 = self.depth_adapters[0](query=rgb, key_value=d, rope=rot_pos_embed)
-        #         rgb2 = self.depth_adapters[1](query=d, key_value=rgb, rope=rot_pos_embed)
-        #         rgb = rgb1 + rgb2
+        
+        rgb = self.vit_model.patch_embed(rgb)
+        rgb, rot_pos_embed = self.vit_model._pos_embed(rgb)
+        for blk in self.vit_model.blocks:
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                rgb = checkpoint(blk, rgb, d, rope=rot_pos_embed, use_reentrant=False)
+            else:
+                rgb = blk(rgb, d, rope=rot_pos_embed)
+        rgb = self.vit_model.norm(rgb)
 
-        #     lamda = d[:, 1:].mean(dim=1)
-        #     lamda = self.lamda_norm(lamda)
-        #     lamda = self.lamda_drop(lamda)
-        #     lamda = self.lamda(lamda)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            d.requires_grad_(True)
+            rgb = checkpoint(forward_ca_with_rope, self.depth_adapters[0], rgb, d, rot_pos_embed, use_reentrant=False)
+            # rgb2 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], d, rgb, rot_pos_embed, use_reentrant=False)
+            # rgb = rgb1 + rgb2
+        else:
+            rgb = self.depth_adapters[0](query=rgb, key_value=d, rope=rot_pos_embed)
+            # rgb2 = self.depth_adapters[1](query=d, key_value=rgb, rope=rot_pos_embed)
+            # rgb = rgb1 + rgb2
+
+            # lamda = d[:, 1:].mean(dim=1)
+            # lamda = self.lamda_norm(lamda)
+            # lamda = self.lamda_drop(lamda)
+            # lamda = self.lamda(lamda)
             # for i in range(1, len(self.depth_adapters)):
             #     if self.grad_checkpointing and not torch.jit.is_scripting():
             #         rgb = checkpointing(self.depth_adapters[i], query=rgb, key_value=rgb, rope=rot_pos_embed)
             #     else:
             #         rgb = self.depth_adapters[i](rgb, rgb, rope=rot_pos_embed)
+        rgb = self.vit_model.forward_head(rgb)
 
         lamda = self.lamda_drop(rgb)
         lamda = self.lamda(lamda)
