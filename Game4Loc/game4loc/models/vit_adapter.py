@@ -8,6 +8,16 @@ from typing import Any, Callable, Dict, Optional, Set, Tuple, Type, Union, List
 from timm.models.vision_transformer import VisionTransformer, LayerScale
 from timm.layers import DropPath, Mlp, RotaryEmbeddingCat, LayerNorm, GluMlp, SwiGLU, apply_rot_embed_cat, use_fused_attn
 
+from torch.utils.checkpoint import checkpoint
+
+def forward_sa_with_rope(module, x, rope):
+    # 调用 blk 的 forward 方法并传递 rope 参数
+    return module(x, rope=rope)
+
+def forward_ca_with_rope(module, x1, x2, rope):
+    # 调用 blk 的 forward 方法并传递 rope 参数
+    return module(x1, x2, rope=rope)
+
 class EvaCrossAttentionBlock(nn.Module):
 
     def __init__(
@@ -198,18 +208,19 @@ class ViTAdapter(nn.Module):
                  img_size=(384, 384), 
                  embed_dim=768,
                  num_heads=12,
-                 num_blocks=3,
+                 num_blocks=1,
+                 lamda_drop_rate=0.,
                  *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
 
         self.depth_encoder = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size, in_chans=1)
-        pretrained_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1021075644/weights_end.pth')
-        depth_state_dict = {}
-        for k, v in pretrained_state_dict.items():
-            if 'drone_depth_model.' in k:
-                depth_state_dict[k.replace('drone_depth_model.', '')] = v
-        self.depth_encoder.load_state_dict(depth_state_dict)
+        # pretrained_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1021075644/weights_end.pth')
+        # depth_state_dict = {}
+        # for k, v in pretrained_state_dict.items():
+        #     if 'drone_depth_model.' in k:
+        #         depth_state_dict[k.replace('drone_depth_model.', '')] = v
+        # self.depth_encoder.load_state_dict(depth_state_dict)
 
         # for param in self.depth_encoder.parameters():
         #     param.requires_grad = False
@@ -230,9 +241,20 @@ class ViTAdapter(nn.Module):
             # for i in range(len(self.vit_model.blocks))
         ])
 
+        self.lamda_norm = LayerNorm(embed_dim)
+        self.lamda_drop = nn.Dropout(lamda_drop_rate)
+        self.lamda = nn.Linear(embed_dim, 1)
+
         self.fc_norm = LayerNorm(embed_dim)
+
+        self.set_grad_checkpointing()
+        self.grad_checkpointing = True
+
+    def set_grad_checkpointing(self, enable=True):
+        self.vit_model.set_grad_checkpointing(enable)
     
     def forward(self, x):
+
         if x.shape[1] == 3:
             rgb = x[:, :3, :, :]
             N, C, H, W = rgb.shape
@@ -248,30 +270,59 @@ class ViTAdapter(nn.Module):
         if d != None:
             d = self.depth_encoder.forward_features(d)
 
-
         ####################
         ## Mid Adapter
         # for i in range(len(self.vit_model.blocks)):
-        #     rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
         #     if d != None:
-        #         rgb = self.depth_adapters[i](d, rgb, rope=rot_pos_embed)
+        #         if self.grad_checkpointing and not torch.jit.is_scripting():
+        #             rgb = checkpoint(forward_ca_with_rope, self.depth_adapters[i], rgb, d, rot_pos_embed)
+        #         else:
+        #             rgb = self.depth_adapters[i](query=rgb, key_value=d, rope=rot_pos_embed)
+        #     if self.grad_checkpointing and not torch.jit.is_scripting():
+        #         rgb = checkpoint(forward_sa_with_rope, self.vit_model.blocks[i], rgb, rot_pos_embed)
+        #     else:
+        #         rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
+        #     # rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
         # rgb = self.vit_model.norm(rgb)
         # rgb = self.vit_model.forward_head(rgb)
         ####################
 
         #####################
         ## Last Adapter
-        for i in range(len(self.vit_model.blocks)):
-            rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
+        for blk in self.vit_model.blocks:
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                rgb.requires_grad_(True)
+                rgb = checkpoint(forward_sa_with_rope, blk, rgb, rot_pos_embed, use_reentrant=False)
+            else:
+                rgb = blk(rgb, rope=rot_pos_embed)
         if d != None:
-            rgb = self.depth_adapters[0](d, rgb, rope=rot_pos_embed)
-            for i in range(1, len(self.depth_adapters)):
-                rgb = self.depth_adapters[i](rgb, rgb, rope=rot_pos_embed)
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                d.requires_grad_(True)
+                rgb1 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], rgb, d, rot_pos_embed, use_reentrant=False)
+                rgb2 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], d, rgb, rot_pos_embed, use_reentrant=False)
+                rgb = rgb1 + rgb2
+            else:  
+                rgb1 = self.depth_adapters[0](query=rgb, key_value=d, rope=rot_pos_embed)
+                rgb2 = self.depth_adapters[1](query=d, key_value=rgb, rope=rot_pos_embed)
+                rgb = rgb1 + rgb2
+
+            lamda = d[:, 1:].mean(dim=1)
+            lamda = self.lamda_norm(lamda)
+            lamda = self.lamda_drop(lamda)
+            lamda = self.lamda(lamda)
+            # for i in range(1, len(self.depth_adapters)):
+            #     if self.grad_checkpointing and not torch.jit.is_scripting():
+            #         rgb = checkpointing(self.depth_adapters[i], query=rgb, key_value=rgb, rope=rot_pos_embed)
+            #     else:
+            #         rgb = self.depth_adapters[i](rgb, rgb, rope=rot_pos_embed)
         rgb = self.fc_norm(rgb)
         rgb = rgb[:, 1:].mean(dim=1)
+
+        lamda = self.lamda_drop(rgb)
+        lamda = self.lamda(lamda)
         #######################
         
-        return rgb
+        return rgb, lamda
 
 
 if __name__ == '__main__':
