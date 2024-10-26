@@ -1,3 +1,7 @@
+# References:
+#   https://github.com/Lu-Feng/SelaVPR
+
+
 import torch
 import timm
 import numpy as np
@@ -10,6 +14,11 @@ from timm.layers import DropPath, Mlp, RotaryEmbeddingCat, LayerNorm, GluMlp, Sw
 
 from torch.utils.checkpoint import checkpoint
 
+
+def forward_sa_adapter_with_rope(module, x, adapter1, adapter2, rope):
+    # 调用 blk 的 forward 方法并传递 rope 参数
+    return module(x, adapter1=adapter1, adapter2=adapter2, rope=rope)
+
 def forward_sa_with_rope(module, x, rope):
     # 调用 blk 的 forward 方法并传递 rope 参数
     return module(x, rope=rope)
@@ -17,6 +26,50 @@ def forward_sa_with_rope(module, x, rope):
 def forward_ca_with_rope(module, x1, x2, rope):
     # 调用 blk 的 forward 方法并传递 rope 参数
     return module(x1, x2, rope=rope)
+
+def new_forward_eva_block_with_adapter(self,
+                                        x, 
+                                        adapter1,
+                                        adapter2,
+                                        rope: Optional[torch.Tensor] = None, 
+                                        attn_mask: Optional[torch.Tensor] = None
+                                      ):
+    def attn_residual_func(x, rope, attn_mask):
+        return adapter1(self.attn(self.norm1(x), rope=rope, attn_mask=attn_mask))
+
+    def ffn_residual_func(x):
+        return self.mlp(self.norm2(x))+0.2*adapter2(self.norm2(x))  # 0.2 is the scaling factor for Parallel adapter
+
+    if self.gamma_1 is None:
+        x = x + self.drop_path1(attn_residual_func(x, rope=rope, attn_mask=attn_mask))
+        x = x + self.drop_path2(ffn_residual_func(x))
+    else:
+        x = x + self.drop_path1(self.gamma_1 * attn_residual_func(x, rope=rope, attn_mask=attn_mask))
+        x = x + self.drop_path2(self.gamma_2 * ffn_residual_func(x))
+    return x
+
+
+class Adapter(nn.Module):  # Adapter is used to add to the transformer block for global adaptation
+    def __init__(self, D_features, mlp_ratio=0.75, act_layer=nn.ReLU, skip_connect=True):
+        # mlp_ratio is the bottleneck ratio of adapters
+        super().__init__()
+        self.skip_connect = skip_connect
+        D_hidden_features = int(D_features * mlp_ratio)
+        self.act = act_layer()
+        self.D_fc1 = nn.Linear(D_features, D_hidden_features)
+        self.D_fc2 = nn.Linear(D_hidden_features, D_features)
+        
+    def forward(self, x):
+        # x is (BT, HW+1, D)
+        xs = self.D_fc1(x)
+        xs = self.act(xs)
+        xs = self.D_fc2(xs)
+        if self.skip_connect:
+            x = x + xs
+        else:
+            x = xs
+        return x
+
 
 class EvaCrossAttentionBlock(nn.Module):
 
@@ -232,8 +285,25 @@ class ViTAdapter(nn.Module):
             for k, v in model_state_dict.items():
                 model_state_dict_new[k.replace('model.', '')] = v
             self.vit_model.load_state_dict(model_state_dict_new, strict=False)
-        # for param in self.vit_model.parameters():
-        #     param.requires_grad = False
+
+
+        ##############################################################
+        ## SelaVPR Adapters
+        self.serial_adapters = nn.Sequential(*[
+            Adapter(D_features=embed_dim, mlp_ratio=0.5)
+            for i in range(len(self.vit_model.blocks))
+        ])
+        self.parallel_adapters = nn.Sequential(*[
+            Adapter(D_features=embed_dim, mlp_ratio=0.5, skip_connect=False)
+            for i in range(len(self.vit_model.blocks))
+        ])
+        for blk in self.vit_model.blocks:
+            blk.forward = new_forward_eva_block_with_adapter.__get__(blk, type(blk))
+        ##############################################################
+
+        for param in self.vit_model.parameters():
+            param.requires_grad = False
+
         
         self.depth_adapters = nn.Sequential(*[
             EvaCrossAttentionBlock(dim=embed_dim, num_heads=num_heads)
@@ -279,29 +349,40 @@ class ViTAdapter(nn.Module):
         #         else:
         #             rgb = self.depth_adapters[i](query=rgb, key_value=d, rope=rot_pos_embed)
         #     if self.grad_checkpointing and not torch.jit.is_scripting():
-        #         rgb = checkpoint(forward_sa_with_rope, self.vit_model.blocks[i], rgb, rot_pos_embed)
+        #         # rgb = checkpoint(forward_sa_with_rope, self.vit_model.blocks[i], rgb, rot_pos_embed)
+        #         rgb = checkpoint(
+        #                 forward_sa_adapter_with_rope, self.vit_model.blocks[i], rgb, 
+        #                 self.serial_adapters[i], self.parallel_adapters[i], 
+        #                 rot_pos_embed, use_reentrant=False
+        #             )
         #     else:
-        #         rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
-        #     # rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
+        #         # rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
+        #         rgb = self.vit_model.blocks[i](rgb, self.serial_adapters[i], self.parallel_adapters[i], rope=rot_pos_embed)
         # rgb = self.vit_model.norm(rgb)
         # rgb = self.vit_model.forward_head(rgb)
         ####################
 
         #####################
         ## Last Adapter
-        for blk in self.vit_model.blocks:
+        for i in range(len(self.vit_model.blocks)):
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 rgb.requires_grad_(True)
-                rgb = checkpoint(forward_sa_with_rope, blk, rgb, rot_pos_embed, use_reentrant=False)
+                # rgb = checkpoint(forward_sa_with_rope, blk, rgb, rot_pos_embed, use_reentrant=False)
+                rgb = checkpoint(
+                        forward_sa_adapter_with_rope, self.vit_model.blocks[i], rgb, 
+                        self.serial_adapters[i], self.parallel_adapters[i], 
+                        rot_pos_embed, use_reentrant=False
+                    )
             else:
-                rgb = blk(rgb, rope=rot_pos_embed)
+                # rgb = self.vit_model.blocks[i](rgb, rope=rot_pos_embed)
+                rgb = self.vit_model.blocks[i](rgb, self.serial_adapters[i], self.parallel_adapters[i], rope=rot_pos_embed)
         if d != None:
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 d.requires_grad_(True)
                 rgb1 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], rgb, d, rot_pos_embed, use_reentrant=False)
                 rgb2 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], d, rgb, rot_pos_embed, use_reentrant=False)
                 rgb = rgb1 + rgb2
-            else:  
+            else:
                 rgb1 = self.depth_adapters[0](query=rgb, key_value=d, rope=rot_pos_embed)
                 rgb2 = self.depth_adapters[1](query=d, key_value=rgb, rope=rot_pos_embed)
                 rgb = rgb1 + rgb2
