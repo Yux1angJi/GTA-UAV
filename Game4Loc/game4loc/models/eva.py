@@ -441,34 +441,20 @@ class EvaBlock(nn.Module):
         ############## Adapter
         self.serial_adapter = Adapter(D_features=dim, mlp_ratio=0.5)
         self.parallel_adapter = Adapter(D_features=dim, mlp_ratio=0.5, skip_connect=False)
-        self.cross_attn_adapter = EvaCrossAttention(
-            dim,
-            num_heads=num_heads,
-            qkv_bias=qkv_bias,
-            qkv_fused=qkv_fused,
-            num_prefix_tokens=num_prefix_tokens,
-            attn_drop=attn_drop,
-            proj_drop=proj_drop,
-            attn_head_dim=attn_head_dim,
-            norm_layer=norm_layer if scale_attn_inner else None,
-        )
-        self.norm_adapter = norm_layer(dim)
         ################
 
     def forward(self, rgb, d, rope: Optional[torch.Tensor] = None, attn_mask: Optional[torch.Tensor] = None):
         def attn_residual_func(rgb, d, rope, attn_mask):
             rgb = self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask)
-            rgb = self.cross_attn_adapter(self.norm_adapter(rgb), d, rope=rope, attn_mask=attn_mask)
             rgb = self.serial_adapter(rgb)
             return rgb
 
         def ffn_residual_func(rgb):
             return self.mlp(self.norm2(rgb))+0.2*self.parallel_adapter(self.norm2(rgb))  # 0.2 is the scaling factor for Parallel adapter
 
-        
         if self.gamma_1 is None:
             rgb = rgb + self.drop_path1(attn_residual_func(rgb, d, rope, attn_mask))
-            x = rgb + self.drop_path2(ffn_residual_func(rgb))
+            rgb = rgb + self.drop_path2(ffn_residual_func(rgb))
         else:
             rgb = rgb + self.drop_path1(self.gamma_1 * attn_residual_func(rgb, d, rope, attn_mask))
             rgb = rgb + self.drop_path2(self.gamma_2 * ffn_residual_func(rgb))
