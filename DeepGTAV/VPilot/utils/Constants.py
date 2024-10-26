@@ -14,7 +14,7 @@
 # the buffers are at 4k (3840x2160) while the screenResolution is
 # downsized to match the screen (in this case 4k).
 
-MANAGED_SCREEN_RESOLUTION = "1920x1440"
+MANAGED_SCREEN_RESOLUTION = "1920x1080"
 
 if MANAGED_SCREEN_RESOLUTION != None:
     if MANAGED_SCREEN_RESOLUTION == "1920x1440":

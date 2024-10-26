@@ -9,6 +9,7 @@ https://github.com/gdpinchina/A-virtual-LiDAR-for-DeepGTAV
 #include "..\ObjectDetIncludes.h"
 #include <unordered_map>
 #include <Eigen/Core>
+#include <memory>
 #include "CamParams.h"
 
 #define _LIDAR_NOT_INIT_YET_ 0
@@ -103,8 +104,12 @@ private:
 
 private:
 
-    float* m_pPointClouds;
-    float* m_pRaycastPointCloud;
+    // float* m_pPointClouds;
+    // float* m_pRaycastPointCloud;
+    // Change to unique_ptr
+    std::unique_ptr<float[]> m_pPointClouds;
+    std::unique_ptr<float[]> m_pRaycastPointCloud;
+
     int m_pointsHit;
     int m_depthMapPoints;
     int m_raycastPoints;
@@ -132,7 +137,10 @@ private:
     float m_max_dist;
     float m_min_dist;
 
-    float* m_lidar2DPoints;
+    // float* m_lidar2DPoints;
+    // Change to unique_ptr
+    std::unique_ptr<float[]> m_lidar2DPoints;
+
     int m_beamCount;
 
     std::unordered_map<int, HitLidarEntity*>* m_entitiesHit;
@@ -147,7 +155,11 @@ private:
 
     //Updating at a later time with the new depth map
     int m_updatedPointCount;
-    float * m_updatedPointCloud;
+
+    // float * m_updatedPointCloud;
+    // Change to unique_ptr
+    std::unique_ptr<float[]> m_updatedPointCloud;
+
     Vector3 get3DFromDepthTarget(Vector3 target, Eigen::Vector2f target2D);
     std::vector<Hit2DDepth> m_hitDepthPoints;
 };

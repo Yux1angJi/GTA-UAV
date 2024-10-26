@@ -20,10 +20,10 @@ boost::random::normal_distribution<> s_nDist(DEPTH_NOISE_MEAN, DEPTH_NOISE_STDDE
 
 LiDAR::LiDAR()
 {
-    m_pPointClouds = NULL;
-    m_pRaycastPointCloud = NULL;
-    m_lidar2DPoints = NULL;
-    m_updatedPointCloud = NULL;
+    // m_pPointClouds = NULL;
+    // m_pRaycastPointCloud = NULL;
+    // m_lidar2DPoints = NULL;
+    // m_updatedPointCloud = NULL;
     m_pointsHit = 0;
     m_maxRange = 0;
     m_vertiUpLimit = 0;
@@ -61,8 +61,9 @@ void LiDAR::Init2DLiDAR_SmplNum(float maxRange, int horizSmplNum, float horizLeL
     m_horizRiLimit = horizRiLimit;
     m_horizResolu = (m_horizLeLimit + 360.0 - m_horizRiLimit) / m_horizSmplNum;
     if (!m_pPointClouds)
-        m_pPointClouds = (float *)malloc(m_horizSmplNum * sizeof(float));
-    if (m_pPointClouds == NULL)
+        // m_pPointClouds = (float *)malloc(m_horizSmplNum * sizeof(float));
+        m_pPointClouds = std::make_unique<float[]>(MAX_POINTS);
+    if (!m_pPointClouds)
         printf("\nLiDAR: memory alloc err");
 
     m_initType = _LIDAR_INIT_AS_2D_;
@@ -113,27 +114,31 @@ void LiDAR::Init3DLiDAR_SmplNum(float maxRange, int horizSmplNum, float horizLeL
 
     if (!m_pPointClouds)
         //Malloc 4*max number of points bytes for the point cloud
-        m_pPointClouds = (float*)malloc((MAX_POINTS * sizeof(float)));
-    if (m_pPointClouds == NULL)
+        // m_pPointClouds = (float*)malloc((MAX_POINTS * sizeof(float)));
+        m_pPointClouds = std::make_unique<float[]>(MAX_POINTS);
+    if (!m_pPointClouds)
         printf("\nLiDAR: memory alloc err");
 
     if (!m_pRaycastPointCloud)
         //Malloc 4*max number of points bytes for the point cloud
-        m_pRaycastPointCloud = (float*)malloc((MAX_POINTS * sizeof(float)));
-    if (m_pRaycastPointCloud == NULL)
+        // m_pRaycastPointCloud = (float*)malloc((MAX_POINTS * sizeof(float)));
+        m_pRaycastPointCloud = std::make_unique<float[]>(MAX_POINTS);
+    if (!m_pRaycastPointCloud)
         printf("\nLiDAR: memory alloc err3");
 
     if (!m_updatedPointCloud)
         //Malloc 4*max number of points bytes for the point cloud
-        m_updatedPointCloud = (float*)malloc((MAX_POINTS * sizeof(float)));
-    if (m_updatedPointCloud == NULL)
+        // m_updatedPointCloud = (float*)malloc((MAX_POINTS * sizeof(float)));
+        m_updatedPointCloud = std::make_unique<float[]>(MAX_POINTS);
+    if (!m_updatedPointCloud)
         printf("\nLiDAR: memory alloc err4");
 
     //Malloc 2*max number of points bytes for the 3d -> 2d point map
     if (GENERATE_2D_POINTMAP) {
-        m_lidar2DPoints = (float*)malloc((MAX_POINTS * sizeof(float)) / 2);
-        if (m_lidar2DPoints == NULL)
-            printf("\nLiDAR: memory alloc err2");
+        // m_lidar2DPoints = (float*)malloc((MAX_POINTS * sizeof(float)) / 2);
+        // if (m_lidar2DPoints == NULL)
+        //     printf("\nLiDAR: memory alloc err2");
+        m_lidar2DPoints = std::make_unique<float[]>(MAX_POINTS / 2);
     }
 
     m_initType = _LIDAR_INIT_AS_3D_;
@@ -177,22 +182,32 @@ void LiDAR::AttachLiDAR2Camera(Cam camera, Entity ownCar)
 
 void LiDAR::DestroyLiDAR()
 {
-    if (m_pPointClouds) {
-        free(m_pPointClouds);
-        m_pPointClouds = NULL;
+    // if (m_pPointClouds) {
+    //     free(m_pPointClouds);
+    //     m_pPointClouds = NULL;
+    // }
+    // if (m_pRaycastPointCloud) {
+    //     free(m_pRaycastPointCloud);
+    //     m_pRaycastPointCloud = NULL;
+    // }
+    // if (m_updatedPointCloud) {
+    //     free(m_updatedPointCloud);
+    //     m_updatedPointCloud = NULL;
+    // }
+    // if (m_lidar2DPoints) {
+    //     free(m_lidar2DPoints);
+    //     m_lidar2DPoints = NULL;
+    // }
+
+    if (m_entitiesHit) {
+        for (auto& pair : *m_entitiesHit) {
+            delete pair.second; // 删除动态分配的 HitLidarEntity 对象
+        }
+        m_entitiesHit->clear();
+        delete m_entitiesHit; // 如果 m_entitiesHit 的所有权属于 LiDAR 类
+        m_entitiesHit = nullptr;
     }
-    if (m_pRaycastPointCloud) {
-        free(m_pRaycastPointCloud);
-        m_pRaycastPointCloud = NULL;
-    }
-    if (m_updatedPointCloud) {
-        free(m_updatedPointCloud);
-        m_updatedPointCloud = NULL;
-    }
-    if (m_lidar2DPoints) {
-        free(m_lidar2DPoints);
-        m_lidar2DPoints = NULL;
-    }
+
     m_maxRange = 0;
     m_vertiUpLimit = 0;
     m_vertiUnLimit = 0;
@@ -210,12 +225,12 @@ void LiDAR::DestroyLiDAR()
 
 float * LiDAR::Get2DPoints(int &size) {
     size = m_beamCount;
-    return m_lidar2DPoints;
+    return m_lidar2DPoints.get();
 }
 
 float * LiDAR::GetRaycastPointcloud(int &size) {
     size = m_raycastPoints;
-    return m_pRaycastPointCloud;
+    return m_pRaycastPointCloud.get();
 }
 
 float* LiDAR::UpdatePointCloud(int &size, float* depthMap) {
@@ -226,7 +241,7 @@ float* LiDAR::UpdatePointCloud(int &size, float* depthMap) {
         float newDistance = sqrt(SYSTEM::VDIST2(0, 0, 0, vec_cam_coord.x, vec_cam_coord.y, vec_cam_coord.z));
         if (newDistance <= m_maxRange) {
             //Note: The y/x axes are changed to conform with KITTI velodyne axes
-            float* p = m_updatedPointCloud + (m_updatedPointCount * FLOATS_PER_POINT);
+            float* p = m_updatedPointCloud.get() + (m_updatedPointCount * FLOATS_PER_POINT);
             *p = vec_cam_coord.y;
             *(p + 1) = -vec_cam_coord.x;
             *(p + 2) = vec_cam_coord.z;
@@ -237,7 +252,7 @@ float* LiDAR::UpdatePointCloud(int &size, float* depthMap) {
 
     size = m_updatedPointCount;
     m_hitDepthPoints.clear();
-    return m_updatedPointCloud;
+    return m_updatedPointCloud.get();
 }
 
 std::string LiDAR::printDepthStats() {
@@ -311,11 +326,11 @@ float * LiDAR::GetPointClouds(int &size, std::unordered_map<int, HitLidarEntity*
     m_beamCount = 0;
     m_updatedPointCount = 0;
 
-    if (m_pPointClouds == NULL || m_initType == _LIDAR_NOT_INIT_YET_ || !m_isAttach)
+    if (!m_pPointClouds || m_initType == _LIDAR_NOT_INIT_YET_ || !m_isAttach)
         return NULL;
     switch (m_initType)
     {
-    case _LIDAR_INIT_AS_2D_: GenerateHorizPointClouds(90, m_pPointClouds);
+    case _LIDAR_INIT_AS_2D_: GenerateHorizPointClouds(90, m_pPointClouds.get());
     case _LIDAR_INIT_AS_3D_:
     {
         m_max_dist = 0;
@@ -332,7 +347,7 @@ float * LiDAR::GetPointClouds(int &size, std::unordered_map<int, HitLidarEntity*
                 break;
 
             ++horizBeamCount;
-			GenerateHorizPointClouds(phi, m_pPointClouds);
+			GenerateHorizPointClouds(phi, m_pPointClouds.get());
 		}
         std::ostringstream oss;
         oss << "Max distance: " << m_max_dist << " min distance: " << m_min_dist
@@ -349,7 +364,7 @@ float * LiDAR::GetPointClouds(int &size, std::unordered_map<int, HitLidarEntity*
     log(str1);
 
     size = m_pointsHit;
-    return m_pPointClouds;
+    return m_pPointClouds.get();
 }
 
 int LiDAR::getTotalSmplNum()
@@ -620,8 +635,8 @@ void LiDAR::GenerateSinglePoint(float phi, float theta, float* p)
     //This is what should be used for sampling depth map as endCoord will not hit same points as depth map
     target2D = get_2d_from_3d(Eigen::Vector3f(target.x, target.y, target.z));
     if (GENERATE_2D_POINTMAP) {
-        *(m_lidar2DPoints + 2 * m_beamCount) = target2D(0);
-        *(m_lidar2DPoints + 2 * m_beamCount + 1) = target2D(1);
+        *(m_lidar2DPoints.get() + 2 * m_beamCount) = target2D(0);
+        *(m_lidar2DPoints.get() + 2 * m_beamCount + 1) = target2D(1);
         ++m_beamCount;
     }
     bool targetOnScreen = isPositionOnScreen(target2D(0), target2D(1));
@@ -709,7 +724,7 @@ void LiDAR::GenerateSinglePoint(float phi, float theta, float* p)
             *(p + 3) = entityID;//This is the entityID (Only non-zero for pedestrians and vehicles)
             ++m_pointsHit;
 
-            float* pUpdatedPC = m_updatedPointCloud + (m_updatedPointCount * FLOATS_PER_POINT);
+            float* pUpdatedPC = m_updatedPointCloud.get() + (m_updatedPointCount * FLOATS_PER_POINT);
             *pUpdatedPC = vec_cam_coord.y;
             *(pUpdatedPC + 1) = -vec_cam_coord.x;
             *(pUpdatedPC + 2) = vec_cam_coord.z;
@@ -719,7 +734,7 @@ void LiDAR::GenerateSinglePoint(float phi, float theta, float* p)
 
         if (OUTPUT_RAYCAST_POINTS) {
             //Note: The y/x axes are changed to conform with KITTI velodyne axes
-            float* ptr = m_pRaycastPointCloud + (m_raycastPoints * FLOATS_PER_POINT);
+            float* ptr = m_pRaycastPointCloud.get() + (m_raycastPoints * FLOATS_PER_POINT);
             *ptr = vec_cam_coord.y;
             *(ptr + 1) = -vec_cam_coord.x;
             *(ptr + 2) = vec_cam_coord.z;

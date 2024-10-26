@@ -15,6 +15,8 @@ import argparse
 import time
 import cv2
 
+import base64
+
 import matplotlib.pyplot as plt
 
 from PIL import Image
@@ -119,14 +121,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('-l', '--host', default='localhost', help='The IP where DeepGTAV is running')
     parser.add_argument('-p', '--port', default=8000, help='The port where DeepGTAV is running')
-    parser.add_argument('-s', '--save_dir', default='D:\\data\\GTA-UAV\\Captured\\visual_test_300', help='The directory the generated data is saved to')
+    parser.add_argument('-s', '--save_dir', default='D:\\data\\GTA-UAV\\Captured\\visual_test_lidar_120', help='The directory the generated data is saved to')
     args = parser.parse_args()
 
     client = Client(ip=args.host, port=args.port)
     # voltic
     # scenario = Scenario(drivingMode=786603, vehicle="buzzard", location=[245.23306274414062, -998.244140625, 29.205352783203125], spawnedEntitiesDespawnSeconds=200)
-    scenario = Scenario(drivingMode=[786603,0], vehicle="voltic", location=[245.23306274414062, -998.244140625, 29.205352783203125], spawnedEntitiesDespawnSeconds=200)
-    dataset = Dataset(location=True, time=True, exportBBox2D=True)
+    scenario = Scenario(drivingMode=0, vehicle="buzzard", location=[245.23306274414062, -998.244140625, 29.205352783203125], spawnedEntitiesDespawnSeconds=200)
+    dataset = Dataset(location=True, time=True, exportBBox2D=True, segmentationImage=True, exportLiDAR=True, maxLidarDist=12000)
     client.sendMessage(Start(scenario=scenario, dataset=dataset))
     message = client.recvMessage()
     
@@ -135,9 +137,9 @@ if __name__ == '__main__':
 
     CAMERA_OFFSET_Z = -10
     CAMERA_OFFSET_ROT_Z = 20
-    TRAVEL_HEIGHT = 300
+    TRAVEL_HEIGHT = 60
     # TRAVEL_HEIGHT_LIST = [100, 200, 300, 400, 500, 600]
-    TRAVEL_HEIGHT_ATEMPT = 1000
+    TRAVEL_HEIGHT_ATEMPT = 100
 
     CAMERA_ROT_X = -90  # [-70, 110]
     CAMERA_ROT_X_L = -110
@@ -166,9 +168,8 @@ if __name__ == '__main__':
     # Adjustments for recording
     #  from UAV perspective
     # client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x = uniform(CAMERA_ROT_X_LOW, CAMERA_ROT_X_HIGH)))
-    client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=rot_x, rot_z=rot_z, rot_y=rot_y))
-    message = client.recvMessage()
-    print('start camera', message['CameraAngle'])
+    # client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=rot_x, rot_z=rot_z, rot_y=rot_y))
+    client.sendMessage(SetCameraPositionAndRotation(z = -20, rot_x = -90))
 
 
     xAr_min, xAr_max, yAr_min, yAr_max = -3418, 3945, -3370, 7251
@@ -207,19 +208,21 @@ if __name__ == '__main__':
         os.makedirs(os.path.join(save_dir, 'images'))
     if not os.path.exists(os.path.join(save_dir, 'meta_data')):
         os.makedirs(os.path.join(save_dir, 'meta_data'))
+    if not os.path.exists(os.path.join(save_dir, 'LiDAR')):
+        os.makedirs(os.path.join(save_dir, 'LiDAR'))
 
     for i in range(len(x_y_list)):
         x_temp, y_temp = x_y_list[i][0], x_y_list[i][1]
 
-        for f in range(20):
+        for f in range(60):
+            count += 1
+
             if f == 1:
                 weather = "CLEAR"
                 client.sendMessage(SetWeather(weather))
-                message = client.recvMessage()
             
             elif f == 2:
                 client.sendMessage(SetClockTime(12))
-                message = client.recvMessage()
 
             elif f == 3:
                 client.sendMessage(TeleportToLocation(x_temp, y_temp, TRAVEL_HEIGHT_ATEMPT))
@@ -231,47 +234,57 @@ if __name__ == '__main__':
                 z_loc = z_ground + TRAVEL_HEIGHT - CAMERA_OFFSET_Z
                 z_temp = z_ground + TRAVEL_HEIGHT
 
-            elif f == 4:
                 client.sendMessage(TeleportToLocation(x_temp, y_temp, z_loc))
-                message = client.recvMessage()
             
-            elif f == 7:
-                rot_x = gaussin_random_truncted(CAMERA_ROT_X_L, CAMERA_ROT_X_R, CAMERA_ROT_X, STD_DEV)
-                rot_y = gaussin_random_truncted(CAMERA_ROT_Y_L, CAMERA_ROT_Y_R, CAMERA_ROT_Y, STD_DEV)
-                rot_z = random.randint(CAMERA_ROT_Z_L, CAMERA_ROT_Z_R)
-                # print(z_loc, heightAboveGround, TRAVEL_HEIGHT, z_temp)
-                client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=rot_x, rot_y=rot_y, rot_z=rot_z))
-                message = client.recvMessage()
-                rot_x_m, rot_y_m, rot_z_m = message['CameraAngle']
-                pos_x_m, pos_y_m, pos_z_m = message['location']
-                print('!!!!! rot', rot_x, rot_x_m, rot_y, rot_y_m, rot_z, rot_z_m)
-                print('!!!!! pos', pos_x_m, pos_y_m, pos_z_m)
-            elif f == 9:
+            # elif f == 7:
+            #     rot_x = gaussin_random_truncted(CAMERA_ROT_X_L, CAMERA_ROT_X_R, CAMERA_ROT_X, STD_DEV)
+            #     rot_y = gaussin_random_truncted(CAMERA_ROT_Y_L, CAMERA_ROT_Y_R, CAMERA_ROT_Y, STD_DEV)
+            #     rot_z = random.randint(CAMERA_ROT_Z_L, CAMERA_ROT_Z_R)
+            #     # print(z_loc, heightAboveGround, TRAVEL_HEIGHT, z_temp)
+            #     client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=rot_x, rot_y=rot_y, rot_z=rot_z))
+            #     message = client.recvMessage()
+            #     rot_x_m, rot_y_m, rot_z_m = message['CameraAngle']
+            #     pos_x_m, pos_y_m, pos_z_m = message['location']
+            #     print('!!!!! rot', rot_x, rot_x_m, rot_y, rot_y_m, rot_z, rot_z_m)
+            #     print('!!!!! pos', pos_x_m, pos_y_m, pos_z_m)
+            elif f == 5:
+                client.sendMessage(GoToLocation(443, -87, 40))
+
+            elif f > 30 and f%10 == 0:
                 client.sendMessage(StartRecording())
-                message = client.recvMessage()
-                heightAboveGround_1 = message['HeightAboveGround']
-            elif f == 13:
+
+            elif f > 30 and f%10 == 1:
                 client.sendMessage(StopRecording())
-                message = client.recvMessage()
+            
+            message = client.recvMessage()
+
+            if message["LiDAR"] != None and message["LiDAR"] != "":
+
                 filename = f'{TRAVEL_HEIGHT}' + '_' + f'{run_count:04}' + '_' + f'{count:010}'
 
                 x_temp, y_temp, z_temp = message['CameraPosition']
                 heightAboveGround_2 = message['HeightAboveGround']
 
-                diff1 = abs(heightAboveGround_2 - heightAboveGround_1)
-                if diff1 > ERROR_EPS:
-                    print(f'Warning!! heightAboveGround value unstable! h1={heightAboveGround_1:.2f}, h2={heightAboveGround_2:.2f}, diff={diff1:.2f}')
-                    continue
-
                 rot_x, rot_y, rot_z = message['CameraAngle']
 
-                proj_points = calculate_projection_points(heightAboveGround_1 + CAMERA_OFFSET_Z, rot_x, rot_y, rot_z, x_temp, y_temp)
+                proj_points = calculate_projection_points(heightAboveGround_2 + CAMERA_OFFSET_Z, rot_x, rot_y, rot_z, x_temp, y_temp)
                 save_image(save_dir, filename, frame2numpy(message['frame']))
                 save_meta_data(save_dir, filename, message["location"], message["HeightAboveGround"], proj_points, message["CameraPosition"], message["CameraAngle"], message["time"])
-                count += 1
 
-            else:
-                message = client.recvMessage()
+                # print(message["LiDAR"])
+                a = np.frombuffer(base64.b64decode(message["LiDAR"]), np.float32)
+                a = a.reshape((-1, 4))
+                points3d = np.delete(a, 3, 1)
+
+            #     # point_cloud = open3d.geometry.PointCloud()
+            #     # point_cloud.points = open3d.utility.Vector3dVector(points3d)
+            #     # open3d.visualization.draw_geometries([point_cloud])
+
+                fig = plt.figure(figsize=(20,15))
+                ax = fig.add_subplot(111, projection='3d')
+                ax.view_init(30, - 90 - 90 -8)
+                ax.scatter(points3d[:,0], points3d[:,1], points3d[:,2], c=points3d[:,2], s=2)
+                plt.savefig(os.path.join(save_dir, "LiDAR", filename))
 
     # We tell DeepGTAV to stop
     client.sendMessage(Stop())
