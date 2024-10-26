@@ -12,7 +12,7 @@ from transformers import get_constant_schedule_with_warmup, get_polynomial_decay
 
 from game4loc.dataset.gta_mm import GTAMMDatasetEval, GTAMMDatasetTrain, get_transforms
 from game4loc.utils import setup_system, Logger
-from game4loc.trainer_mm import train_mm_with_weight
+from game4loc.trainer.trainer_mm import train_mm_with_weight
 from game4loc.evaluate.gta_mm import evaluate
 from game4loc.loss import InfoNCE, MMWeightedInfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
 from game4loc.models.model_mm import DesModelWithMM
@@ -103,7 +103,7 @@ class Configuration:
     test_mode: str = "pos"                # Test with semi-positive pairs
 
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -310,7 +310,7 @@ def train_script(config):
         dlidar2simg=False,
         dimg2dlidar=False,
         ddepth2dimg=True,
-        ddepth2simg=True,
+        ddepth2simg=False,
         with_depth=True,
         with_lidar=False
     )
