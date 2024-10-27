@@ -263,7 +263,7 @@ class ViTAdapter(nn.Module):
                  img_size=(384, 384), 
                  embed_dim=768,
                  num_heads=12,
-                 num_blocks=2,
+                 num_blocks=1,
                  lamda_drop_rate=0.,
                  *args,
                  **kwargs):
@@ -290,9 +290,9 @@ class ViTAdapter(nn.Module):
                 model_state_dict_new[k.replace('model.', '')] = v
             self.vit_model.load_state_dict(model_state_dict_new, strict=False)
 
-        for name, param in self.vit_model.named_parameters():
-            if 'adapter' not in name:
-                param.requires_grad = False
+        # for name, param in self.vit_model.named_parameters():
+        #     if 'adapter' not in name:
+        #         param.requires_grad = False
             # else:
             #     print('not freeze', name)
 
