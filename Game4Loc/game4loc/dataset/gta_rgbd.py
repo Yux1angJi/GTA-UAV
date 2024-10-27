@@ -54,6 +54,7 @@ class GTARGBDDatasetTrain(Dataset):
                  mode='pos_semipos',
                  train_ratio=1.0,
                  prob_drop_depth=0.0,
+                 prob_drop_rgb=0.0,
                  ):
         super().__init__()
         
@@ -95,6 +96,7 @@ class GTARGBDDatasetTrain(Dataset):
         self.prob_flip = prob_flip
         self.shuffle_batch_size = shuffle_batch_size
         self.prob_drop_depth = prob_drop_depth
+        self.prob_drop_rgb = prob_drop_rgb
 
         # Training with sparse data
         num_pairs = len(self.pairs)
@@ -129,9 +131,15 @@ class GTARGBDDatasetTrain(Dataset):
                 image_d_transformed = image_d_transformed.unsqueeze(0)
             query_img = torch.cat((image_rgb_transformed, image_d_transformed), dim=0)  # 形状为 (4, H, W)
 
+        drop_flag = False
         if np.random.random() < self.prob_drop_depth:
             zero_d = torch.zeros_like(query_img[3:, :, :])
             query_img[3, :, :] = zero_d
+            drop_flag = True
+
+        if np.random.random() < self.prob_drop_rgb and not drop_flag:
+            zero_rgb = torch.zeros_like(query_img[:3, :, :])
+            query_img[:3, :, :] = zero_rgb
             
         if self.transforms_gallery is not None:
             gallery_img = self.transforms_gallery(image=gallery_img)['image']

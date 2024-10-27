@@ -711,7 +711,7 @@ class Eva(nn.Module):
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 init_values=init_values,
-                adapter=(i in [2, 5, 8])
+                adapter=False,
             )
             for i in range(depth)])
 

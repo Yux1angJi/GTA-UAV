@@ -226,6 +226,7 @@ def train_script(config):
                                     transforms_gallery=train_sat_transforms,
                                     prob_flip=config.prob_flip,
                                     prob_drop_depth=0.2,
+                                    prob_drop_rgb=0.2,
                                     shuffle_batch_size=config.batch_size,
                                     mode=config.train_mode,
                                     train_ratio=config.train_ratio,

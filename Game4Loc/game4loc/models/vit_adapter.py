@@ -263,7 +263,7 @@ class ViTAdapter(nn.Module):
                  img_size=(384, 384), 
                  embed_dim=768,
                  num_heads=12,
-                 num_blocks=1,
+                 num_blocks=2,
                  lamda_drop_rate=0.,
                  *args,
                  **kwargs):
@@ -290,9 +290,9 @@ class ViTAdapter(nn.Module):
                 model_state_dict_new[k.replace('model.', '')] = v
             self.vit_model.load_state_dict(model_state_dict_new, strict=False)
 
-        for name, param in self.vit_model.named_parameters():
-            if 'adapter' not in name:
-                param.requires_grad = False
+        # for name, param in self.vit_model.named_parameters():
+        #     if 'adapter' not in name:
+        #         param.requires_grad = False
             # else:
             #     print('not freeze', name)
 
@@ -380,13 +380,13 @@ class ViTAdapter(nn.Module):
 
         if self.grad_checkpointing and not torch.jit.is_scripting():
             d.requires_grad_(True)
-            rgb = checkpoint(forward_ca_with_rope, self.depth_adapters[0], rgb, d, rot_pos_embed, use_reentrant=False)
-            # rgb2 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], d, rgb, rot_pos_embed, use_reentrant=False)
-            # rgb = rgb1 + rgb2
+            rgb1 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], rgb, d, rot_pos_embed, use_reentrant=False)
+            rgb2 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], d, rgb, rot_pos_embed, use_reentrant=False)
+            rgb = rgb1 + rgb2
         else:
-            rgb = self.depth_adapters[0](query=rgb, key_value=d, rope=rot_pos_embed)
-            # rgb2 = self.depth_adapters[1](query=d, key_value=rgb, rope=rot_pos_embed)
-            # rgb = rgb1 + rgb2
+            rgb1 = self.depth_adapters[0](query=rgb, key_value=d, rope=rot_pos_embed)
+            rgb2 = self.depth_adapters[1](query=d, key_value=rgb, rope=rot_pos_embed)
+            rgb = rgb1 + rgb2
 
             # lamda = d[:, 1:].mean(dim=1)
             # lamda = self.lamda_norm(lamda)
