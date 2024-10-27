@@ -190,13 +190,21 @@ if __name__ == '__main__':
     client.sendMessage(SetCameraPositionAndRotation(z = CAMERA_OFFSET_Z, rot_x=CAMERA_ROT_X, rot_z=CAMERA_ROT_Z, rot_y=CAMERA_ROT_Y))
 
     count_start = 0
+    # count_start = 20000
 
     meta_data_dir = 'D:\\data\\GTA-UAV\\Captured\\randcam2_std0_stable_5area\\meta_data'
+    meta_data_dir_already = 'D:\\data\\GTA-UAV\\Captured\\lidar_from_file\\meta_data'
 
     meta_data_list = get_meta_data_from_file(meta_data_dir)
     total_count = len(meta_data_list)
 
+    meta_file_list = os.listdir(meta_data_dir)
+    meta_file_list_already = os.listdir(meta_data_dir_already)
+
     for count in range(count_start, total_count):
+
+        if meta_file_list[count] in meta_file_list_already:
+            continue
 
         meta_data = meta_data_list[count]
         filename, x, y, z, cam_x, cam_y, cam_z = meta_data

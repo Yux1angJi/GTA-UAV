@@ -439,8 +439,8 @@ class EvaBlock(nn.Module):
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
         ############## Adapter
-        self.serial_adapter = Adapter(D_features=dim, mlp_ratio=0.5)
-        self.parallel_adapter = Adapter(D_features=dim, mlp_ratio=0.5, skip_connect=False)
+        # self.serial_adapter = Adapter(D_features=dim, mlp_ratio=0.5)
+        # self.parallel_adapter = Adapter(D_features=dim, mlp_ratio=0.5, skip_connect=False)
         ################
 
     def forward(self, rgb, d, rope: Optional[torch.Tensor] = None, attn_mask: Optional[torch.Tensor] = None):
@@ -453,11 +453,21 @@ class EvaBlock(nn.Module):
             return self.mlp(self.norm2(rgb))+0.2*self.parallel_adapter(self.norm2(rgb))  # 0.2 is the scaling factor for Parallel adapter
 
         if self.gamma_1 is None:
-            rgb = rgb + self.drop_path1(attn_residual_func(rgb, d, rope, attn_mask))
-            rgb = rgb + self.drop_path2(ffn_residual_func(rgb))
+            ################################
+            ## Adapter
+            # rgb = rgb + self.drop_path1(attn_residual_func(rgb, d, rope, attn_mask))
+            # rgb = rgb + self.drop_path2(ffn_residual_func(rgb))
+            ################################
+            rgb = rgb + self.drop_path1(self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask))
+            rgb = rgb + self.drop_path2(self.mlp(self.norm2(rgb)))
         else:
-            rgb = rgb + self.drop_path1(self.gamma_1 * attn_residual_func(rgb, d, rope, attn_mask))
-            rgb = rgb + self.drop_path2(self.gamma_2 * ffn_residual_func(rgb))
+            ################################
+            ## Adapter
+            # rgb = rgb + self.drop_path1(self.gamma_1 * attn_residual_func(rgb, d, rope, attn_mask))
+            # rgb = rgb + self.drop_path2(self.gamma_2 * ffn_residual_func(rgb))
+            ################################
+            rgb = rgb + self.drop_path1(self.gamma_1 * self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask))
+            rgb = rgb + self.drop_path2(self.gamma_2 * self.mlp(self.norm2(rgb)))
         return rgb
 
 
