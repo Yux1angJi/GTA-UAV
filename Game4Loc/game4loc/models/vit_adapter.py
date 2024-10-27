@@ -290,9 +290,9 @@ class ViTAdapter(nn.Module):
                 model_state_dict_new[k.replace('model.', '')] = v
             self.vit_model.load_state_dict(model_state_dict_new, strict=False)
 
-        # for name, param in self.vit_model.named_parameters():
-        #     if 'adapter' not in name:
-        #         param.requires_grad = False
+        for name, param in self.vit_model.named_parameters():
+            if 'adapter' not in name:
+                param.requires_grad = False
             # else:
             #     print('not freeze', name)
 
