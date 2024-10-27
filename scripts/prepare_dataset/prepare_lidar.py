@@ -308,6 +308,8 @@ def lidar2rgbd():
     
     rgbd_dir = data_root + "rgbd"
 
+    os.makedirs(rgbd_dir, exist_ok=True)
+
     img_size = (384, 384)
 
     lidar_files = [f for f in os.listdir(lidar_dir) if f.endswith(".ply")]
@@ -339,11 +341,13 @@ def lidar2rgbd():
         rgbd_img = np.dstack((rgb_img, depth_img))
 
         cv2.imwrite(os.path.join(rgbd_dir, lidar_file.replace('.ply', '.png')), rgbd_img)
+        # print(os.path.join(rgbd_dir, lidar_file.replace('.ply', '.png')))
     
     print('Lidar 2 RGBD Done!')
 
 
 if __name__ == "__main__":
+    # data_clean()
     lidar2rgbd()
 
     # rgbd = cv2.imread('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/rgbd/200_0001_0000004776.png', cv2.IMREAD_UNCHANGED)

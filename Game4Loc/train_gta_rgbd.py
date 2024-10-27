@@ -84,6 +84,9 @@ class Configuration:
     # Loss
     label_smoothing: float = 0.1
     k: float = 3
+
+    # Differential train
+    diff_guidance: float = 0.0
     
     # Learning Rate
     lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
@@ -167,7 +170,7 @@ def train_script(config):
                     pretrained=True,
                     img_size=config.img_size,
                     share_weights=config.share_weights,
-                    diff_guidance=5.0)
+                    diff_guidance=config.diff_guidance)
 
     data_config = model.get_config()
     print(data_config)
@@ -211,12 +214,13 @@ def train_script(config):
 
     # Transforms
     val_sat_transforms, val_drone_transforms, train_sat_transforms, \
-        train_drone_rgb_transforms, train_drone_depth_transforms \
-            = get_transforms(img_size, mean=mean, std=std)
+        train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms \
+         = get_transforms(img_size, mean=mean, std=std)
                                                                                                                                  
     # Train
     train_dataset = GTARGBDDatasetTrain(data_root=config.data_root,
                                     pairs_meta_file=config.train_pairs_meta_file,
+                                    transforms_query_geo=train_drone_geo_transforms,
                                     transforms_query_rgb=train_drone_rgb_transforms,
                                     transforms_query_depth=train_drone_depth_transforms,
                                     transforms_gallery=train_sat_transforms,
@@ -491,6 +495,8 @@ def parse_args():
 
     parser.add_argument('--k', type=float, default=5, help='weighted k')
 
+    parser.add_argument('--diff_guidance', type=float, default=0.0, help='Differential guidance')
+
     parser.add_argument('--no_custom_sampling', action='store_true', help='Train without custom sampling')
     
     parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
@@ -531,5 +537,6 @@ if __name__ == '__main__':
     config.test_mode = args.test_mode
     config.query_mode = args.query_mode
     config.train_ratio = args.train_ratio
+    config.diff_guidance = args.diff_guidance
 
     train_script(config)

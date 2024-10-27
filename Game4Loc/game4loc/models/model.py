@@ -68,7 +68,11 @@ class DesModel(nn.Module):
     
     
     def set_grad_checkpointing(self, enable=True):
-        self.model.set_grad_checkpointing(enable)
+        if self.share_weights:
+            self.model.set_grad_checkpointing(enable)
+        else:
+            self.model1.set_grad_checkpointing(enable)
+            self.model2.set_grad_checkpointing(enable)
 
     def freeze_layers(self, frozen_blocks=10, frozen_stages=[0,0,0,0]):
         pass

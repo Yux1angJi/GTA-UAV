@@ -112,24 +112,26 @@ class DesModelWithRGBD(nn.Module):
         if self.share_weights:
             if img1 is not None and img2 is not None:
                 if self.diff_guidance > 0.0:
-                    image_features1_rgb = self.model(img1[:, :3, :, :])
-                    image_features1_rgbd = self.model(img1)
+                    image_features1_rgb, _ = self.model(img1[:, :3, :, :])
+                    image_features1_rgbd, lamda = self.model(img1)
+                    # image_features1 = lamda * image_features1_rgbd + (1 - lamda) * image_features1_rgb
                     image_features1 = self.diff_guidance * (image_features1_rgbd - image_features1_rgb) + image_features1_rgb
-                    image_features2 = self.model(img2)
+                    image_features2, _ = self.model(img2)
                 else:
-                    image_features1 = self.model(img1)
-                    image_features2 = self.model(img2)
-                return image_features1, image_features2            
+                    image_features1, _ = self.model(img1)
+                    image_features2, _ = self.model(img2)
+                return image_features1, image_features2        
             elif img1 is not None:
                 if self.diff_guidance > 0.0:
-                    image_features1_rgb = self.model(img1[:, :3, :, :])
-                    image_features1_rgbd = self.model(img1)
+                    image_features1_rgb, _ = self.model(img1[:, :3, :, :])
+                    image_features1_rgbd, lamda = self.model(img1)
+                    # image_features = lamda * image_features1_rgbd + (1 - lamda) * image_features1_rgb
                     image_features = self.diff_guidance * (image_features1_rgbd - image_features1_rgb) + image_features1_rgb
                 else:
-                    image_features = self.model(img1)
+                    image_features, _ = self.model(img1)
                 return image_features
             else:
-                image_features = self.model(img2)
+                image_features, _ = self.model(img2)
                 return image_features
         else:
             if img1 is not None and img2 is not None:

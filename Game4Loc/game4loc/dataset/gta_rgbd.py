@@ -45,6 +45,7 @@ class GTARGBDDatasetTrain(Dataset):
     def __init__(self,
                  pairs_meta_file,
                  data_root,
+                 transforms_query_geo=None,
                  transforms_query_rgb=None,
                  transforms_query_depth=None,
                  transforms_gallery=None,
@@ -87,6 +88,7 @@ class GTARGBDDatasetTrain(Dataset):
                 self.pairs_sate2drone_dict.setdefault(pair_sate_img, []).append(drone_img_name)
                 self.pairs_match_set.add((drone_img_name, pair_sate_img))
 
+        self.transforms_query_geo = transforms_query_geo
         self.transforms_query_rgb = transforms_query_rgb
         self.transforms_query_depth = transforms_query_depth
         self.transforms_gallery = transforms_gallery
@@ -116,11 +118,13 @@ class GTARGBDDatasetTrain(Dataset):
             query_img = cv2.flip(query_img, 1)
         
         # image transforms
-        if self.transforms_query_depth is not None and self.transforms_query_rgb is not None:
+        if self.transforms_query_geo is not None:
             image_rgb = query_img[:, :, :3]
-            image_d = query_img[:, :, 3]
-            image_rgb_transformed = self.transforms_query_rgb(image=image_rgb)['image']
-            image_d_transformed = self.transforms_query_depth(image=image_d)['image']
+            image_d = query_img[:, :, 3:]
+            transformed = self.transforms_query_geo(image=image_rgb, mask=image_d)
+            image_rgb_transformed = self.transforms_query_rgb(image=transformed['image'])['image']
+            image_d_transformed = self.transforms_query_depth(image=transformed['mask'])['image']
+
             if image_d_transformed.ndim == 2:
                 image_d_transformed = image_d_transformed.unsqueeze(0)
             query_img = torch.cat((image_rgb_transformed, image_d_transformed), dim=0)  # 形状为 (4, H, W)
@@ -364,9 +368,13 @@ def get_transforms(img_size,
                                       A.Normalize(mean, std),
                                       ToTensorV2(),
                                       ])
-    
+
+    train_drone_geo_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                            A.RandomRotate90(p=1.0),
+                                           ],
+                                          )
+
     train_drone_rgb_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
-                                        A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
                                         A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.15, always_apply=False, p=0.5),
                                         A.OneOf([
                                                  A.AdvancedBlur(p=1.0),
@@ -387,21 +395,32 @@ def get_transforms(img_size,
                                         ],
                                     )
     train_drone_depth_transforms = A.Compose([
-                                        A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
-                                        A.Normalize(mean_d, std_d),
-                                        ToTensorV2(),
-                                        ],
-                                    )
+        A.Normalize(mean_d, std_d),
+        ToTensorV2(),
+    ])
     
-    return val_sat_transforms, val_drone_transforms, train_sat_transforms, train_drone_rgb_transforms, train_drone_depth_transforms
+    return val_sat_transforms, val_drone_transforms, train_sat_transforms, train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms
 
 
 if __name__ == "__main__":
-    _, transforms_rgbd, _, transforms_rgb, transforms_depth = get_transforms(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5], img_size=(384, 384))
+    _, _, _, transforms_geo, transforms_rgb, transforms_d = get_transforms(mean=[0.5,0.5,0.5], std=[0.5,0.5,0.5], img_size=(384, 384))
 
-    a = np.ones((500, 500, 4)) * 255
-    a = transforms_rgbd(image=a)['image']
-    print(a)
+    x = np.random.rand(500, 500, 4) * 255
+    x = x.astype(np.uint8)
+    print(x.dtype)
+    rgb = x[:, :, :3]
+    d = x[:, :, 3:]
+    print(rgb.shape, d.shape)
+    a = transforms_geo(image=rgb, mask=d)
+    rgb = a['image']
+    d = a['mask']
+
+    rgb = transforms_rgb(image=rgb)['image']
+    d = transforms_d(image=d)['image']
+
+
+    print(rgb.max(), rgb.min())
+    print(d.max(), d.min())
 
     # rgbd = cv2.imread('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/rgbd/200_0001_0000001542.png', cv2.IMREAD_UNCHANGED)
 
