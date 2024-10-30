@@ -461,6 +461,7 @@ class EvaBlock(nn.Module):
             ## Adapter
                 rgb = rgb + self.drop_path1(attn_residual_func(rgb, d, rope, attn_mask))
                 rgb = rgb + self.drop_path2(ffn_residual_func(rgb))
+                # rgb = rgb + self.drop_path2(self.mlp(self.norm2(rgb)))
             ################################
             else:
                 rgb = rgb + self.drop_path1(self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask))
@@ -471,6 +472,7 @@ class EvaBlock(nn.Module):
             ## Adapter
                 rgb = rgb + self.drop_path1(self.gamma_1 * attn_residual_func(rgb, d, rope, attn_mask))
                 rgb = rgb + self.drop_path2(self.gamma_2 * ffn_residual_func(rgb))
+                # rgb = rgb + self.drop_path2(self.gamma_2 * self.mlp(self.norm2(rgb)))
             ################################
             else:
                 rgb = rgb + self.drop_path1(self.gamma_1 * self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask))
@@ -611,6 +613,7 @@ class Eva(nn.Module):
             dynamic_img_pad: bool = False,
             ref_feat_shape: Optional[Union[Tuple[int, int], int]] = None,
             head_init_scale: float = 0.001,
+            adapter_list=[],
     ):
         """
 
@@ -711,7 +714,7 @@ class Eva(nn.Module):
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
                 init_values=init_values,
-                adapter=False,
+                adapter=(i in adapter_list),
             )
             for i in range(depth)])
 
@@ -818,16 +821,22 @@ class Eva(nn.Module):
                 rot_pos_embed = apply_keep_indices_nlc(x, rot_pos_embed, keep_indices)
         return x, rot_pos_embed
 
-    def forward_features(self, rgb, d):
+    def forward_features(self, rgb, d=None, intermediate=False):
         rgb = self.patch_embed(rgb)
         rgb, rot_pos_embed = self._pos_embed(rgb)
+        x_intermediate = []
         for blk in self.blocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
                 x = checkpoint(blk, rgb, d, rope=rot_pos_embed, use_reentrant=False)
             else:
                 x = blk(rgb, d, rope=rot_pos_embed)
+            if intermediate:
+                x_intermediate.append(x)
         x = self.norm(x)
-        return x
+        if intermediate:
+            return x, x_intermediate
+        else:
+            return x
 
     def forward_head(self, x, pre_logits: bool = False):
         if self.global_pool:
@@ -1237,9 +1246,15 @@ def vit_betwixt_patch16_rope_reg4_gap_256(pretrained=False, **kwargs) -> Eva:
     return model
 
 
-def vit_base_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
-    model_args = dict(
+def vit_base_patch16_rope_reg1_gap_256(
+        pretrained=False, 
+        in_chans=3,
         img_size=384,
+        **kwargs,
+    ) -> Eva:
+    model_args = dict(
+        in_chans=in_chans,
+        img_size=img_size,
         patch_size=16,
         embed_dim=768,
         depth=12,
@@ -1254,4 +1269,7 @@ def vit_base_patch16_rope_reg1_gap_256(pretrained=False, **kwargs) -> Eva:
         ref_feat_shape=(16, 16),  # 224/14
     )
     model = Eva(**model_args)
+    if pretrained:
+        checkpoint = torch.load('./pretrained/vit_base_patch16_rope_reg1_gap_256/pytorch_model.bin')
+        model.load_state_dict(checkpoint)
     return model

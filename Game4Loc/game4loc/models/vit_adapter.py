@@ -269,8 +269,9 @@ class ViTAdapter(nn.Module):
                  **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.depth_encoder = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size, in_chans=1)
-        # pretrained_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1021075644/weights_end.pth')
+        # self.depth_encoder = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size, in_chans=1)
+        self.depth_encoder = vit_base_patch16_rope_reg1_gap_256(in_chans=1, pretrain=True)
+        # pretrained_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1026065900/weights_end.pth')
         # depth_state_dict = {}
         # for k, v in pretrained_state_dict.items():
         #     if 'drone_depth_model.' in k:
@@ -281,10 +282,10 @@ class ViTAdapter(nn.Module):
         #     param.requires_grad = False
         
         # self.vit_model = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size)
-        self.vit_model = vit_base_patch16_rope_reg1_gap_256()
+        self.vit_model = vit_base_patch16_rope_reg1_gap_256(adapter_list=[0,1,2,3,4,5,6,7,8,9])
         if True:
-            # model_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1016011311/weights_end.pth')  
-            model_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1026155942/weights_end.pth')  
+            model_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1016011311/weights_end.pth')  
+            # model_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1026155942/weights_end.pth')  
             model_state_dict_new = {}
             for k, v in model_state_dict.items():
                 model_state_dict_new[k.replace('model.', '')] = v
@@ -325,7 +326,7 @@ class ViTAdapter(nn.Module):
             d = x[:, 3:, :, :]
             # d = d.repeat(1, 3, 1, 1)
 
-        d = self.depth_encoder.forward_features(d)
+        d, d_intermediate = self.depth_encoder.forward_features(d, intermediate=True)
 
         ##################################
         ## Inter Adapter
@@ -371,22 +372,22 @@ class ViTAdapter(nn.Module):
         
         rgb = self.vit_model.patch_embed(rgb)
         rgb, rot_pos_embed = self.vit_model._pos_embed(rgb)
-        for blk in self.vit_model.blocks:
+        for i, blk in enumerate(self.vit_model.blocks):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                rgb = checkpoint(blk, rgb, d, rope=rot_pos_embed, use_reentrant=False)
+                rgb = checkpoint(blk, rgb, d_intermediate[i], rope=rot_pos_embed, use_reentrant=False)
             else:
-                rgb = blk(rgb, d, rope=rot_pos_embed)
+                rgb = blk(rgb, d_intermediate[i], rope=rot_pos_embed)
         rgb = self.vit_model.norm(rgb)
 
         if self.grad_checkpointing and not torch.jit.is_scripting():
             d.requires_grad_(True)
-            rgb1 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], rgb, d, rot_pos_embed, use_reentrant=False)
-            rgb2 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], d, rgb, rot_pos_embed, use_reentrant=False)
-            rgb = rgb1 + rgb2
+            rgb = checkpoint(forward_ca_with_rope, self.depth_adapters[0], rgb, d, rot_pos_embed, use_reentrant=False)
+            # rgb2 = checkpoint(forward_ca_with_rope, self.depth_adapters[0], d, rgb, rot_pos_embed, use_reentrant=False)
+            # rgb = rgb1 + rgb2
         else:
-            rgb1 = self.depth_adapters[0](query=rgb, key_value=d, rope=rot_pos_embed)
-            rgb2 = self.depth_adapters[1](query=d, key_value=rgb, rope=rot_pos_embed)
-            rgb = rgb1 + rgb2
+            rgb = self.depth_adapters[0](query=rgb, key_value=d, rope=rot_pos_embed)
+            # rgb2 = self.depth_adapters[1](query=d, key_value=rgb, rope=rot_pos_embed)
+            # rgb = rgb1 + rgb2
 
             # lamda = d[:, 1:].mean(dim=1)
             # lamda = self.lamda_norm(lamda)
