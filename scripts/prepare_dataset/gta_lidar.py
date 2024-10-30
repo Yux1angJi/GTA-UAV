@@ -15,6 +15,8 @@ import pickle
 import json
 import re
 import math
+from PIL import Image
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
 GAME_TO_SATE_KX = 1.8206
@@ -480,6 +482,37 @@ def copy_png_files(src_path, dst_path):
     print(f"所有 .png 文件已复制到 {dst_path}")
 
 
+def resize_and_save_image(file, input_dir, output_dir, size):
+    # 加载RGBD图像
+    rgbd_path = os.path.join(input_dir, file)
+    image = Image.open(rgbd_path)
+    
+    # 将图像resize
+    resized_image = image.resize(size, Image.LANCZOS)
+    
+    # 保存到目标路径
+    output_path = os.path.join(output_dir, file)
+    resized_image.save(output_path)
+
+def resize_rgbd_images(input_dir, output_dir, size=(960, 540), max_workers=4):
+    # 确保输出目录存在
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 获取文件列表
+    files = [f for f in os.listdir(input_dir) if f.endswith(".png") or f.endswith(".jpg")]
+    
+    # 使用多进程池执行任务
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(resize_and_save_image, file, input_dir, output_dir, size)
+            for file in files
+        ]
+        
+        # 使用tqdm显示进度条
+        for _ in tqdm(as_completed(futures), total=len(futures), desc="Resizing images", unit="image"):
+            pass
+
+
 def move_png_files(source_dir, destination_dir):
     # 遍历源目录下的所有文件和子目录
     for root, dirs, files in os.walk(source_dir):
@@ -586,9 +619,13 @@ if __name__ == "__main__":
     # correct_proj_points()
     # rename_tile()
 
-    root = '/home/xmuairmud/data/GTA-UAV-data/Lidar'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/Lidar/cross_lidar_200'
-    process_gta_data(root, save_root, h_list=[200], zoom_list=[4, 5, 6, 7], offset_list=[0], split_type='cross')
+    # root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar'
+    # save_root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/same_area'
+    # process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], offset_list=[0], split_type='same')
+
+    input_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/drone/images'
+    output_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar-LR/drone/images'
+    resize_rgbd_images(input_dir, output_dir, size=(960, 540))
 
     # write_json(pickle_root=save_root, root=root, split_type='same')
 

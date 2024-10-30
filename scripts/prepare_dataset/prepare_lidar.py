@@ -10,7 +10,7 @@ import cv2
 # from scipy.signal import convolve2d
 
 
-data_root = '/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/'
+data_root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/lidar_from_file/'
 
 
 def create_top_down_depth_image(points, bev_height=1080, bev_width=1920):
