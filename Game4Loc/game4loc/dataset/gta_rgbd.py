@@ -69,18 +69,20 @@ class GTARGBDDatasetTrain(Dataset):
 
         for pair_drone2sate in pairs_meta_data:
             drone_img_dir = pair_drone2sate['drone_img_dir']
-            drone_img_dir = drone_img_dir.replace('images', 'rgbd')
+            drone_depth_dir = pair_drone2sate['drone_depth_dir']
             drone_img_name = pair_drone2sate['drone_img_name']
+            drone_depth_name = pair_drone2sate['drone_depth_name']
             sate_img_dir = pair_drone2sate['sate_img_dir']
             # Training with Positive-only data or Positive+Semi-positive data
             pair_sate_img_list = pair_drone2sate[f'pair_{mode}_sate_img_list']
             pair_sate_weight_list = pair_drone2sate[f'pair_{mode}_sate_weight_list']
             
             drone_img_file = os.path.join(data_root, drone_img_dir, drone_img_name)
+            drone_depth_file = os.path.join(data_root, drone_depth_dir, drone_depth_name)
 
             for pair_sate_img, pair_sate_weight in zip(pair_sate_img_list, pair_sate_weight_list):
                 sate_img_file = os.path.join(data_root, sate_img_dir, pair_sate_img)
-                self.pairs.append((drone_img_file, sate_img_file, pair_sate_weight))
+                self.pairs.append((drone_img_file, drone_depth_file, sate_img_file, pair_sate_weight))
 
             # Build Graph with All Edges (drone, sate)
             pair_all_sate_img_list = pair_drone2sate['pair_pos_semipos_sate_img_list']
@@ -108,10 +110,17 @@ class GTARGBDDatasetTrain(Dataset):
     
     def __getitem__(self, index):
         
-        query_img_path, gallery_img_path, positive_weight = self.samples[index]
+        query_img_path, query_depth_path, gallery_img_path, positive_weight = self.samples[index]
         
         # for query there is only one file in folder
-        query_img = cv2.imread(query_img_path, cv2.IMREAD_UNCHANGED)
+        query_img = cv2.imread(query_img_path)
+        query_img = cv2.cvtColor(query_img, cv2.COLOR_BGR2RGB)
+        query_depth = cv2.imread(query_depth_path, cv2.IMREAD_UNCHANGED)
+
+        query_depth = (query_depth / 256).astype(np.uint8)
+        if len(query_depth.shape) == 2:
+                query_depth = np.expand_dims(query_depth, axis=2)
+        query_img = np.concatenate((query_img, query_depth), axis=2)
         
         gallery_img = cv2.imread(gallery_img_path)
         gallery_img = cv2.cvtColor(gallery_img, cv2.COLOR_BGR2RGB)
@@ -122,7 +131,7 @@ class GTARGBDDatasetTrain(Dataset):
         # image transforms
         if self.transforms_query_geo is not None:
             image_rgb = query_img[:, :, :3]
-            image_d = query_img[:, :, 3:]
+            image_d = query_img[:, :, 3]
             transformed = self.transforms_query_geo(image=image_rgb, mask=image_d)
             image_rgb_transformed = self.transforms_query_rgb(image=transformed['image'])['image']
             image_d_transformed = self.transforms_query_depth(image=transformed['mask'])['image']
@@ -184,7 +193,7 @@ class GTARGBDDatasetTrain(Dataset):
             if len(pair_pool) > 0:
                 pair = pair_pool.pop(0)
                 
-                drone_img, sate_img, _ = pair
+                drone_img, _, sate_img, _ = pair
                 drone_img_name = drone_img.split('/')[-1]
                 sate_img_name = sate_img.split('/')[-1]
                 # print(sate_img_name)
@@ -234,8 +243,9 @@ class GTARGBDDatasetTrain(Dataset):
         print("Original Length: {} - Length after Shuffle: {}".format(len(self.pairs), len(self.samples))) 
         print("Break Counter:", break_counter)
         print("Pairs left out of last batch to avoid creating noise:", len(self.pairs) - len(self.samples))
-        print("First Element: {} - Last Element: {}".format(self.samples[0][0], self.samples[-1][0]))  
-        print("First Element: {} - Last Element: {}".format(self.samples[0][1], self.samples[-1][1]))  
+        print("First RGB Element: {} - Last Element: {}".format(self.samples[0][0], self.samples[-1][0]))  
+        print("First Depth Element: {} - Last Element: {}".format(self.samples[0][1], self.samples[-1][1]))  
+        print("First Satellite Element: {} - Last Element: {}".format(self.samples[0][2], self.samples[-1][2]))  
         
 
 class GTARGBDDatasetEval(Dataset):
@@ -259,6 +269,7 @@ class GTARGBDDatasetEval(Dataset):
 
         self.images_path = []
         self.images_name = []
+        self.depth_path = []
         self.images_loc_xy = []
 
         self.pairs_sate2drone_dict = {}
@@ -271,7 +282,8 @@ class GTARGBDDatasetEval(Dataset):
             for pair_drone2sate in pairs_meta_data:
                 drone_img_name = pair_drone2sate['drone_img_name']
                 drone_img_dir = pair_drone2sate['drone_img_dir']
-                drone_img_dir = drone_img_dir.replace('images', 'rgbd')
+                drone_depth_name = pair_drone2sate['drone_depth_name']
+                drone_depth_dir = pair_drone2sate['drone_depth_dir']
                 drone_loc_x_y = pair_drone2sate['drone_loc_x_y']
                 self.pairs_drone2sate_dict[drone_img_name] = []
                 pair_sate_img_list = pair_drone2sate[f'pair_{mode}_sate_img_list']
@@ -281,6 +293,7 @@ class GTARGBDDatasetEval(Dataset):
                     self.pairs_match_set.add((drone_img_name, pair_sate_img))
                 if len(pair_sate_img_list) != 0:
                     self.images_path.append(os.path.join(data_root, drone_img_dir, drone_img_name))
+                    self.depth_path.append(os.path.join(data_root, drone_depth_dir, drone_depth_name))
                     self.images_name.append(drone_img_name)
                     self.images_loc_xy.append((drone_loc_x_y[0], drone_loc_x_y[1]))
 
@@ -318,13 +331,23 @@ class GTARGBDDatasetEval(Dataset):
 
     def __getitem__(self, index):
         
-        img_path = self.images_path[index]
-        
         if self.view == 'drone':
-            img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+            img_path = self.images_path[index]
+            depth_path = self.depth_path[index]
+
+            img = cv2.imread(img_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            depth = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
+            if len(depth.shape) == 2:
+                depth = np.expand_dims(depth, axis=2)
+            depth = (depth / 256).astype(np.uint8)
+
+            img = np.concatenate((img, depth), axis=2)
             img = self.transforms(image=img)['image']
-            
+
         else:
+            img_path = self.images_path[index]
             img = cv2.imread(img_path)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img = self.transforms(image=img)['image']

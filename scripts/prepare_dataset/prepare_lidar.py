@@ -10,7 +10,7 @@ import cv2
 # from scipy.signal import convolve2d
 
 
-data_root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/lidar_from_file/'
+data_root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/drone/'
 
 
 def create_top_down_depth_image(points, bev_height=1080, bev_width=1920):
@@ -237,10 +237,10 @@ def dense_top_down_map_conv_gpu(Pts, n=1920, m=1080, grid=5, visualize=False):
         max_depth = valid_out.max()
         depth_values = cp.nan_to_num(depth_values, nan=min_depth)
         # Normalize depth values to 0-255
-        depth_normalized = (depth_values - min_depth) / (max_depth - min_depth + 1e-6) * 255
-        depth_normalized = depth_normalized.astype(cp.uint8)
+        depth_normalized = (depth_values - min_depth) / (max_depth - min_depth + 1e-6) * 65535
+        depth_normalized = depth_normalized.astype(cp.uint16)
     else:
-        depth_normalized = cp.zeros_like(depth_values, dtype=cp.uint8)
+        depth_normalized = cp.zeros_like(depth_values, dtype=cp.uint16)
 
     # Transfer the result back to CPU memory
     depth_normalized_cpu = cp.asnumpy(depth_normalized)
@@ -306,9 +306,9 @@ def lidar2rgbd():
     lidar_dir = data_root + "lidars"
     image_dir = data_root + "images"
     
-    rgbd_dir = data_root + "rgbd"
+    depth_dir = data_root + "depth"
 
-    os.makedirs(rgbd_dir, exist_ok=True)
+    os.makedirs(depth_dir, exist_ok=True)
 
     img_size = (384, 384)
 
@@ -329,18 +329,7 @@ def lidar2rgbd():
 
         depth_img = dense_top_down_map_conv_gpu(points, grid=6)
 
-        image_path = os.path.join(image_dir, lidar_file.replace('.ply', '.png'))
-
-        bgr_img = cv2.imread(image_path)
-        rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
-
-        if rgb_img.shape[:2] != depth_img.shape[:2]:
-            print(f"ERROR! Wrong size for {image_path}, shape={image_path.shape}")
-            continue
-
-        rgbd_img = np.dstack((rgb_img, depth_img))
-
-        cv2.imwrite(os.path.join(rgbd_dir, lidar_file.replace('.ply', '.png')), rgbd_img)
+        cv2.imwrite(os.path.join(depth_dir, lidar_file.replace('.ply', '.png')), depth_img)
         # print(os.path.join(rgbd_dir, lidar_file.replace('.ply', '.png')))
     
     print('Lidar 2 RGBD Done!')
@@ -374,6 +363,11 @@ if __name__ == "__main__":
     # print(points[:, 2].max(), points[:, 2].min())
 
     # depth = dense_top_down_map_conv_gpu(points, grid=6, visualize=True)
+
+    # rgb = cv2.imread('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/images/200_0001_0000001542.png', cv2.IMREAD_UNCHANGED)
+
+    # cv2.imwrite('vis_depth_uin16.png', depth)
+
     # print(depth.shape)
 
 

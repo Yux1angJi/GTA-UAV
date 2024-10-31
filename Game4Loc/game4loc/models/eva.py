@@ -1271,5 +1271,9 @@ def vit_base_patch16_rope_reg1_gap_256(
     model = Eva(**model_args)
     if pretrained:
         checkpoint = torch.load('./pretrained/vit_base_patch16_rope_reg1_gap_256/pytorch_model.bin')
-        model.load_state_dict(checkpoint)
+        if in_chans == 1:
+            pretrained_weight = checkpoint['patch_embed.proj.weight']
+            new_weight = pretrained_weight.mean(dim=1, keepdim=True)  # 平均到1通道
+            checkpoint['patch_embed.proj.weight'] = new_weight  # 更新权重
+        model.load_state_dict(checkpoint, strict=False)
     return model

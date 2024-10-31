@@ -222,7 +222,7 @@ def tile_expand(tile_xy_list, p_xy_list, offset_list, debug=False):
 
 
 def process_per_drone_image(file_data):
-    img_file, dir_img, dir_lidar, dir_meta, dir_satellite, root, save_root, zoom_list, offset_list = file_data
+    img_file, dir_img, dir_lidar, dir_depth, dir_meta, dir_satellite, root, save_root, zoom_list, offset_list = file_data
 
     meta_file_path = os.path.join(dir_meta, img_file.replace('.png', '.txt'))
     #### meta_data format
@@ -264,6 +264,8 @@ def process_per_drone_image(file_data):
         "drone_img": img_file,
         "drone_lidar_dir": dir_lidar,
         "drone_lidar": lidar_file,
+        "drone_depth_dir": dir_depth,
+        "drone_depth": img_file,
         "drone_loc_x_y": (p_x_sate_mid * 0.45, p_y_sate_mid * 0.45),
         "sate_img_dir": dir_satellite,
         "pair_iou_sate_img_list": [],
@@ -412,10 +414,11 @@ def process_gta_data(root, save_root, h_list=[200, 300, 400], zoom_list=[5, 6, 7
 
     dir_img = os.path.join(root, 'drone', 'images')
     dir_lidar = os.path.join(root, 'drone', 'lidars')
+    dir_depth = os.path.join(root, 'drone', 'depth')
     dir_meta = os.path.join(root, 'drone', 'meta_data')
     dir_satellite = os.path.join(root, 'satellite')
     files = [f for f in os.listdir(dir_img)]
-    file_data_list.extend([(img_file, dir_img, dir_lidar, dir_meta, dir_satellite, root, save_root, zoom_list, offset_list)for img_file in files])
+    file_data_list.extend([(img_file, dir_img, dir_lidar, dir_depth, dir_meta, dir_satellite, root, save_root, zoom_list, offset_list)for img_file in files])
     file_data_list_h = []
     for file_data in file_data_list:
         if int(file_data[0].split('_')[0]) in h_list:
@@ -513,6 +516,21 @@ def resize_rgbd_images(input_dir, output_dir, size=(960, 540), max_workers=4):
             pass
 
 
+def split_depth(rgbd_path, image_path):
+    rgbd_image = cv2.imread(rgbd_path, cv2.IMREAD_UNCHANGED)
+    rgb_image = cv2.imread(image_path)
+    depth = rgbd_image[:, :, 3]  # 提取第四个通道 (Depth)
+    rgb = rgbd_image[:, :, :3]  # 提取前三个通道 (RGB)
+    rgb_ori = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB)
+    rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
+
+    print(rgb.shape, rgb_ori.shape)
+    print((rgb == rgb_ori).sum(), rgb.shape[0]*rgb.shape[1]*rgb.shape[2])
+
+    cv2.imwrite('vis_rgb.png', rgb)
+    cv2.imwrite('vis_depth.png', depth)
+
+
 def move_png_files(source_dir, destination_dir):
     # 遍历源目录下的所有文件和子目录
     for root, dirs, files in os.walk(source_dir):
@@ -592,6 +610,8 @@ def write_json(pickle_root, root, split_type):
                 "drone_img_name": pair_drone2sate['drone_img'],
                 "drone_lidar_dir": "drone/lidars",
                 "drone_lidar_name": pair_drone2sate['drone_lidar'],
+                "drone_depth_dir": "drone/depth",
+                "drone_depth_name": pair_drone2sate['drone_img'],
                 "drone_loc_x_y": pair_drone2sate['drone_loc_x_y'],
                 "sate_img_dir": "satellite",
                 "pair_pos_sate_img_list": pair_drone2sate['pair_iou_sate_img_list'],
@@ -619,13 +639,21 @@ if __name__ == "__main__":
     # correct_proj_points()
     # rename_tile()
 
-    # root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar'
-    # save_root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/same_area'
-    # process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], offset_list=[0], split_type='same')
+    # rgbd_path = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar-LR/drone/rgbd/400_0001_0000016893.png'
+    # rgb_path = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar-LR/drone/images/400_0001_0000016893.png'
 
-    input_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/drone/images'
-    output_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar-LR/drone/images'
-    resize_rgbd_images(input_dir, output_dir, size=(960, 540))
+    # rgbd_path = 'vis_rgbd.tiff'
+    # rgb_path = '/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/images/200_0001_0000001542.png'
+
+    # split_depth(rgbd_path, rgb_path)
+
+    root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar'
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/same_area'
+    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], offset_list=[0], split_type='same')
+
+    # input_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/drone/depth'
+    # output_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar-LR/drone/depth'
+    # resize_rgbd_images(input_dir, output_dir, size=(960, 540))
 
     # write_json(pickle_root=save_root, root=root, split_type='same')
 

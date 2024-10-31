@@ -16,6 +16,7 @@ from game4loc.trainer.trainer import train, train_with_weight
 from game4loc.evaluate.gta import evaluate
 from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
 from game4loc.models.model import DesModel
+from game4loc.models.model_netvlad import DesModelWithVLAD
 
 
 def parse_tuple(s):
@@ -31,6 +32,7 @@ class Configuration:
     # Model
     model: str = 'convnext_base.fb_in22k_ft_in1k_384'
     model_hub: str = 'timm'
+    with_netvlad: bool = False
     
     # Override model image size
     img_size: int = 384
@@ -56,7 +58,6 @@ class Configuration:
     # Please Ignore
     train_with_recon: bool = False
     recon_weight: float = 0.1
-    
     
     # Training 
     mixed_precision: bool = True
@@ -162,10 +163,16 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     print("\nModel: {}".format(config.model))
 
-    model = DesModel(model_name=config.model, 
+    if config.with_netvlad:
+        model = DesModelWithVLAD(model_name=config.model, 
                     pretrained=True,
                     img_size=config.img_size,
                     share_weights=config.share_weights)
+    else:
+        model = DesModel(model_name=config.model, 
+                        pretrained=True,
+                        img_size=config.img_size,
+                        share_weights=config.share_weights)
                         
     data_config = model.get_config()
     print(data_config)
