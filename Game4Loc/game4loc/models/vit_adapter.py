@@ -57,17 +57,17 @@ class ViTAdapter(nn.Module):
         # self.vit_model = timm.create_model(model_name=vit_model_name, pretrained=True, num_classes=0, img_size=img_size)
         # self.vit_model = vit_base_patch16_rope_reg1_gap_256(adapter_list=[0,1,2,3,4,5,6,7,8,9])
         self.vit_model = vit_base_patch16_rope_reg1_gap_256(adapter_list=[], pretrained=True)
-        if True:
+        # if True:
             ###  AIRMUD-559
             # model_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1016011311/weights_end.pth')  
             ###############
-            ###  AIRMUD
-            model_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1029142103/weights_end.pth')  
-            ###############
-            model_state_dict_new = {}
-            for k, v in model_state_dict.items():
-                model_state_dict_new[k.replace('model.', '')] = v
-            self.vit_model.load_state_dict(model_state_dict_new, strict=False)
+            # ###  AIRMUD
+            # model_state_dict = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/1029142103/weights_end.pth')  
+            # ###############
+            # model_state_dict_new = {}
+            # for k, v in model_state_dict.items():
+            #     model_state_dict_new[k.replace('model.', '')] = v
+            # self.vit_model.load_state_dict(model_state_dict_new, strict=False)
 
         # for name, param in self.vit_model.named_parameters():
         #     if 'adapter' not in name:
