@@ -8,3 +8,5 @@ pandas
 tqdm
 shapely
 geopy
+pytorch_metric_learning
+thop
