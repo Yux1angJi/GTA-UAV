@@ -630,7 +630,7 @@ def write_json(pickle_root, root, split_type):
                     "cam_yaw": cam_yaw,
                 }
             })
-        save_path = os.path.join(root, f'{split_type}-area-drone2sate-{type}.json')
+        save_path = os.path.join(root, f'{split_type}-area-drone2sate-{type}-500.json')
         with open(save_path, 'w', encoding='utf-8') as f:
             json.dump(data_drone2sate_json, f, indent=4, ensure_ascii=False)
 
@@ -648,12 +648,12 @@ if __name__ == "__main__":
     # split_depth(rgbd_path, rgb_path)
 
     root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar'
-    save_root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/same_area'
-    process_gta_data(root, save_root, h_list=[100, 200, 300, 400, 500, 600], zoom_list=[4, 5, 6, 7], offset_list=[0], split_type='same')
+    save_root = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/cross_area'
+    process_gta_data(root, save_root, h_list=[500], zoom_list=[4, 5, 6, 7], offset_list=[0], split_type='cross')
 
-    # input_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/drone/depth'
-    # output_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar-LR/drone/depth'
-    # resize_rgbd_images(input_dir, output_dir, size=(960, 540))
+    # input_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/drone/depth_resize'
+    # output_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/drone/depth_resize_384'
+    # resize_rgbd_images(input_dir, output_dir, size=(384, 384))
 
     # write_json(pickle_root=save_root, root=root, split_type='same')
 

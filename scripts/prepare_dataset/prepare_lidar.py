@@ -182,7 +182,7 @@ def dense_top_down_map(Pts, n=1920, m=1080, grid=5):
     return depth_normalized
 
 
-def dense_top_down_map_conv_gpu(Pts, n=1920, m=1080, grid=5, visualize=False):
+def dense_top_down_map_conv_gpu(Pts, n=384, m=384, grid=5, visualize=False):
     ng = 2 * grid + 1  # Size of the sliding window
 
     # Transfer Pts to GPU memory
@@ -306,11 +306,11 @@ def lidar2rgbd():
     lidar_dir = data_root + "lidars"
     image_dir = data_root + "images"
     
-    depth_dir = data_root + "depth"
+    depth_dir = data_root + "depth_resize"
 
     os.makedirs(depth_dir, exist_ok=True)
 
-    img_size = (384, 384)
+    img_size = (960, 540)
 
     lidar_files = [f for f in os.listdir(lidar_dir) if f.endswith(".ply")]
 
@@ -327,7 +327,7 @@ def lidar2rgbd():
         points[:, 2] = -points[:, 2]
         points[:, 2] = (points[:, 2] - points[:, 2].min()) / (points[:, 2].max() - points[:, 2].min())
 
-        depth_img = dense_top_down_map_conv_gpu(points, grid=6)
+        depth_img = dense_top_down_map_conv_gpu(points, n=img_size[0], m=img_size[1], grid=5)
 
         cv2.imwrite(os.path.join(depth_dir, lidar_file.replace('.ply', '.png')), depth_img)
         # print(os.path.join(rgbd_dir, lidar_file.replace('.ply', '.png')))

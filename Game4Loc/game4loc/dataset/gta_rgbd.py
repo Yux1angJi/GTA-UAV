@@ -120,18 +120,18 @@ class GTARGBDDatasetTrain(Dataset):
         query_depth = (query_depth / 256).astype(np.uint8)
         if len(query_depth.shape) == 2:
                 query_depth = np.expand_dims(query_depth, axis=2)
-        query_img = np.concatenate((query_img, query_depth), axis=2)
         
         gallery_img = cv2.imread(gallery_img_path)
         gallery_img = cv2.cvtColor(gallery_img, cv2.COLOR_BGR2RGB)
         
         if np.random.random() < self.prob_flip:
             query_img = cv2.flip(query_img, 1)
+            query_depth = cv2.flip(query_depth, 1)
         
         # image transforms
         if self.transforms_query_geo is not None:
-            image_rgb = query_img[:, :, :3]
-            image_d = query_img[:, :, 3]
+            image_rgb = query_img
+            image_d = query_depth
             transformed = self.transforms_query_geo(image=image_rgb, mask=image_d)
             image_rgb_transformed = self.transforms_query_rgb(image=transformed['image'])['image']
             image_d_transformed = self.transforms_query_depth(image=transformed['mask'])['image']
@@ -258,7 +258,8 @@ class GTARGBDDatasetEval(Dataset):
                  sate_img_dir='',
                  query_mode='D2S',
                  pairs_sate2drone_dict=None,
-                 transforms=None,
+                 transforms_rgb=None,
+                 transforms_depth=None,
                  ):
         super().__init__()
         
@@ -327,7 +328,8 @@ class GTARGBDDatasetEval(Dataset):
                     offset = int(offset)
                     self.images_loc_xy.append(sate2loc(tile_zoom, offset, tile_x, tile_y))
 
-        self.transforms = transforms
+        self.transforms_rgb = transforms_rgb
+        self.transforms_depth = transforms_depth
 
     def __getitem__(self, index):
         
@@ -343,14 +345,15 @@ class GTARGBDDatasetEval(Dataset):
                 depth = np.expand_dims(depth, axis=2)
             depth = (depth / 256).astype(np.uint8)
 
-            img = np.concatenate((img, depth), axis=2)
-            img = self.transforms(image=img)['image']
+            img = self.transforms_rgb(image=img)['image']
+            depth = self.transforms_depth(image=depth)['image']
+            img = torch.cat((img, depth), dim=0)
 
         else:
             img_path = self.images_path[index]
             img = cv2.imread(img_path)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = self.transforms(image=img)['image']
+            img = self.transforms_rgb(image=img)['image']
         
         return img
 
@@ -372,8 +375,12 @@ def get_transforms(img_size,
                                 A.Normalize(mean, std),
                                 ToTensorV2(),
                                 ])
-    val_drone_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
-                                A.Normalize(mean_rgbd, std_rgbd),
+    val_drone_rgb_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                A.Normalize(mean, std),
+                                ToTensorV2(),
+                                ])
+    val_drone_depth_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                A.Normalize(mean_d, std_d),
                                 ToTensorV2(),
                                 ])
                                 
@@ -403,6 +410,7 @@ def get_transforms(img_size,
     train_drone_geo_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
                                             A.RandomRotate90(p=1.0),
                                            ],
+                                           is_check_shapes=False
                                           )
 
     train_drone_rgb_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
@@ -430,7 +438,7 @@ def get_transforms(img_size,
         ToTensorV2(),
     ])
     
-    return val_sat_transforms, val_drone_transforms, train_sat_transforms, train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms
+    return val_sat_transforms, val_drone_rgb_transforms, val_drone_depth_transforms, train_sat_transforms, train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms
 
 
 if __name__ == "__main__":

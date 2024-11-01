@@ -186,7 +186,11 @@ def train_script(config):
     if config.checkpoint_start is not None:  
         print("Start from:", config.checkpoint_start)
         model_state_dict = torch.load(config.checkpoint_start)  
-        model.load_state_dict(model_state_dict, strict=False)     
+        model_state_dict_new = {}
+        for k, v in model_state_dict.items():
+            model_state_dict_new[k.replace('model.', '')] = v
+        model.model.vit_model.load_state_dict(model_state_dict_new, strict=False)
+    
 
     print("Freeze model layers:", config.freeze_layers, config.frozen_stages)
     if config.freeze_layers:
@@ -213,7 +217,7 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
 
     # Transforms
-    val_sat_transforms, val_drone_transforms, train_sat_transforms, \
+    val_sat_transforms, val_drone_rgb_transforms, val_drone_depth_transforms, train_sat_transforms, \
         train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms \
          = get_transforms(img_size, mean=mean, std=std)
                                                                                                                                  
@@ -248,7 +252,8 @@ def train_script(config):
     query_dataset_test = GTARGBDDatasetEval(data_root=config.data_root,
                                         pairs_meta_file=config.test_pairs_meta_file,
                                         view=query_view,
-                                        transforms=val_drone_transforms,
+                                        transforms_rgb=val_drone_rgb_transforms,
+                                        transforms_depth=val_drone_depth_transforms,
                                         mode=config.test_mode,
                                         sate_img_dir=config.sate_img_dir,
                                         query_mode=config.query_mode,
@@ -267,7 +272,7 @@ def train_script(config):
     gallery_dataset_test = GTARGBDDatasetEval(data_root=config.data_root,
                                           pairs_meta_file=config.test_pairs_meta_file,
                                           view=gallery_view,
-                                          transforms=val_sat_transforms,
+                                          transforms_rgb=val_sat_transforms,
                                           mode=config.test_mode,
                                           sate_img_dir=config.sate_img_dir,
                                           query_mode=config.query_mode,
