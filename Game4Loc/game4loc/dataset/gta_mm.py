@@ -75,8 +75,8 @@ class GTAMMDatasetTrain(Dataset):
             drone_img_name = pair_drone2sate['drone_img_name']
             drone_lidar_dir = pair_drone2sate['drone_lidar_dir']
             drone_lidar_name = pair_drone2sate['drone_lidar_name']
-            drone_depth_dir = drone_img_dir.replace('images', 'rgbd')
-            drone_depth_name = drone_img_name
+            drone_depth_dir = pair_drone2sate['drone_depth_dir']
+            drone_depth_name = pair_drone2sate['drone_depth_name']
             sate_img_dir = pair_drone2sate['sate_img_dir']
             # Training with Positive-only data /or/ Positive+Semi-positive data
             pair_sate_img_list = pair_drone2sate[f'pair_{mode}_sate_img_list']
@@ -119,23 +119,23 @@ class GTAMMDatasetTrain(Dataset):
         drone_img = cv2.imread(drone_img_path)
         drone_img = cv2.cvtColor(drone_img, cv2.COLOR_BGR2RGB)
 
-        drone_lidar = o3d.io.read_point_cloud(drone_lidar_path)
-        drone_lidar = np.array(drone_lidar.points, dtype=np.float32)
+        # drone_lidar = o3d.io.read_point_cloud(drone_lidar_path)
+        # drone_lidar = np.array(drone_lidar.points, dtype=np.float32)
 
-        N = drone_lidar.shape[0]
-        indices = np.random.choice(N, 10000, replace=False)
+        # N = drone_lidar.shape[0]
+        # indices = np.random.choice(N, 10000, replace=False)
 
-        drone_lidar = drone_lidar[indices]
-        drone_lidar = self.pc_norm(drone_lidar)
-        drone_lidar = torch.from_numpy(drone_lidar)
+        # drone_lidar = drone_lidar[indices]
+        # drone_lidar = self.pc_norm(drone_lidar)
+        # drone_lidar = torch.from_numpy(drone_lidar)
 
-        if self.augment_pc:
-            drone_lidar = random_scale_point_cloud(drone_lidar[None, ...])
-            drone_lidar = shift_point_cloud(drone_lidar)
-            drone_lidar = rotate_perturbation_point_cloud(drone_lidar)
-            drone_lidar = rotate_point_cloud(drone_lidar)
-            drone_lidar = drone_lidar.squeeze()
-            drone_lidar = torch.from_numpy(drone_lidar)
+        # if self.augment_pc:
+        #     drone_lidar = random_scale_point_cloud(drone_lidar[None, ...])
+        #     drone_lidar = shift_point_cloud(drone_lidar)
+        #     drone_lidar = rotate_perturbation_point_cloud(drone_lidar)
+        #     drone_lidar = rotate_point_cloud(drone_lidar)
+        #     drone_lidar = drone_lidar.squeeze()
+        #     drone_lidar = torch.from_numpy(drone_lidar)
 
         drone_depth = cv2.imread(drone_depth_path, cv2.IMREAD_UNCHANGED)
         
@@ -153,15 +153,14 @@ class GTAMMDatasetTrain(Dataset):
 
         if self.transforms_drone_depth is not None:
             drone_depth = self.transforms_drone_depth(image=drone_depth)['image']
-            drone_depth = drone_depth[3:, :, :]
             
         if self.transforms_satellite is not None:
             satellite_img = self.transforms_satellite(image=satellite_img)['image']
         
         sample =  {
             "drone_img": drone_img, 
-            "drone_lidar_pts": drone_lidar,
-            "drone_lidar_clr": torch.ones_like(drone_lidar).float() * 0.4, 
+            # "drone_lidar_pts": drone_lidar,
+            # "drone_lidar_clr": torch.ones_like(drone_lidar).float() * 0.4, 
             "drone_depth": drone_depth,
             "satellite_img": satellite_img, 
             "positive_weight": positive_weight,
@@ -346,8 +345,8 @@ class GTAMMDatasetEval(Dataset):
             for pair_drone2sate in pairs_meta_data:
                 drone_img_name = pair_drone2sate['drone_img_name']
                 drone_img_dir = pair_drone2sate['drone_img_dir']
-                drone_depth_name = drone_img_name
-                drone_depth_dir = drone_img_dir.replace('images', 'rgbd')
+                drone_depth_name = pair_drone2sate['drone_depth_name']
+                drone_depth_dir = pair_drone2sate['drone_depth_dir']
                 drone_loc_x_y = pair_drone2sate['drone_loc_x_y']
                 self.pairs_drone2sate_dict[drone_img_name] = []
                 pair_sate_img_list = pair_drone2sate[f'pair_{mode}_sate_img_list']
@@ -427,11 +426,12 @@ class GTAMMDatasetEval(Dataset):
         elif self.view == 'drone_depth':
             depth_path = self.drone_depth_paths[index]
 
-            rgbd = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
-            if self.transforms is not None:
-                rgbd = self.transforms(image=rgbd)['image']
-            
-            depth = rgbd[3:, :, :]
+            depth = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
+            if len(depth.shape) == 2:
+                depth = np.expand_dims(depth, axis=2)
+            depth = (depth / 256).astype(np.uint8)
+
+            depth = self.transforms(image=depth)['image']
 
             sample = {
                 "drone_depth": depth,
@@ -490,7 +490,7 @@ def get_transforms(img_size,
                                 ToTensorV2(),
                                 ])
     val_drone_depth_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
-                                A.Normalize(mean_rgbd, std_rgbd),
+                                A.Normalize(mean_d, std_d),
                                 ToTensorV2(),
                                 ])
                                 

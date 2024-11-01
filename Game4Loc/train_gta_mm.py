@@ -309,8 +309,8 @@ def train_script(config):
         dimg2simg=False,
         dlidar2simg=False,
         dimg2dlidar=False,
-        ddepth2dimg=True,
-        ddepth2simg=False,
+        ddepth2dimg=False,
+        ddepth2simg=True,
         with_depth=True,
         with_lidar=False
     )

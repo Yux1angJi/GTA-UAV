@@ -41,8 +41,10 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
             with autocast():
                 # data (batches) to device
                 drone_img = sample['drone_img'].to(train_config.device)
-                drone_lidar_pts = sample['drone_lidar_pts'].to(train_config.device)
-                drone_lidar_clr = sample['drone_lidar_clr'].to(train_config.device)
+                # drone_lidar_pts = sample['drone_lidar_pts'].to(train_config.device)
+                # drone_lidar_clr = sample['drone_lidar_clr'].to(train_config.device)
+                drone_lidar_pts = None
+                drone_lidar_clr = None
                 drone_depth = sample['drone_depth'].to(train_config.device)
                 satellite_img = sample['satellite_img'].to(train_config.device)
                 weight = sample['positive_weight'].to(train_config.device)
