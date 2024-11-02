@@ -11,14 +11,12 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from transformers import get_constant_schedule_with_warmup, get_polynomial_decay_schedule_with_warmup, get_cosine_schedule_with_warmup
 
-from game4loc.dataset.visloc import VisLocDatasetEval, VisLocDatasetTrain, get_transforms
-from game4loc.dataset.gta import GTADatasetTrain
-from game4loc.dataset.mix_data import MixDatasetTrain
+from game4loc.dataset.visloc_rgbd import VisLocRGBDDatasetEval, VisLocRGBDDatasetTrain, get_transforms
 from game4loc.utils import setup_system, Logger
 from game4loc.trainer.trainer import train, train_with_weight
 from game4loc.evaluate.visloc import evaluate
 from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, ReconstructionLoss
-from game4loc.models.model import DesModel
+from game4loc.models.model_rgbd import DesModelWithRGBD
 
 
 def parse_tuple(s):
@@ -84,6 +82,9 @@ class Configuration:
     label_smoothing: float = 0.0
     k: float = 5
     
+    # Differential train
+    diff_guidance: float = 0.0
+
     # Learning Rate
     lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
     scheduler: str = "cosine"           # "polynomial" | "cosine" | "constant" | None
@@ -99,7 +100,7 @@ class Configuration:
     dataset: str= "VisLoc-D2S"
     
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -120,7 +121,7 @@ class Configuration:
 
     train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/train_pair_meta.pkl'
     test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/test_pair_meta.pkl'
-    sate_img_dir: str = 'satellite_z31_4'
+    sate_img_dir: str = 'satellite'
 
     extra_train_pairs_meta_file: str = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
 
@@ -181,16 +182,16 @@ def train_script(config):
     print("\nModel: {}".format(config.model))
     print("Sharing weights? {}".format(config.share_weights))
 
-    model = DesModel(config.model,
-                        pretrained=True,
-                        img_size=config.img_size,
-                        share_weights=config.share_weights,
-                        train_with_recon=config.train_with_recon)
+    model = DesModelWithRGBD(model_name=config.model, 
+                    pretrained=True,
+                    img_size=config.img_size,
+                    share_weights=config.share_weights,
+                    diff_guidance=config.diff_guidance)
                           
     data_config = model.get_config()
     print(data_config)
-    mean = data_config["mean"]
-    std = data_config["std"]
+    mean = list(data_config["mean"])
+    std = list(data_config["std"])
     img_size = (config.img_size, config.img_size)
     
     # Activate gradient checkpointing
@@ -201,7 +202,10 @@ def train_script(config):
     if config.checkpoint_start is not None:  
         print("Start from:", config.checkpoint_start)
         model_state_dict = torch.load(config.checkpoint_start)  
-        model.load_state_dict(model_state_dict, strict=False)   
+        model_state_dict_new = {}
+        for k, v in model_state_dict.items():
+            model_state_dict_new[k.replace('model.', '')] = v
+        model.model.vit_model.load_state_dict(model_state_dict_new, strict=False)
 
     print("Freeze model layers:", config.freeze_layers, config.frozen_stages, config.frozen_blocks)
     if config.freeze_layers:
@@ -226,19 +230,28 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
 
     # Transforms
-    val_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
+    # Transforms
+    val_sat_transforms, val_drone_rgb_transforms, val_drone_depth_transforms, train_sat_transforms, \
+        train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms \
+         = get_transforms(img_size, mean=mean, std=std)
+
+    query_view = 'drone'
+    gallery_view = 'sate'
                                                                                                                                  
     # Train
-    train_dataset = VisLocDatasetTrain(data_root=config.data_root,
-                                      pairs_meta_file=config.train_pairs_meta_file,
-                                      transforms_query=train_sat_transforms,
-                                      transforms_gallery=train_drone_transforms,
-                                      group_len=config.group_len,
-                                      prob_flip=config.prob_flip,
-                                      shuffle_batch_size=config.batch_size,
-                                      mode=config.train_mode,
-                                      train_ratio=config.train_ratio,
-                                      )
+    train_dataset = VisLocRGBDDatasetTrain(data_root=config.data_root,
+                                    pairs_meta_file=config.train_pairs_meta_file,
+                                    transforms_query_geo=train_drone_geo_transforms,
+                                    transforms_query_rgb=train_drone_rgb_transforms,
+                                    transforms_query_depth=train_drone_depth_transforms,
+                                    transforms_gallery=train_sat_transforms,
+                                    prob_flip=config.prob_flip,
+                                    prob_drop_depth=0.2,
+                                    prob_drop_rgb=0.0,
+                                    shuffle_batch_size=config.batch_size,
+                                    mode=config.train_mode,
+                                    train_ratio=config.train_ratio,
+                                    )
     
     train_dataloader = DataLoader(train_dataset,
                                   batch_size=config.batch_size,
@@ -247,11 +260,14 @@ def train_script(config):
                                   pin_memory=True)
 
     # Test query
-    query_dataset_test = VisLocDatasetEval(data_root=config.data_root,
+    query_dataset_test = VisLocRGBDDatasetEval(data_root=config.data_root,
                                         pairs_meta_file=config.test_pairs_meta_file,
-                                        view="drone",
+                                        view=query_view,
+                                        transforms_rgb=val_drone_rgb_transforms,
+                                        transforms_depth=val_drone_depth_transforms,
                                         mode=config.test_mode,
-                                        transforms=val_transforms,
+                                        sate_img_dir=config.sate_img_dir,
+                                        query_mode=config.query_mode,
                                         )
     query_img_list = query_dataset_test.images_name
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
@@ -264,12 +280,14 @@ def train_script(config):
                                        pin_memory=True)
 
     # Test gallery
-    gallery_dataset_test = VisLocDatasetEval(data_root=config.data_root,
-                                               pairs_meta_file=config.test_pairs_meta_file,
-                                               view="sate",
-                                               transforms=val_transforms,
-                                               sate_img_dir=config.sate_img_dir,
-                                               )
+    gallery_dataset_test = VisLocRGBDDatasetEval(data_root=config.data_root,
+                                          pairs_meta_file=config.test_pairs_meta_file,
+                                          view=gallery_view,
+                                          transforms_rgb=val_sat_transforms,
+                                          mode=config.test_mode,
+                                          sate_img_dir=config.sate_img_dir,
+                                          query_mode=config.query_mode,
+                                         )
     gallery_img_list = gallery_dataset_test.images_name
     gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
     print('jyxjyx, test len', len(query_img_list), len(gallery_img_list), flush=True)
@@ -545,6 +563,8 @@ def parse_args():
 
     parser.add_argument('--k', type=float, default=5, help='weighted k')
 
+    parser.add_argument('--diff_guidance', type=float, default=0.0, help='Differential guidance')
+    
     parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
     
     args = parser.parse_args()
@@ -583,5 +603,6 @@ if __name__ == '__main__':
     config.test_mode = args.test_mode
     config.query_mode = args.query_mode
     config.train_ratio = args.train_ratio
+    config.diff_guidance = args.diff_guidance
 
     train_script(config)

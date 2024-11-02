@@ -5,6 +5,7 @@ import numpy as np
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from torch.utils.data import Dataset
+import torch
 import copy
 from tqdm import tqdm
 import time
@@ -99,19 +100,22 @@ def get_sate_data(root_dir):
     return sate_img_dir_list, sate_img_list
 
 
-class VisLocDatasetTrain(Dataset):
+class VisLocRGBDDatasetTrain(Dataset):
     
     def __init__(self,
-                 data_root,
                  pairs_meta_file,
-                 drone2sate=True,
-                 transforms_query=None,
+                 data_root,
+                 transforms_query_geo=None,
+                 transforms_query_rgb=None,
+                 transforms_query_depth=None,
                  transforms_gallery=None,
-                 group_len=2,
                  prob_flip=0.5,
                  shuffle_batch_size=128,
-                 mode='iou',
-                 train_ratio=1.0):
+                 mode='pos_semipos',
+                 train_ratio=1.0,
+                 prob_drop_depth=0.0,
+                 prob_drop_rgb=0.0,
+                 ):
         super().__init__()
         
         with open(os.path.join(data_root, pairs_meta_file), 'r', encoding='utf-8') as f:
@@ -125,17 +129,20 @@ class VisLocDatasetTrain(Dataset):
 
         for pair_drone2sate in pairs_meta_data:
             drone_img_dir = pair_drone2sate['drone_img_dir']
+            drone_depth_dir = pair_drone2sate['drone_depth_dir']
             drone_img_name = pair_drone2sate['drone_img_name']
+            drone_depth_name = pair_drone2sate['drone_depth_name']
             sate_img_dir = pair_drone2sate['sate_img_dir']
             # Training with Positive-only data or Positive+Semi-positive data
             pair_sate_img_list = pair_drone2sate[f'pair_{mode}_sate_img_list']
             pair_sate_weight_list = pair_drone2sate[f'pair_{mode}_sate_weight_list']
             
             drone_img_file = os.path.join(data_root, drone_img_dir, drone_img_name)
+            drone_depth_file = os.path.join(data_root, drone_depth_dir, drone_depth_name)
 
             for pair_sate_img, pair_sate_weight in zip(pair_sate_img_list, pair_sate_weight_list):
                 sate_img_file = os.path.join(data_root, sate_img_dir, pair_sate_img)
-                self.pairs.append((drone_img_file, sate_img_file, pair_sate_weight))
+                self.pairs.append((drone_img_file, drone_depth_file, sate_img_file, pair_sate_weight))
 
             # Build Graph with All Edges (drone, sate)
             pair_all_sate_img_list = pair_drone2sate['pair_pos_semipos_sate_img_list']
@@ -144,10 +151,14 @@ class VisLocDatasetTrain(Dataset):
                 self.pairs_sate2drone_dict.setdefault(pair_sate_img, []).append(drone_img_name)
                 self.pairs_match_set.add((drone_img_name, pair_sate_img))
 
-        self.transforms_query = transforms_query
+        self.transforms_query_geo = transforms_query_geo
+        self.transforms_query_rgb = transforms_query_rgb
+        self.transforms_query_depth = transforms_query_depth
         self.transforms_gallery = transforms_gallery
         self.prob_flip = prob_flip
         self.shuffle_batch_size = shuffle_batch_size
+        self.prob_drop_depth = prob_drop_depth
+        self.prob_drop_rgb = prob_drop_rgb
 
         num_pairs = len(self.pairs)
         num_pairs_train = int(train_ratio * num_pairs)
@@ -158,22 +169,45 @@ class VisLocDatasetTrain(Dataset):
     
     def __getitem__(self, index):
         
-        query_img_path, gallery_img_path, positive_weight = self.samples[index]
+        query_img_path, query_depth_path, gallery_img_path, positive_weight = self.samples[index]
         
         # for query there is only one file in folder
         query_img = cv2.imread(query_img_path)
         query_img = cv2.cvtColor(query_img, cv2.COLOR_BGR2RGB)
+        query_depth = cv2.imread(query_depth_path, cv2.IMREAD_UNCHANGED)
+
+        query_depth = (query_depth / 256).astype(np.uint8)
+        if len(query_depth.shape) == 2:
+                query_depth = np.expand_dims(query_depth, axis=2)
         
         gallery_img = cv2.imread(gallery_img_path)
         gallery_img = cv2.cvtColor(gallery_img, cv2.COLOR_BGR2RGB)
         
         if np.random.random() < self.prob_flip:
             query_img = cv2.flip(query_img, 1)
-            gallery_img = cv2.flip(gallery_img, 1) 
+            query_depth = cv2.flip(query_depth, 1)
         
         # image transforms
-        if self.transforms_query is not None:
-            query_img = self.transforms_query(image=query_img)['image']
+        if self.transforms_query_geo is not None:
+            image_rgb = query_img
+            image_d = query_depth
+            transformed = self.transforms_query_geo(image=image_rgb, mask=image_d)
+            image_rgb_transformed = self.transforms_query_rgb(image=transformed['image'])['image']
+            image_d_transformed = self.transforms_query_depth(image=transformed['mask'])['image']
+
+            if image_d_transformed.ndim == 2:
+                image_d_transformed = image_d_transformed.unsqueeze(0)
+            query_img = torch.cat((image_rgb_transformed, image_d_transformed), dim=0)  # 形状为 (4, H, W)
+
+        drop_flag = False
+        if np.random.random() < self.prob_drop_depth:
+            zero_d = torch.zeros_like(query_img[3:, :, :])
+            query_img[3, :, :] = zero_d
+            drop_flag = True
+
+        if np.random.random() < self.prob_drop_rgb and not drop_flag:
+            zero_rgb = torch.zeros_like(query_img[:3, :, :])
+            query_img[:3, :, :] = zero_rgb
             
         if self.transforms_gallery is not None:
             gallery_img = self.transforms_gallery(image=gallery_img)['image']
@@ -183,151 +217,6 @@ class VisLocDatasetTrain(Dataset):
     def __len__(self):
         return len(self.samples)
 
-
-    def shuffle_group(self, ):
-        '''
-        custom shuffle function for unique class_id sampling in batch
-        '''
-        print("\nShuffle Dataset in Groups:")
-        
-        pair_pool = copy.deepcopy(self.pairs)
-        # Shuffle pairs order
-        random.shuffle(pair_pool)
-        
-        sate_batch = set()
-        drone_batch = set()
-        
-        # Lookup if already used in epoch
-        pairs_epoch = set()   
-
-        # buckets
-        batches = []
-        current_batch = []
-        
-        # counter
-        break_counter = 0
-        
-        # progressbar
-        # pbar = tqdm()
-
-        while True:
-            # pbar.update()
-            # print(break_counter)
-            if len(pair_pool) > 0:
-                if break_counter >= 16384:
-                    break
-
-                pair = pair_pool.pop(0)
-                
-                drone_img_path, sate_img_path, _ = pair
-                drone_img_dir = os.path.dirname(drone_img_path)
-                sate_img_dir = os.path.dirname(sate_img_path)
-
-                drone_img_name_i = drone_img_path.split('/')[-1]
-                sate_img_name_i = sate_img_path.split('/')[-1]
-
-                pair_name = (drone_img_name_i, sate_img_name_i)
-
-                if drone_img_name_i in drone_batch or pair_name in pairs_epoch:
-                    if pair_name not in pairs_epoch:
-                            pair_pool.append(pair)
-                    break_counter += 1
-                    continue
-
-                pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name_i]
-                random.shuffle(pairs_drone2sate)
-
-                subset_sate_len = itertools.combinations(pairs_drone2sate, self.group_len)
-                
-                subset_drone = None
-                subset_sate = None
-                for subset_sate_i in subset_sate_len:
-                    flag = True
-                    sate2drone_inter_set = None
-
-                    #### Check for sate
-                    for sate_img in subset_sate_i:
-                        if sate_img in sate_batch:
-                            flag = False
-                            break
-                        
-                        if sate2drone_inter_set == None:
-                            sate2drone_inter_set = set(self.pairs_sate2drone_dict[sate_img])
-                        else:
-                            sate2drone_inter_set = sate2drone_inter_set.intersection(self.pairs_sate2drone_dict[sate_img])
-                    
-                        
-                    if not flag or sate2drone_inter_set == None or len(sate2drone_inter_set) < self.group_len:
-                        continue
-
-                    sate2drone_inter_set = list(sate2drone_inter_set)
-                    random.shuffle(sate2drone_inter_set)
-                    subset_drone_len = itertools.combinations(sate2drone_inter_set, self.group_len)
-                    #### Check for drone
-                    for subset_drone_i in subset_drone_len:
-                        if drone_img_name_i not in subset_drone_i:
-                            continue
-                        flag = True
-                        for drone_img in subset_drone_i:
-                            if drone_img in drone_batch or flag == False:
-                                flag = False
-                                break
-                            for sate_img in subset_sate_i:
-                                pair_tmp = (drone_img, sate_img)
-                                if pair_tmp in pairs_epoch:
-                                    flag = False
-                                    break
-                        if flag:
-                            subset_drone = subset_drone_i
-                            subset_sate = subset_sate_i
-                            break
-                
-                if subset_drone != None and subset_sate != None:
-                    # random.shuffle(subset_drone)
-                    # random.shuffle(subset_sate)
-                    for drone_img_name, sate_img_name in zip(subset_drone, subset_sate):
-                        drone_img_path = os.path.join(drone_img_dir, drone_img_name)
-                        sate_img_path = os.path.join(sate_img_dir, sate_img_name)
-                        current_batch.append((drone_img_path, sate_img_path, 1.0))
-                        pairs_epoch.add((drone_img_name, sate_img_name))
-                    for drone_img in subset_drone:
-                        pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name]
-                        for sate in pairs_drone2sate:
-                            sate_batch.add(sate)
-                    for sate_img in subset_sate:
-                        pairs_sate2drone = self.pairs_sate2drone_dict[sate_img_name]
-                        for drone in pairs_sate2drone:
-                            drone_batch.add(drone)
-                else:
-                    if pair_name not in pairs_epoch:
-                            pair_pool.append(pair)        
-                    break_counter += 1
-
-                if break_counter >= 16384:
-                    break
-            else:
-                break
-            if len(current_batch) >= self.shuffle_batch_size:
-                # empty current_batch bucket to batches
-                batches.extend(current_batch)
-                sate_batch = set()
-                drone_batch = set()
-                current_batch = []
-    
-        # pbar.close()
-        
-        # wait before closing progress bar
-        time.sleep(0.3)
-        
-        self.samples = batches
-        
-        print("Original Length: {} - Length after Shuffle: {}".format(len(self.pairs), len(self.samples))) 
-        print("Break Counter:", break_counter)
-        print("Pairs left out of last batch to avoid creating noise:", len(self.pairs) - len(self.samples))
-        print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][0], self.samples[-1][0]))  
-        print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][1], self.samples[-1][1]))  
-
-    
     def shuffle(self, ):
 
             '''
@@ -364,7 +253,7 @@ class VisLocDatasetTrain(Dataset):
                 if len(pair_pool) > 0:
                     pair = pair_pool.pop(0)
                     
-                    drone_img, sate_img, _ = pair
+                    drone_img, _, sate_img, _ = pair
 
                     drone_img_name = drone_img.split('/')[-1]
                     sate_img_name = sate_img.split('/')[-1]
@@ -419,7 +308,7 @@ class VisLocDatasetTrain(Dataset):
             print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][0], self.samples[-1][0]))  
             print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][1], self.samples[-1][1]))  
 
-class VisLocDatasetEval(Dataset):
+class VisLocRGBDDatasetEval(Dataset):
     
     def __init__(self,
                  pairs_meta_file,
@@ -429,7 +318,8 @@ class VisLocDatasetEval(Dataset):
                  sate_img_dir='',
                  query_mode='D2S',
                  pairs_sate2drone_dict=None,
-                 transforms=None,
+                 transforms_rgb=None,
+                 transforms_depth=None,
                  ):
         super().__init__()
         
@@ -440,16 +330,21 @@ class VisLocDatasetEval(Dataset):
 
         self.images_name = []
         self.images_path = []
+        self.depth_path = []
         self.images_loc_xy = []
 
         self.pairs_sate2drone_dict = {}
         self.pairs_drone2sate_dict = {}
         self.pairs_match_set = set()
 
+        self.view = view
+
         if view == 'drone':
             for pair_drone2sate in pairs_meta_data:
                 drone_img_name = pair_drone2sate['drone_img_name']
                 drone_img_dir = pair_drone2sate['drone_img_dir']
+                drone_depth_name = pair_drone2sate['drone_depth_name']
+                drone_depth_dir = pair_drone2sate['drone_depth_dir']
                 drone_loc_xy = pair_drone2sate['drone_loc_lat_lon']
                 self.pairs_drone2sate_dict[drone_img_name] = []
                 pair_sate_img_list = pair_drone2sate[f'pair_{mode}_sate_img_list']
@@ -459,6 +354,7 @@ class VisLocDatasetEval(Dataset):
                     self.pairs_match_set.add((drone_img_name, pair_sate_img))
                 if len(pair_sate_img_list) != 0:
                     self.images_path.append(os.path.join(data_root, drone_img_dir, drone_img_name))
+                    self.depth_path.append(os.path.join(data_root, drone_depth_dir, drone_depth_name))
                     self.images_name.append(drone_img_name)
                     self.images_loc_xy.append((drone_loc_xy[0], drone_loc_xy[1]))
 
@@ -477,19 +373,34 @@ class VisLocDatasetEval(Dataset):
                     self.images_path.append(os.path.join(data_root, sate_img_dir, sate_img))
                     self.images_name.append(sate_img)
                     self.images_loc_xy.append(tile2sate(sate_img))
-        self.transforms = transforms
+        
+        self.transforms_rgb = transforms_rgb
+        self.transforms_depth = transforms_depth
 
 
     def __getitem__(self, index):
         
-        img_path = self.images_path[index]
-        
-        img = cv2.imread(img_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        
-        # image transforms
-        if self.transforms is not None:
-            img = self.transforms(image=img)['image']
+        if self.view == 'drone':
+            img_path = self.images_path[index]
+            depth_path = self.depth_path[index]
+
+            img = cv2.imread(img_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            depth = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)
+            if len(depth.shape) == 2:
+                depth = np.expand_dims(depth, axis=2)
+            depth = (depth / 256).astype(np.uint8)
+
+            img = self.transforms_rgb(image=img)['image']
+            depth = self.transforms_depth(image=depth)['image']
+            img = torch.cat((img, depth), dim=0)
+
+        else:
+            img_path = self.images_path[index]
+            img = cv2.imread(img_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = self.transforms_rgb(image=img)['image']
         
         return img
 
@@ -503,14 +414,27 @@ class VisLocDatasetEval(Dataset):
 def get_transforms(img_size,
                    mean=[0.485, 0.456, 0.406],
                    std=[0.229, 0.224, 0.225]):
+
+    mean_d = [0.5]
+    std_d = [0.5]
+    mean_rgbd = mean + mean_d
+    std_rgbd = std + std_d
     
 
-    val_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+    val_sat_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
                                 A.Normalize(mean, std),
                                 ToTensorV2(),
                                 ])
+    val_drone_rgb_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                A.Normalize(mean, std),
+                                ToTensorV2(),
+                                ])
+    val_drone_depth_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                A.Normalize(mean_d, std_d),
+                                ToTensorV2(),
+                                ])
                                 
-                             
+
     train_sat_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
                                       A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
                                       A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.15, always_apply=False, p=0.5),
@@ -532,9 +456,14 @@ def get_transforms(img_size,
                                       A.Normalize(mean, std),
                                       ToTensorV2(),
                                       ])
-    
-    train_drone_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
-                                        A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+
+    train_drone_geo_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
+                                            A.RandomRotate90(p=1.0),
+                                           ],
+                                           is_check_shapes=False
+                                          )
+
+    train_drone_rgb_transforms = A.Compose([A.ImageCompression(quality_lower=90, quality_upper=100, p=0.5),
                                         A.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15, hue=0.15, always_apply=False, p=0.5),
                                         A.OneOf([
                                                  A.AdvancedBlur(p=1.0),
@@ -552,9 +481,14 @@ def get_transforms(img_size,
                                               ], p=0.3),
                                         A.Normalize(mean, std),
                                         ToTensorV2(),
-                                        ])
+                                        ],
+                                    )
+    train_drone_depth_transforms = A.Compose([
+        A.Normalize(mean_d, std_d),
+        ToTensorV2(),
+    ])
     
-    return val_transforms, train_sat_transforms, train_drone_transforms
+    return val_sat_transforms, val_drone_rgb_transforms, val_drone_depth_transforms, train_sat_transforms, train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms
 
 
 if __name__ == '__main__':
