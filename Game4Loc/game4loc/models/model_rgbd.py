@@ -36,7 +36,8 @@ class DesModelWithRGBD(nn.Module):
                  diff_guidance=-1.0,
                  train_with_recon=False,
                  train_with_offset=False,
-                 model_hub='timm'):
+                 model_hub='timm',
+                 head='GeM'):
                  
         super(DesModelWithRGBD, self).__init__()
         self.share_weights = share_weights
@@ -46,7 +47,7 @@ class DesModelWithRGBD(nn.Module):
             if "vit" in model_name or "swin" in model_name:
                 # automatically change interpolate pos-encoding to img_size
                 # self.model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size) 
-                self.model = ViTAdapter()
+                self.model = ViTAdapter(head=head)
             else:
                 self.model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
         else:

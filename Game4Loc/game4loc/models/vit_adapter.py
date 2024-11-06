@@ -30,6 +30,37 @@ def forward_ca_with_rope(module, x1, x2, rope):
     return module(x1, x2, rope=rope)
 
 
+class GeM(nn.Module):
+    def __init__(self, p=3, eps=1e-6):
+        super(GeM, self).__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)  # p 是可训练的参数
+        self.eps = eps
+
+    def forward(self, x):
+        # x shape: b x n x d
+        x = x.clamp(min=self.eps).pow(self.p)  # 对数值加上eps并提升到p次方
+        x = x.mean(dim=1)                      # 对 n 维进行平均池化
+        return x.pow(1. / self.p)               # 还原 p 次方，返回 b x d
+
+# 全局平均池化模块 (GAP)
+class GlobalAvgPool(nn.Module):
+    def __init__(self):
+        super(GlobalAvgPool, self).__init__()
+
+    def forward(self, x):
+        # x shape: b x n x d
+        return x.mean(dim=1)  # 在 n 维上取平均，输出 b x d
+
+# 全局最大池化模块 (GMP)
+class GlobalMaxPool(nn.Module):
+    def __init__(self):
+        super(GlobalMaxPool, self).__init__()
+
+    def forward(self, x):
+        # x shape: b x n x d
+        return x.max(dim=1)[0]
+
+
 class ViTAdapter(nn.Module):
     def __init__(self, 
                  vit_model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', 
@@ -38,6 +69,7 @@ class ViTAdapter(nn.Module):
                  num_heads=12,
                  num_blocks=1,
                  lamda_drop_rate=0.,
+                 head='GeM',
                  *args,
                  **kwargs):
         super().__init__(*args, **kwargs)
@@ -89,6 +121,13 @@ class ViTAdapter(nn.Module):
 
         self.set_grad_checkpointing()
         self.grad_checkpointing = True
+
+        if head == 'GeM':
+            self.head = GeM()
+        elif head == 'GAP':
+            self.head = GlobalMaxPool()
+        elif head == 'GMP':
+            self.head = GlobalAvgPool()
 
     def set_grad_checkpointing(self, enable=True):
         self.vit_model.set_grad_checkpointing(enable)
@@ -176,7 +215,8 @@ class ViTAdapter(nn.Module):
             #         rgb = checkpointing(self.depth_adapters[i], query=rgb, key_value=rgb, rope=rot_pos_embed)
             #     else:
             #         rgb = self.depth_adapters[i](rgb, rgb, rope=rot_pos_embed)
-        rgb = self.vit_model.forward_head(rgb)
+        # rgb = self.vit_model.forward_head(rgb)
+        rgb = self.head(rgb[:, 1:, :])
 
         lamda = self.lamda_drop(rgb)
         lamda = self.lamda(lamda)
@@ -196,7 +236,7 @@ if __name__ == '__main__':
     # print(model.head)
     # print(model.num_prefix_tokens)
 
-    model = ViTAdapter()
+    model = ViTAdapter(head='GAP')
     model.cuda()
     x1 = torch.rand((1, 3, 384, 384)).cuda()
     x2 = torch.rand((1, 4, 384, 384)).cuda()

@@ -31,6 +31,7 @@ class Configuration:
     # Model
     model: str = 'convnext_base.fb_in22k_ft_in1k_384'
     model_hub: str = 'timm'
+    head: str = 'GeM'
     
     # Override model image size
     img_size: int = 384
@@ -170,7 +171,8 @@ def train_script(config):
                     pretrained=True,
                     img_size=config.img_size,
                     share_weights=config.share_weights,
-                    diff_guidance=config.diff_guidance)
+                    diff_guidance=config.diff_guidance,
+                    head=config.head)
 
     data_config = model.get_config()
     print(data_config)
@@ -507,6 +509,8 @@ def parse_args():
     
     parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
 
+    parser.add_argument('--head', type=str, default='GeM', help='Head of model')
+
     args = parser.parse_args()
     return args
 
@@ -544,5 +548,6 @@ if __name__ == '__main__':
     config.query_mode = args.query_mode
     config.train_ratio = args.train_ratio
     config.diff_guidance = args.diff_guidance
+    config.head = args.head
 
     train_script(config)
