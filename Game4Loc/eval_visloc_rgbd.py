@@ -3,9 +3,9 @@ import torch
 from dataclasses import dataclass
 from torch.utils.data import DataLoader
 
-from game4loc.dataset.visloc import VisLocDatasetEval, get_transforms
-from game4loc.evaluate.visloc import evaluate
-from game4loc.models.model import DesModel
+from game4loc.dataset.visloc_rgbd import VisLocRGBDDatasetEval, get_transforms
+from game4loc.evaluate.visloc_rgbd import evaluate
+from game4loc.models.model_rgbd import DesModelWithRGBD
 
 
 @dataclass
@@ -29,8 +29,6 @@ class Configuration:
 
     test_mode: str = 'pos'
 
-    query_mode = 'D2S'
-
     # Dataset
     dataset: str = 'VisLoc-D2S'           # 'U1652-D2S' | 'U1652-S2D'
 
@@ -46,7 +44,7 @@ class Configuration:
     # checkpoint_start = 'work_dir/visloc/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723205823/weights_end.pth' ## ImageNet
     # checkpoint_start = 'work_dir/visloc/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0724145818/weights_end.pth' ## University
 
-    checkpoint_start = './pretrained/gta/cross_area/game4loc.pth'
+    checkpoint_start = './pretrained/gta/cross_area/licogeo.pth'
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -54,19 +52,19 @@ class Configuration:
     # train on GPU if available
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu' 
 
+    query_mode = 'D2S'
+
     data_root = '/root/lanyun-tmp/UAV_VisLoc_dataset_Lidar'
 
     train_pairs_meta_file = 'cross-area-drone2sate-train-z31.json'
     test_pairs_meta_file = 'cross-area-drone2sate-test-z31.json'
     sate_img_dir = 'satellite'
 
-
 #-----------------------------------------------------------------------------#
 # Config                                                                      #
 #-----------------------------------------------------------------------------#
 
 config = Configuration() 
-
 
 
 if __name__ == '__main__':
@@ -77,18 +75,16 @@ if __name__ == '__main__':
     
     print("\nModel: {}".format(config.model))
 
-
-    model = DesModel(config.model,
+    model = DesModelWithRGBD(config.model,
                           pretrained=True,
                           img_size=config.img_size)
                           
     data_config = model.get_config()
     print(data_config)
-    mean = data_config["mean"]
-    std = data_config["std"]
+    mean = list(data_config["mean"])
+    std = list(data_config["std"])
     img_size = (config.img_size, config.img_size)
     
-
     # load pretrained Checkpoint    
     if config.checkpoint_start is not None:  
         print("Start from:", config.checkpoint_start)
@@ -99,7 +95,7 @@ if __name__ == '__main__':
     print("GPUs available:", torch.cuda.device_count())  
     if torch.cuda.device_count() > 1 and len(config.gpu_ids) > 1:
         model = torch.nn.DataParallel(model, device_ids=config.gpu_ids)
-            
+    
     # Model to device   
     model = model.to(config.device)
 
@@ -114,15 +110,22 @@ if __name__ == '__main__':
     #-----------------------------------------------------------------------------#
 
     # Transforms
-    val_transforms, train_sat_transforms, train_drone_transforms = get_transforms(img_size, mean=mean, std=std)
+    val_sat_transforms, val_drone_rgb_transforms, val_drone_depth_transforms, train_sat_transforms, \
+        train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms \
+         = get_transforms(img_size, mean=mean, std=std)
 
+    query_view = 'drone'
+    gallery_view = 'sate'
 
     # Test query
-    query_dataset_test = VisLocDatasetEval(data_root=config.data_root,
+    query_dataset_test = VisLocRGBDDatasetEval(data_root=config.data_root,
                                         pairs_meta_file=config.test_pairs_meta_file,
-                                        view="drone",
+                                        view=query_view,
+                                        transforms_rgb=val_drone_rgb_transforms,
+                                        transforms_depth=val_drone_depth_transforms,
                                         mode=config.test_mode,
-                                        transforms=val_transforms,
+                                        sate_img_dir=config.sate_img_dir,
+                                        query_mode=config.query_mode,
                                         )
     query_img_list = query_dataset_test.images_name
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
@@ -135,12 +138,14 @@ if __name__ == '__main__':
                                        pin_memory=True)
 
     # Test gallery
-    gallery_dataset_test = VisLocDatasetEval(data_root=config.data_root,
-                                               pairs_meta_file=config.test_pairs_meta_file,
-                                               view="sate",
-                                               transforms=val_transforms,
-                                               sate_img_dir=config.sate_img_dir,
-                                               )
+    gallery_dataset_test = VisLocRGBDDatasetEval(data_root=config.data_root,
+                                          pairs_meta_file=config.test_pairs_meta_file,
+                                          view=gallery_view,
+                                          transforms_rgb=val_sat_transforms,
+                                          mode=config.test_mode,
+                                          sate_img_dir=config.sate_img_dir,
+                                          query_mode=config.query_mode,
+                                         )
     gallery_img_list = gallery_dataset_test.images_name
     gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
     
@@ -152,7 +157,7 @@ if __name__ == '__main__':
     
     print("Query Images Test:", len(query_dataset_test))
     print("Gallery Images Test:", len(gallery_dataset_test))
-    
+
     print("\n{}[{}]{}".format(30*"-", "UAV-VisLoc", 30*"-"))  
 
     r1_test = evaluate(config=config,
