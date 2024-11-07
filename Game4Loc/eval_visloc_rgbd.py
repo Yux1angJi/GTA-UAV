@@ -44,7 +44,7 @@ class Configuration:
     # checkpoint_start = 'work_dir/visloc/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723205823/weights_end.pth' ## ImageNet
     # checkpoint_start = 'work_dir/visloc/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0724145818/weights_end.pth' ## University
 
-    checkpoint_start = './pretrained/gta/cross_area/licogeo.pth'
+    checkpoint_start = './pretrained/visloc/cross_area/licogeo.pth'
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -59,6 +59,13 @@ class Configuration:
     train_pairs_meta_file = 'cross-area-drone2sate-train-z31.json'
     test_pairs_meta_file = 'cross-area-drone2sate-test-z31.json'
     sate_img_dir = 'satellite'
+
+    ####### Cross-area
+    dis_threshold_list = [10*(i+1) for i in range(50)]
+
+    ####### Same-area
+    # dis_threshold_list = [4*(i+1) for i in range(50)]
+
 
 #-----------------------------------------------------------------------------#
 # Config                                                                      #
@@ -89,7 +96,7 @@ if __name__ == '__main__':
     if config.checkpoint_start is not None:  
         print("Start from:", config.checkpoint_start)
         model_state_dict = torch.load(config.checkpoint_start)  
-        model.load_state_dict(model_state_dict, strict=False)     
+        model.load_state_dict(model_state_dict, strict=True)     
 
     # Data parallel
     print("GPUs available:", torch.cuda.device_count())  
@@ -172,8 +179,7 @@ if __name__ == '__main__':
                            ranks_list=[1, 5, 10],
                            step_size=1000,
                            cleanup=True,
-                           dis_threshold_list=[4*(i+1) for i in range(50)],
-                           cleanup=True,
+                           dis_threshold_list=config.dis_threshold_list,
                            plot_acc_threshold=True,
-                           top10_log=False)
+                           top10_log=True)
  

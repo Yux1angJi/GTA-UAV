@@ -220,44 +220,19 @@ def evaluate(config,
         #torch.cuda.empty_cache()
 
     if top10_log:
-        satellite_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
-        pickle_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/test_pair_meta.pkl'
-        save_dir = '/home/xmuairmud/jyx/GTA-UAV/Game4Loc/visualization'
-        with open(pickle_path, 'rb') as f:
-            data = pickle.load(f)
-            test_semi_drone2sate_dict = data['pairs_semi_iou_drone2sate_dict']
-            test_pos_drone2sate_dict = data['pairs_iou_drone2sate_dict']
         for query_img, top10, loc in zip(query_list, top10_list, loc1_list):
             print('Query', query_img)
             print('Top10', top10)
             print('Query loc', loc[0], loc[1])
             print('Top1 loc', loc[2], loc[3])
             
-            imgs_path = []
             imgs_type = []
             for img_name in top10[:5]:
-                imgs_path.append(os.path.join(satellite_dir, img_name))
-                if img_name in test_pos_drone2sate_dict[query_img]:
+                if img_name in pairs_dict[query_img]:
                     imgs_type.append('Pos')
-                elif img_name in test_semi_drone2sate_dict[query_img]:
-                    imgs_type.append('Semi')
                 else:
                     imgs_type.append('Null')
             print(imgs_type)
-
-            images = [Image.open(x) for x in imgs_path]
-
-            gap_width = 40
-            total_width = sum(i.size[0] for i in images) + gap_width * (len(images) - 1)
-            height = images[0].size[1]
-            new_im = new_im = Image.new('RGBA', (total_width, height), (255, 255, 255, 0))
-
-            x_offset = 0
-            for im in images:
-                new_im.paste(im, (x_offset, 0))
-                x_offset += im.size[0] + gap_width  # 在每张图片后添加间隙
-            new_im.save(f'{save_dir}/same_{query_img}')
-
 
 
     if plot_acc_threshold:
@@ -265,22 +240,22 @@ def evaluate(config,
         x = np.array(dis_threshold_list)
         y = y / query_num * 100
 
-        x_new = np.linspace(x.min(), x.max(), 500)
-        spl = make_interp_spline(x, y, k=3)  
-        y_smooth = spl(x_new)
+        # x_new = np.linspace(x.min(), x.max(), 500)
+        # spl = make_interp_spline(x, y, k=3)  
+        # y_smooth = spl(x_new)
 
-        plt.figure(figsize=(10, 6), dpi=300)
-        plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
-        plt.scatter(x, y, label='Discrete Points', color='blue')
+        # plt.figure(figsize=(10, 6), dpi=300)
+        # plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
+        # plt.scatter(x, y, label='Discrete Points', color='blue')
 
-        plt.xlabel('X Axis')
-        plt.ylabel('Y Axis')
-        plt.title('Smooth Curve with Discrete Points')
-        plt.legend()
+        # plt.xlabel('X Axis')
+        # plt.ylabel('Y Axis')
+        # plt.title('Smooth Curve with Discrete Points')
+        # plt.legend()
 
-        # 调整边框
-        plt.gca().spines['top'].set_visible(False)
-        plt.gca().spines['right'].set_visible(False)
+        # # 调整边框
+        # plt.gca().spines['top'].set_visible(False)
+        # plt.gca().spines['right'].set_visible(False)
 
         # 显示图表
         # plt.tight_layout()

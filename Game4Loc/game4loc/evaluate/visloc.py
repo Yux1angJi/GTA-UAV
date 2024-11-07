@@ -42,6 +42,14 @@ def get_dis(query_loc, index, gallery_loc_xy_list, disk_list):
     return dis_list
 
 
+def get_top10(index, gallery_list):
+    top10 = []
+    for i in range(10):
+        idx = index[i]
+        top10.append(gallery_list[idx])
+    return top10
+
+
 def predict(train_config, model, dataloader):
     
     model.eval()
@@ -94,7 +102,10 @@ def evaluate(config,
                 sdmk_list=[1, 3, 5],
                 disk_list=[1, 3, 5],
                 step_size=1000,
-                cleanup=True):
+                cleanup=True,
+                dis_threshold_list=[4*(i+1) for i in range(50)],
+                plot_acc_threshold=False,
+                top10_log=False):
     print("Extract Features and Compute Scores:")
     img_features_query = predict(config, model, query_loader)
     # img_features_gallery = predict(config, model, gallery_loader)
@@ -144,6 +155,10 @@ def evaluate(config,
     cmc = np.zeros(len(gallery_list))
     sdm_list = []
     dis_list = []
+    acc_threshold = [0 for _ in range(len(dis_threshold_list))]
+
+    top10_list = []
+    loc1_list = []
 
     for i in range(query_num):
         str_i = query_list[i].split('_')[0]
@@ -155,8 +170,16 @@ def evaluate(config,
 
         dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list, disk_list))
 
+        top10_list.append(get_top10(index, gallery_list))
+        loc1_x, loc1_y = gallery_loc_xy_list[index[0]]
+        loc1_list.append((query_loc_xy_list[i][0], query_loc_xy_list[i][1], loc1_x, loc1_y))
+
+        for j in range(len(dis_threshold_list)):
+            if dis_list[i][0] < dis_threshold_list[j]:
+                acc_threshold[j] += 1.
+
         good_index_i = np.isin(index, matches_tensor[i]) 
-        
+
         # 计算 AP
         y_true = good_index_i.astype(int)
         y_scores = np.arange(len(y_true), 0, -1)  # 分数与排名相反
@@ -198,5 +221,47 @@ def evaluate(config,
         del img_features_query, gallery_features_batch, scores_batch
         gc.collect()
         #torch.cuda.empty_cache()
+
+    if top10_log:
+        for query_img, top10, loc in zip(query_list, top10_list, loc1_list):
+            print('Query', query_img)
+            print('Top10', top10)
+            print('Query loc', loc[0], loc[1])
+            print('Top1 loc', loc[2], loc[3])
+            
+            imgs_type = []
+            for img_name in top10[:5]:
+                if img_name in pairs_dict[query_img]:
+                    imgs_type.append('Pos')
+                else:
+                    imgs_type.append('Null')
+            print(imgs_type)
+
+    if plot_acc_threshold:
+        y = np.array(acc_threshold)
+        x = np.array(dis_threshold_list)
+        y = y / query_num * 100
+
+        # x_new = np.linspace(x.min(), x.max(), 500)
+        # spl = make_interp_spline(x, y, k=3)  
+        # y_smooth = spl(x_new)
+
+        # plt.figure(figsize=(10, 6), dpi=300)
+        # plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
+        # plt.scatter(x, y, label='Discrete Points', color='blue')
+
+        # plt.xlabel('X Axis')
+        # plt.ylabel('Y Axis')
+        # plt.title('Smooth Curve with Discrete Points')
+        # plt.legend()
+
+        # # 调整边框
+        # plt.gca().spines['top'].set_visible(False)
+        # plt.gca().spines['right'].set_visible(False)
+
+        # 显示图表
+        # plt.tight_layout()
+        # plt.savefig('/home/xmuairmud/jyx/GTA-UAV-private/Game4Loc/images/plot_acc_threshold_samearea.png')
+        print(y.tolist())
     
     return cmc[0]

@@ -13,7 +13,8 @@ class Configuration:
 
     # Model
     # model: str = 'convnext_base.fb_in22k_ft_in1k_384'
-    model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
+    # model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
+    model: str = 'TransGeo'
     
     # Override model image size
     img_size: int = 384
@@ -46,7 +47,7 @@ class Configuration:
     # checkpoint_start = 'work_dir/visloc/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0723205823/weights_end.pth' ## ImageNet
     # checkpoint_start = 'work_dir/visloc/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0724145818/weights_end.pth' ## University
 
-    checkpoint_start = './pretrained/gta/cross_area/game4loc.pth'
+    checkpoint_start = './pretrained/visloc/same_area/transgeo.pth'
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -54,11 +55,21 @@ class Configuration:
     # train on GPU if available
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu' 
 
-    data_root = '/root/lanyun-tmp/UAV_VisLoc_dataset_Lidar'
+    data_root = '/home/xmuairmud/data/UAV_VisLoc_dataset_Lidar'
 
-    train_pairs_meta_file = 'cross-area-drone2sate-train-z31.json'
-    test_pairs_meta_file = 'cross-area-drone2sate-test-z31.json'
+    train_pairs_meta_file = 'same-area-drone2sate-train-z31.json'
+    test_pairs_meta_file = 'same-area-drone2sate-test-z31.json'
     sate_img_dir = 'satellite'
+
+    dis_threshold_list = None
+    if 'cross' in test_pairs_meta_file:
+        ####### Cross-area
+        print("cross-area eval")
+        dis_threshold_list = [10*(i+1) for i in range(50)]
+    else:
+    ####### Same-area
+        print("same-area eval")
+        dis_threshold_list = [4*(i+1) for i in range(50)]
 
 
 #-----------------------------------------------------------------------------#
@@ -166,5 +177,8 @@ if __name__ == '__main__':
                            pairs_dict=pairs_drone2sate_dict,
                            ranks_list=[1, 5, 10],
                            step_size=1000,
-                           cleanup=True)
+                           dis_threshold_list=[4*(i+1) for i in range(50)],
+                           cleanup=True,
+                           plot_acc_threshold=True,
+                           top10_log=True)
  

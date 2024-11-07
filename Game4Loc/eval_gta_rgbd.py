@@ -41,13 +41,19 @@ class Configuration:
     # checkpoint_start = 'work_dir/denseuav/convnext_base.fb_in22k_ft_in1k_384/0630155817/weights_end.pth'
     # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0810002619/weights_end.pth'
     # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0809045532/weights_end.pth'
-    checkpoint_start = '/root/lanyun-tmp/jyx/GTA-UAV/Game4Loc/pretrained/gta/cross_area/licogeo.pth'
+    checkpoint_start = 'pretrained/gta/same_area/licogeo.pth'
 
     data_root: str = "/root/lanyun-tmp/GTA-UAV-Lidar-LR"
 
-    train_pairs_meta_file = 'cross-area-drone2sate-train-12.json'
-    test_pairs_meta_file = 'cross-area-drone2sate-test-12.json'
+    train_pairs_meta_file = 'same-area-drone2sate-train-12.json'
+    test_pairs_meta_file = 'same-area-drone2sate-test-12.json'
     sate_img_dir = 'satellite'
+
+    ####### Cross-area
+    # dis_threshold_list = [10*(i+1) for i in range(50)]
+
+    ####### Same-area
+    dis_threshold_list = [4*(i+1) for i in range(50)]
 
 
 #-----------------------------------------------------------------------------#
@@ -162,9 +168,9 @@ if __name__ == '__main__':
                            query_loc_xy_list=query_loc_xy_list,
                            gallery_loc_xy_list=gallery_loc_xy_list,
                            step_size=1000,
+                           dis_threshold_list=config.dis_threshold_list,
                            cleanup=True,
-                           dis_threshold_list=[4*(i+1) for i in range(50)],
                            plot_acc_threshold=True,
-                           top10_log=False)
+                           top10_log=True)
 
 
