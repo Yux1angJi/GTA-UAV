@@ -71,8 +71,8 @@ if __name__ == '__main__':
                           
     data_config = model.get_config()
     print(data_config)
-    mean = data_config["mean"]
-    std = data_config["std"]
+    mean = list(data_config["mean"])
+    std = list(data_config["std"])
     img_size = (config.img_size, config.img_size)
     
 
@@ -105,6 +105,8 @@ if __name__ == '__main__':
         train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms \
          = get_transforms(img_size, mean=mean, std=std)
 
+    query_view = 'drone'
+    gallery_view = 'sate'
 
     # Test query
     query_dataset_test = GTARGBDDatasetEval(data_root=config.data_root,
@@ -121,7 +123,7 @@ if __name__ == '__main__':
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
     
     query_dataloader_test = DataLoader(query_dataset_test,
-                                       batch_size=config.batch_size_eval,
+                                       batch_size=config.batch_size,
                                        num_workers=config.num_workers,
                                        shuffle=False,
                                        pin_memory=True)
@@ -139,7 +141,7 @@ if __name__ == '__main__':
     gallery_img_list = gallery_dataset_test.images_name
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
-                                       batch_size=config.batch_size_eval,
+                                       batch_size=config.batch_size,
                                        num_workers=config.num_workers,
                                        shuffle=False,
                                        pin_memory=True)
@@ -161,6 +163,7 @@ if __name__ == '__main__':
                            gallery_loc_xy_list=gallery_loc_xy_list,
                            step_size=1000,
                            cleanup=True,
+                           dis_threshold_list=[4*(i+1) for i in range(50)],
                            plot_acc_threshold=True,
                            top10_log=False)
 

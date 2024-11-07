@@ -171,5 +171,9 @@ if __name__ == '__main__':
                            pairs_dict=pairs_drone2sate_dict,
                            ranks_list=[1, 5, 10],
                            step_size=1000,
-                           cleanup=True)
+                           cleanup=True,
+                           dis_threshold_list=[4*(i+1) for i in range(50)],
+                           cleanup=True,
+                           plot_acc_threshold=True,
+                           top10_log=False)
  
