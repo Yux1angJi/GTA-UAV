@@ -184,6 +184,7 @@ Game4Loc/pretrained.zip
 *.pdf
 *.mp4
 *.tiff
+*.ply
 Game4Loc/university/
 */university/*
 
