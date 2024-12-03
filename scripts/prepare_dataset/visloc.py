@@ -1,18 +1,19 @@
-from operator import length_hint
+# ---------------------------------------------------------------
+# Copyright (c) 2024-2025 Yuxiang Ji. All rights reserved.
+# Licensed under the Apache License, Version 2.0
+# ---------------------------------------------------------------
+
 import os
 import cv2
 import numpy as np
 import albumentations as A
-from albumentations.pytorch import ToTensorV2
 from torch.utils.data import Dataset
 import copy
 from tqdm import tqdm
-import time
 import random
 import shutil
 from scipy.spatial import ConvexHull
 from shapely.geometry import Polygon
-from shapely.validation import make_valid
 import concurrent.futures
 from PIL import Image
 import math
@@ -21,7 +22,6 @@ import csv
 import pickle
 import random
 import itertools
-from geopy.distance import geodesic
 import json
 
 
@@ -686,22 +686,30 @@ def get_sate_data(root_dir):
 
 
 if __name__ == '__main__':
+    ############################################################
+    ## This script is to pre-process UAV-VisLoc into a similar format as GTA-UAV. 
+    ## Please refer to the original data at https://github.com/IntelliSensing/UAV-VisLoc.
+    ## If you would like to construct your own dataset, some modifications may need to be adapted.
+    ############################################################
 
-    # UAV-VisLoc dataset root
+    ############################################################
+    ## UAV-VisLoc dataset root, please change it
     root = '/home/xmuairmud/data/UAV_VisLoc_dataset'
-    # Saving directory
+    ## Saving directory, please change it
     save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset/same_area'
-    # Mode (cross-area / same-area)
+    ## Mode (cross-area / same-area)
     split_type = 'same-area'
 
-    # For same-area, we use 03, 04 for both train and test
+    ##############################################################
+    ## For same-area, we use 03, 04 for both train and test
     if split_type == 'same-area':
         TRAIN_LIST = [3, 4]
         TEST_LIST = [3, 4]
-    # For cross-area, we use 03 for train; and 04 for test
+    ## For cross-area, we use 03 for train; and 04 for test
     elif split_type == 'cross-area':
         TRAIN_LIST = [3]
         TEST_LIST = [4]
+    ## Other settings like TRAIN_LIST=[1,2], TEST_LIST=[3,4] are also available
 
     ################################################################
     ## The preparing script includes two part
