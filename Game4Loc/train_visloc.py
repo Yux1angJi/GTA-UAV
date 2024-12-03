@@ -49,7 +49,6 @@ class Configuration:
     with_weight: bool = True
 
     train_in_group: bool = True
-    group_len = 2
 
     loss_type = ["whole_slice", "part_slice"]
 
@@ -118,40 +117,15 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
-    train_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/train_pair_meta.pkl'
-    test_pairs_meta_file: str = '/home/xmuairmud/data/UAV_VisLoc_dataset/data_all_iou4/test_pair_meta.pkl'
-    sate_img_dir: str = 'satellite_z31_4'
-
-    extra_train_pairs_meta_file: str = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable/train_h23456_z567/train_pair_meta.pkl'
+    train_pairs_meta_file: str = ''
+    test_pairs_meta_file: str = ''
+    sate_img_dir: str = 'satellite'
 
 
-def train_script(config):
+def train_script(config):    
 
-    loss_type_str = ""
-    for loss_type in config.loss_type:
-        if loss_type == 'part_block':
-            loss_type_str += 'pb'
-        elif loss_type == 'part_slice':
-            loss_type_str += 'ps'
-        elif loss_type == 'whole_block':
-            loss_type_str += 'wb'
-        elif loss_type == 'whole_slice':
-            loss_type_str += 'ws'
-        elif loss_type == 'contrastive_slice':
-            loss_type_str += 'cs'
-    
-    smooth_str = "{:.1f}".format(config.label_smoothing)
-    
-    if config.share_weights:
-        share_str = 'ws'
-    else:
-        share_str = 'wos'
-
-    if config.log_path == None:
-        config.log_path = f"nohup_train_visloc_1234z31_group{config.group_len}_{share_str}_l{loss_type_str}_s{smooth_str}_bs{config.batch_size}_e{config.epochs}_g2.out"
-    
-    f = open(config.log_path, 'w')
     if config.log_to_file:
+        f = open(config.log_path, 'w')
         sys.stdout = f
 
     save_time = "{}".format(time.strftime("%m%d%H%M%S"))
@@ -233,7 +207,6 @@ def train_script(config):
                                       pairs_meta_file=config.train_pairs_meta_file,
                                       transforms_query=train_sat_transforms,
                                       transforms_gallery=train_drone_transforms,
-                                      group_len=config.group_len,
                                       prob_flip=config.prob_flip,
                                       shuffle_batch_size=config.batch_size,
                                       mode=config.train_mode,
@@ -286,17 +259,6 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
     # Loss                                                                        #
     #-----------------------------------------------------------------------------#
-
-    if config.train_in_group:
-        loss_function_group = GroupInfoNCE(
-            group_len=config.group_len,
-            label_smoothing=config.label_smoothing,
-            loss_type=config.loss_type,
-            device=config.device,
-        )
-        print("Train in group.")
-        print("Label Smoothing", config.label_smoothing)
-        print("Loss type", config.loss_type)
 
     print("Train with weight?", config.with_weight, "k=", config.k)
     # loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
@@ -533,8 +495,6 @@ def parse_args():
 
     parser.add_argument('--train_in_group', action='store_true', help='Train in group')
     
-    parser.add_argument('--group_len', type=int, default=2, help='Group length')
-
     parser.add_argument('--train_with_mix_data', action='store_true', help='Train with mix data')
 
     parser.add_argument('--loss_type', type=str, nargs='+', default=['part_slice', 'whole_slice'], help='Loss type for group train')
@@ -565,7 +525,6 @@ if __name__ == '__main__':
     config.train_in_group = args.train_in_group
     config.train_with_recon = args.train_with_recon
     config.recon_weight = args.recon_weight
-    config.group_len = args.group_len
     config.train_with_mix_data = args.train_with_mix_data
     config.loss_type = args.loss_type
     config.gpu_ids = args.gpu_ids
