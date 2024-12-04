@@ -148,6 +148,11 @@ You may want to collect your own data from simulated game environments, if so, y
 To configure the simulation and collection environment, please refer [DeepGTA](https://github.com/David0tt/DeepGTAV).
 Notice that the compiled `DeepGTA` plugin for our GTA-UAV data simulation and collection is located at [here](DeepGTAV/DeepGTAV-PreSIL/bin/Release/).
 
+### Pre-process for UAV-VisLoc
+
+To pre-process the raw [UAV-VisLoc](https://github.com/IntelliSensing/UAV-VisLoc) data into a similar format as GTA-UAV, you can refer [this script](scripts/prepare_dataset/visloc.py).
+What's more, you can also refer to it and modify (extend) it to fit your custom similar datasets.
+
 ## Train and Test
 
 ![](resources/pipeline.jpg)
@@ -161,7 +166,7 @@ pip install -e .
 pip install -r requirements.txt
 ```
 
-Then you could simply run the training experiments by
+Then you could simply run the training experiments on GTA-UAV cross-area setting by
 ```bash
 # run experiment (example: GTA-UAV cross-area setting)  
 python train_gta.py \
@@ -171,6 +176,19 @@ python train_gta.py \
     --model "vit_base_patch16_rope_reg1_gap_256.sbb_in1k" \
     --gpu_ids 0 --label_smoothing 0.05 \
     --lr 0.0001 --batch_size 64 --epoch 5 \
+    --with_weight --k 5
+```
+
+Or run the training experiments on UAV-VisLoc by
+```bash
+# run experiment (example: UAV-VisLoc same-area setting)  
+python train_visloc.py \
+    --data_root <The directory of the UAV-VisLoc dataset> \
+    --train_pairs_meta_file "same-area-drone2sate-train.json" \
+    --test_pairs_meta_file "same-area-drone2sate-test.json" \
+    --model "vit_base_patch16_rope_reg1_gap_256.sbb_in1k" \
+    --gpu_ids 0 --label_smoothing 0.05 \
+    --lr 0.0001 --batch_size 64 --epoch 20 \
     --with_weight --k 5
 ```
 
