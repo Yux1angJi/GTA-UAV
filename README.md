@@ -27,6 +27,11 @@
 - [x] Part II: Train and Test
 - [ ] Part III: Pre-trained Checkpoints
 
+## News
+
+- Dec 10, 2024: Game4Loc is accepted by AAAI'25 🎉
+- Sept 28, 2024: Official GTA-UAV dataset release 🚧
+
 ## Table of contents
 
 - [Dataset Highlights](#dataset-highlights)
