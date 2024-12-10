@@ -212,4 +212,12 @@ This work draws inspiration from the following code as references. We extend our
 - [GTA-V-Wolrd-Map](https://github.com/Flamm64/GTA-V-World-Map)
 
 ## Citation
-To be released soon.
+If you find our repository useful for your research, please consider citing our paper:
+```bibtex
+@article{ji2024game4loc,
+    title  = {Game4Loc: A UAV Geo-Localization Benchmark from Game Data},
+    author = {Ji, Yuxiang and He, Boyong and Tan, Zhuoyue and Wu, Liaoni},
+    journal= {arXiv preprint arXiv:2409.16925},
+    year   = {2024},
+}
+```
