@@ -27,12 +27,12 @@
 - [x] Part II: Train and Test
 - [ ] Part III: Pre-trained Checkpoints
 
-## News
+## 🔥 News
 
-- Dec 10, 2024: Game4Loc is accepted by AAAI'25 🎉
-- Sept 28, 2024: Official GTA-UAV dataset release 🚧
+- [Dec 10, 2024]: Game4Loc is accepted by AAAI'25 🎉
+- [Sep 28, 2024]: Official GTA-UAV dataset release 🚧
 
-## Table of contents
+## 📚 Table of contents
 
 - [Dataset Highlights](#dataset-highlights)
 - [Dataset Access](#dataset-access)
@@ -44,7 +44,7 @@
 - [Citation](#citation)
 
 
-## Dataset Highlights
+## 🌟 Dataset Highlights
 ![](resources/GTA-UAV-data-construction.jpg)
 *GTA-UAV data construction*
 
@@ -58,7 +58,7 @@
 
 - Drone (camera) 6-DoF labels for each drone image.
 
-## Dataset Access
+## 💾 Dataset Access
 The dataset is released in two versions: low resolution (512x384, 12.8G) and high resolution (1920x1440, 133.6G).
 
 |                                      Low Resolution Version                                      |                                     High Resolution Version                                      |
@@ -69,7 +69,7 @@ The dataset is released in two versions: low resolution (512x384, 12.8G) and hig
 
 The high resolution dataset will be released soon.
 
-## Dataset Structure
+## 📁 Dataset Structure
 
 ### Directory Structure
 ```
@@ -158,7 +158,7 @@ Notice that the compiled `DeepGTA` plugin for our GTA-UAV data simulation and co
 To pre-process the raw [UAV-VisLoc](https://github.com/IntelliSensing/UAV-VisLoc) data into a similar format as GTA-UAV, you can refer [this script](scripts/prepare_dataset/visloc.py).
 What's more, you can also refer to it and modify (extend) it to fit your custom similar datasets.
 
-## Train and Test
+## 🚀 Train and Test
 
 ![](resources/pipeline.jpg)
 *Proposed training and test pipeline*
@@ -197,21 +197,29 @@ python train_visloc.py \
     --with_weight --k 5
 ```
 
-## Pre-trained Checkpoints
+## 💡 More Features
+
+### Finer Localization with Post-process
+Some studies divide localization into two parts: retrieval and matching. Our work focuses on the first part. 
+Nevertheless, we also provide support for finer localization based on image matching (Thanks to the excellent zero-shot capabilities of [GIM](https://github.com/xuelunshen/gim/)). 
+Set `with_match=True` in [eval script](Game4Loc/eval_gta.py) if needed.
+
+## 🤗 Pre-trained Checkpoints
 To be released soon.
 
-## License
+## 🎫 License
 This project is licensed under the [Apache 2.0 license](LICENSE).
 
 
-## Acknowledgments 
+## 🙏 Acknowledgments 
 This work draws inspiration from the following code as references. We extend our gratitude to these remarkable contributions:
 
 - [Sample4Geo](https://github.com/Skyy93/Sample4Geo)
 - [DeepGTA](https://github.com/David0tt/DeepGTAV)
 - [GTA-V-Wolrd-Map](https://github.com/Flamm64/GTA-V-World-Map)
+- [GIM](https://github.com/xuelunshen/gim/)
 
-## Citation
+## 📌 Citation
 If you find our repository useful for your research, please consider citing our paper:
 ```bibtex
 @article{ji2024game4loc,
