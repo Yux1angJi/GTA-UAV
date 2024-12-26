@@ -34,14 +34,15 @@
 
 ## 📚 Table of contents
 
-- [Dataset Highlights](#dataset-highlights)
-- [Dataset Access](#dataset-access)
-- [Dataset Structure](#dataset-structure)
-- [Train and Test](#train-and-test)
-- [Pre-trained Checkpoints](#pre-trained-checkpoints)
-- [License](#license)
-- [Acknowledgments](#acknowledgments)
-- [Citation](#citation)
+- [Dataset Highlights](#🌟-dataset-highlights)
+- [Dataset Access](#💾-dataset-access)
+- [Dataset Structure](#📁-dataset-structure)
+- [Train and Test](#🚀-train-and-test)
+- [More Features](#💡-more-features)
+- [Pre-trained Checkpoints](#🤗-pre-trained-checkpoints)
+- [License](#🎫-license)
+- [Acknowledgments](#🙏-acknowledgments)
+- [Citation](#📌-citation)
 
 
 ## 🌟 Dataset Highlights
