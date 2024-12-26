@@ -24,9 +24,11 @@ TILE_LENGTH = 256
 
 def sate2loc(tile_zoom, offset, tile_x, tile_y):
     tile_pix = SATE_LENGTH / (2 ** tile_zoom)
-    loc_x = (tile_pix * (tile_x+1/2+offset/TILE_LENGTH)) * 0.45
-    loc_y = (tile_pix * (tile_y+1/2+offset/TILE_LENGTH)) * 0.45
-    return loc_x, loc_y
+    loc_center_x = (tile_pix * (tile_x+1/2+offset/TILE_LENGTH)) * 0.45
+    loc_center_y = (tile_pix * (tile_y+1/2+offset/TILE_LENGTH)) * 0.45
+    loc_tl_x = (tile_pix * (tile_x+offset/TILE_LENGTH)) * 0.45
+    loc_tl_y = (tile_pix * (tile_y+offset/TILE_LENGTH)) * 0.45
+    return loc_center_x, loc_center_y, loc_tl_x, loc_tl_y
 
 
 def get_sate_data(root_dir):
@@ -370,7 +372,9 @@ class GTADatasetEval(Dataset):
 
         self.images_path = []
         self.images_name = []
-        self.images_loc_xy = []
+        self.images_center_loc_xy = []
+        # For finer localization with image matching
+        self.images_topleft_loc_xy = []
 
         self.pairs_sate2drone_dict = {}
         self.pairs_drone2sate_dict = {}
@@ -390,7 +394,7 @@ class GTADatasetEval(Dataset):
                 if len(pair_sate_img_list) != 0:
                     self.images_path.append(os.path.join(data_root, drone_img_dir, drone_img_name))
                     self.images_name.append(drone_img_name)
-                    self.images_loc_xy.append((drone_loc_x_y[0], drone_loc_x_y[1]))
+                    self.images_center_loc_xy.append((drone_loc_x_y[0], drone_loc_x_y[1]))
 
         elif view == 'sate':
             if query_mode == 'D2S':
@@ -405,7 +409,9 @@ class GTADatasetEval(Dataset):
                     tile_x = int(tile_x)
                     tile_y = int(tile_y)
                     offset = int(offset)
-                    self.images_loc_xy.append(sate2loc(tile_zoom, offset, tile_x, tile_y))
+                    loc_center_x, loc_center_y, loc_topleft_x, loc_topleft_y = sate2loc(tile_zoom, offset, tile_x, tile_y)
+                    self.images_center_loc_xy.append((loc_center_x, loc_center_y))
+                    self.images_topleft_loc_xy.append((loc_topleft_x, loc_topleft_y))
             else:
                 sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
                 for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
@@ -420,7 +426,9 @@ class GTADatasetEval(Dataset):
                     tile_x = int(tile_x)
                     tile_y = int(tile_y)
                     offset = int(offset)
-                    self.images_loc_xy.append(sate2loc(tile_zoom, offset, tile_x, tile_y))
+                    loc_center_x, loc_center_y, loc_topleft_x, loc_topleft_y = sate2loc(tile_zoom, offset, tile_x, tile_y)
+                    self.images_center_loc_xy.append((loc_center_x, loc_center_y))
+                    self.images_topleft_loc_xy.append((loc_topleft_x, loc_topleft_y))
 
         self.transforms = transforms
 
@@ -505,4 +513,4 @@ def get_transforms(img_size,
 
 
 if __name__ == "__main__":
-    pass
+    print(sate2loc(5, 0, 10, 5))

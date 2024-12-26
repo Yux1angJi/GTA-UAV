@@ -80,6 +80,30 @@ def tile_center_latlon(left_top_lat, left_top_lon, right_bottom_lat, right_botto
     return center_lat, center_lon
 
 
+def tile_topleft_latlon(left_top_lat, left_top_lon, right_bottom_lat, right_bottom_lon, zoom, x, y, str_i):
+    """Calculate the topleft lat/lon of a tile."""
+    sate_h, sate_w = SATE_SIZE[str_i][0], SATE_SIZE[str_i][1]
+    max_dim = max(sate_h, sate_w)
+    max_zoom = math.ceil(math.log(max_dim / TILE_SIZE, 2))
+    scale = 2 ** (max_zoom - zoom)
+
+    scaled_width = math.ceil(sate_w / scale)
+    scaled_height = math.ceil(sate_h / scale)
+
+    coe_lon = (x) * TILE_SIZE / scaled_width
+    coe_lat = (y) * TILE_SIZE / scaled_height
+
+    # Calculate the size of each tile in degrees
+    lat_diff = left_top_lat - right_bottom_lat
+    lon_diff = right_bottom_lon - left_top_lon
+
+    # Calculate the center of the tile in degrees
+    topleft_lat = left_top_lat - coe_lat * lat_diff
+    topleft_lon = left_top_lon + coe_lon * lon_diff
+
+    return topleft_lat, topleft_lon
+
+
 def tile2sate(tile_name):
     tile_name = tile_name.replace('.png', '')
     str_i, zoom_level, tile_x, tile_y = tile_name.split('_')
@@ -87,7 +111,8 @@ def tile2sate(tile_name):
     tile_x = int(tile_x)
     tile_y = int(tile_y)
     lt_lat, lt_lon, rb_lat, rb_lon = SATE_LATLON[str_i]
-    return tile_center_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y, str_i)
+    return tile_center_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y, str_i), \
+        tile_topleft_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y, str_i)
 
 def get_sate_data(root_dir):
     sate_img_dir_list = []
@@ -294,7 +319,9 @@ class VisLocDatasetEval(Dataset):
 
         self.images_name = []
         self.images_path = []
-        self.images_loc_xy = []
+        self.images_center_loc_xy = []
+        # For finer localization with image matching
+        self.images_topleft_loc_xy = []
 
         self.pairs_sate2drone_dict = {}
         self.pairs_drone2sate_dict = {}
@@ -314,7 +341,7 @@ class VisLocDatasetEval(Dataset):
                 if len(pair_sate_img_list) != 0:
                     self.images_path.append(os.path.join(data_root, drone_img_dir, drone_img_name))
                     self.images_name.append(drone_img_name)
-                    self.images_loc_xy.append((drone_loc_xy[0], drone_loc_xy[1]))
+                    self.images_center_loc_xy.append((drone_loc_xy[0], drone_loc_xy[1]))
 
         elif view == 'sate':
             if query_mode == 'D2S':
@@ -322,7 +349,9 @@ class VisLocDatasetEval(Dataset):
                 for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
                     self.images_path.append(os.path.join(data_root, sate_img_dir, sate_img))
                     self.images_name.append(sate_img)
-                    self.images_loc_xy.append(tile2sate(sate_img))
+                    loc_center, loc_topleft = tile2sate(sate_img)
+                    self.images_center_loc_xy.append(loc_center)
+                    self.images_topleft_loc_xy.append(loc_topleft)
             else:
                 sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
                 for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
@@ -330,7 +359,9 @@ class VisLocDatasetEval(Dataset):
                         continue
                     self.images_path.append(os.path.join(data_root, sate_img_dir, sate_img))
                     self.images_name.append(sate_img)
-                    self.images_loc_xy.append(tile2sate(sate_img))
+                    loc_center, loc_topleft = tile2sate(sate_img)
+                    self.images_center_loc_xy.append(loc_center)
+                    self.images_topleft_loc_xy.append(loc_topleft)
         self.transforms = transforms
 
 
@@ -412,4 +443,5 @@ def get_transforms(img_size,
 
 
 if __name__ == '__main__':
-    pass
+    print(tile2sate('04_6_007_011.png'))
+    

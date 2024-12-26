@@ -8,6 +8,8 @@ import torch.nn.functional as F
 from sklearn.metrics import average_precision_score
 from geopy.distance import geodesic
 
+from ..matcher.gim_dkm import GimDKM
+
 
 def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
     query_lat, query_lon = query_loc
@@ -27,7 +29,7 @@ def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
     return sdm_list
 
 
-def get_dis(query_loc, index, gallery_loc_xy_list, disk_list):
+def get_dis(query_loc, index, gallery_loc_xy_list, disk_list, match_loc=None):
     query_lat, query_lon = query_loc
     dis_list = []
     for k in disk_list:
@@ -37,9 +39,22 @@ def get_dis(query_loc, index, gallery_loc_xy_list, disk_list):
             gallery_lat, gallery_lon = gallery_loc_xy_list[idx]
             dis = geodesic((query_lat, query_lon), (gallery_lat, gallery_lon)).meters
             dis_sum += dis
-        dis_list.append(dis_sum / k)
+
+        # For matcher estimated location
+        if k == 1 and match_loc != None:
+            match_lat, match_lon = match_loc
+            dis_match = geodesic((query_lat, query_lon), (match_lat, match_lon)).meters
+            dis_list.append(dis_match)
+        else:
+            dis_list.append(dis_sum / k)
 
     return dis_list
+
+
+def get_dis_target(query_loc, target_loc):
+    query_lat, query_lon = query_loc
+    target_lat, target_lon = target_loc
+    return geodesic((query_lat, query_lon), (query_lat, target_lon)).meters
 
 
 def get_top10(index, gallery_list):
@@ -89,23 +104,28 @@ def predict(train_config, model, dataloader):
     return img_features
 
 
-def evaluate(config,
-                model,
-                query_loader,
-                gallery_loader,
-                query_list,
-                query_loc_xy_list,
-                gallery_list,
-                gallery_loc_xy_list,
-                pairs_dict,
-                ranks_list=[1, 5, 10],
-                sdmk_list=[1, 3, 5],
-                disk_list=[1, 3, 5],
-                step_size=1000,
-                cleanup=True,
-                dis_threshold_list=[4*(i+1) for i in range(50)],
-                plot_acc_threshold=False,
-                top10_log=False):
+def evaluate(
+        config,
+        model,
+        query_loader,
+        gallery_loader,
+        query_list,
+        query_center_loc_xy_list,
+        gallery_list,
+        gallery_center_loc_xy_list,
+        gallery_topleft_loc_xy_list,
+        pairs_dict,
+        ranks_list=[1, 5, 10],
+        sdmk_list=[1, 3, 5],
+        disk_list=[1, 3, 5],
+        step_size=1000,
+        cleanup=True,
+        dis_threshold_list=[4*(i+1) for i in range(50)],
+        plot_acc_threshold=False,
+        top10_log=False,
+        with_match=False,
+    ):
+
     print("Extract Features and Compute Scores:")
     img_features_query = predict(config, model, query_loader)
     # img_features_gallery = predict(config, model, gallery_loader)
@@ -124,7 +144,10 @@ def evaluate(config,
             all_scores.append(scores_batch.cpu())
     
     all_scores = torch.cat(all_scores, dim=1).numpy()
-    # print('jyxjyxjyx', all_scores.shape)
+
+    # with image match for finer loc
+    if with_match:
+        matcher = GimDKM(device=config.device)
 
     ap = 0.0
 
@@ -157,22 +180,47 @@ def evaluate(config,
     dis_list = []
     acc_threshold = [0 for _ in range(len(dis_threshold_list))]
 
+    # for log
     top10_list = []
     loc1_list = []
+    dis_ori_list = []
+    dis_match_list = []
 
-    for i in range(query_num):
+    for i in tqdm(range(query_num), desc="Processing each query"):
         str_i = query_list[i].split('_')[0]
         score = all_scores[i] * gallery_mapi_idx[str_i]
         # predict index
         index = np.argsort(score)[::-1]
+        top1_index = index[0]
 
-        sdm_list.append(sdm(query_loc_xy_list[i], sdmk_list, index, gallery_loc_xy_list))
+        # with image match for finer loc
+        # match_loc: (lat, lon)
+        # matcher.est_center (x, y) -> (lon, lat)
+        match_loc = None
+        if with_match:
+            gallery_center_lat, gallery_center_lon = gallery_center_loc_xy_list[top1_index]
+            gallery_center_lon_lat = gallery_center_lon, gallery_center_lat
+            gallery_topleft_lat, gallery_topleft_lon = gallery_topleft_loc_xy_list[top1_index]
+            gallery_topleft_lon_lat = gallery_topleft_lon, gallery_topleft_lat
+            match_loc_lon_lat = matcher.est_center(gallery_loader.dataset[top1_index], query_loader.dataset[i], 
+                gallery_center_lon_lat, gallery_topleft_lon_lat)
+            match_loc_lat_lon = match_loc_lon_lat[1], match_loc_lon_lat[0]
+            dis_match_list.append(get_dis_target(query_center_loc_xy_list[i], match_loc_lat_lon))
+            match_loc = match_loc_lat_lon
+        else:
+            dis_match_list.append(None)
+        
+        dis_ori_list.append(get_dis_target(query_center_loc_xy_list[i], gallery_center_loc_xy_list[top1_index]))
 
-        dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list, disk_list))
+        sdm_list.append(sdm(query_center_loc_xy_list[i], sdmk_list, index, gallery_center_loc_xy_list))
+
+        dis_list.append(get_dis(query_center_loc_xy_list[i], index, gallery_center_loc_xy_list, disk_list, match_loc))
 
         top10_list.append(get_top10(index, gallery_list))
-        loc1_x, loc1_y = gallery_loc_xy_list[index[0]]
-        loc1_list.append((query_loc_xy_list[i][0], query_loc_xy_list[i][1], loc1_x, loc1_y))
+        loc1_lat, loc1_lon = gallery_center_loc_xy_list[index[0]]
+        if with_match:
+            loc1_lat, loc1_lon = match_loc
+        loc1_list.append((query_center_loc_xy_list[i][0], query_center_loc_xy_list[i][1], loc1_lat, loc1_lon))
 
         for j in range(len(dis_threshold_list)):
             if dis_list[i][0] < dis_threshold_list[j]:
@@ -223,7 +271,7 @@ def evaluate(config,
         #torch.cuda.empty_cache()
 
     if top10_log:
-        for query_img, top10, loc in zip(query_list, top10_list, loc1_list):
+        for query_img, top10, loc, dis_ori, dis_match in zip(query_list, top10_list, loc1_list, dis_ori_list, dis_match_list):
             print('Query', query_img)
             print('Top10', top10)
             print('Query loc', loc[0], loc[1])
@@ -236,6 +284,10 @@ def evaluate(config,
                 else:
                     imgs_type.append('Null')
             print(imgs_type)
+
+            if dis_ori < dis_match:
+                print(f'before match is better, dis_ori={dis_ori}, dis_match={dis_match}')
+
 
     if plot_acc_threshold:
         y = np.array(acc_threshold)

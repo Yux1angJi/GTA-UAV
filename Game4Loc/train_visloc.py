@@ -228,7 +228,7 @@ def train_script(config):
                                         )
     query_img_list = query_dataset_test.images_name
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
-    query_loc_xy_list = query_dataset_test.images_loc_xy
+    query_center_loc_xy_list = query_dataset_test.images_center_loc_xy
     
     query_dataloader_test = DataLoader(query_dataset_test,
                                        batch_size=config.batch_size_eval,
@@ -244,7 +244,8 @@ def train_script(config):
                                                sate_img_dir=config.sate_img_dir,
                                                )
     gallery_img_list = gallery_dataset_test.images_name
-    gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
+    gallery_center_loc_xy_list = gallery_dataset_test.images_center_loc_xy
+    gallery_topleft_loc_xy_list = gallery_dataset_test.images_topleft_loc_xy
     print('jyxjyx, test len', len(query_img_list), len(gallery_img_list), flush=True)
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
@@ -310,8 +311,9 @@ def train_script(config):
                            gallery_loader=gallery_dataloader_test, 
                            query_list=query_img_list,
                            gallery_list=gallery_img_list,
-                           query_loc_xy_list=query_loc_xy_list,
-                           gallery_loc_xy_list=gallery_loc_xy_list,
+                           query_center_loc_xy_list=query_center_loc_xy_list,
+                           gallery_center_loc_xy_list=gallery_center_loc_xy_list,
+                           gallery_topleft_loc_xy_list=gallery_topleft_loc_xy_list,
                            pairs_dict=pairs_drone2sate_dict,
                            ranks_list=[1, 5, 10],
                            step_size=1000,
@@ -417,8 +419,9 @@ def train_script(config):
                                 query_list=query_img_list,
                                 gallery_list=gallery_img_list,
                                 pairs_dict=pairs_drone2sate_dict,
-                                query_loc_xy_list=query_loc_xy_list,
-                                gallery_loc_xy_list=gallery_loc_xy_list,
+                                query_center_loc_xy_list=query_center_loc_xy_list,
+                                gallery_center_loc_xy_list=gallery_center_loc_xy_list,
+                                gallery_topleft_loc_xy_list=gallery_topleft_loc_xy_list,
                                 ranks_list=[1, 5, 10],
                                 step_size=1000,
                                 cleanup=True)

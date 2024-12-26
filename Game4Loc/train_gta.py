@@ -256,7 +256,7 @@ def train_script(config):
                                         query_mode=config.query_mode,
                                         )
     query_img_list = query_dataset_test.images_name
-    query_loc_xy_list = query_dataset_test.images_loc_xy
+    query_center_loc_xy_list = query_dataset_test.images_center_loc_xy
     pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
     
     query_dataloader_test = DataLoader(query_dataset_test,
@@ -274,7 +274,8 @@ def train_script(config):
                                           sate_img_dir=config.sate_img_dir,
                                           query_mode=config.query_mode,
                                          )
-    gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
+    gallery_center_loc_xy_list = gallery_dataset_test.images_center_loc_xy
+    gallery_topleft_loc_xy_list = gallery_dataset_test.images_topleft_loc_xy
     gallery_img_list = gallery_dataset_test.images_name
     
     gallery_dataloader_test = DataLoader(gallery_dataset_test,
@@ -373,8 +374,9 @@ def train_script(config):
                            gallery_list=gallery_img_list,
                            pairs_dict=pairs_drone2sate_dict,
                            ranks_list=[1, 5, 10],
-                           query_loc_xy_list=query_loc_xy_list,
-                           gallery_loc_xy_list=gallery_loc_xy_list,
+                           query_center_loc_xy_list=query_center_loc_xy_list,
+                           gallery_center_loc_xy_list=gallery_center_loc_xy_list,
+                           gallery_topleft_loc_xy_list=gallery_topleft_loc_xy_list,
                            step_size=1000,
                            cleanup=True)
            
@@ -419,8 +421,9 @@ def train_script(config):
                                 gallery_list=gallery_img_list,
                                 pairs_dict=pairs_drone2sate_dict,
                                 ranks_list=[1, 5, 10],
-                                query_loc_xy_list=query_loc_xy_list,
-                                gallery_loc_xy_list=gallery_loc_xy_list,
+                                query_center_loc_xy_list=query_center_loc_xy_list,
+                                gallery_center_loc_xy_list=gallery_center_loc_xy_list,
+                                gallery_topleft_loc_xy_list=gallery_topleft_loc_xy_list,
                                 step_size=1000,
                                 cleanup=True)
                 
