@@ -9,6 +9,7 @@ import seaborn as sns
 from PIL import Image
 import pickle
 import cv2
+from matplotlib.lines import Line2D
 
 import os
 
@@ -407,6 +408,68 @@ def resize_img():
     cv2.imwrite('GTA-UAV-sample-dist-cross-resize.png', a)
 
 
+def plot_unguide_prob():
+    # 数据
+    x = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+    gta_cross = [45.53, 47.48, 48.22, 46.65, 46.99, 46.88, 46.08]
+    gta_same = [75.02, 75.51, 78.59, 77.01, 76.21, 76.24, 75.07]
+    visloc_cross = [49.71, 51.73, 51.73, 52.08, 51.91, 52.43, 51.73]
+    visloc_same = [89.70, 89.85, 90.58, 90.57, 89.85, 90.57, 89.85]
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(10, 3), gridspec_kw={'height_ratios': [2, 1]})
+
+    # 设置第一个子图
+    ax1.plot(x, gta_cross, marker='s', label='Cross-area Camera+LiDAR', color='orange')
+    ax1.plot(x, gta_same, marker='s', label='Same-area Camera+LiDAR', color='green')
+    # ax1.plot(x, visloc_cross, marker='s', label='UAV-VisLoc-LiDAR-cross-area', color='green')
+    # ax1.plot(x, visloc_same, marker='s', label='UAV-VisLoc-LiDAR-same-area', color='purple')
+    ax1.axhline(y=74.3, color='green', linestyle='--', alpha=0.5, label='Same-area Camera-only')  # 添加横向虚线
+    ax1.set_ylim(70, 100)  # 设置 y 轴范围
+
+    # 设置第二个子图
+    ax2.plot(x, gta_cross, marker='s', label='Cross-area Camera+LiDAR', color='orange')
+    ax2.plot(x, gta_same, marker='s', label='Same-area Camera+LiDAR', color='green')
+    # ax2.plot(x, visloc_cross, marker='s', label='UAV-VisLoc-LiDAR-cross-area', color='green')
+    # ax2.plot(x, visloc_same, marker='s', label='UAV-VisLoc-LiDAR-same-area', color='purple')
+    ax2.axhline(y=44.0, color='orange', linestyle='--', alpha=0.5, label='Cross-area Camera-only')  # 添加横向虚线
+    ax2.set_ylim(40, 50)  # 设置 y 轴范围
+
+    # 隐藏上下子图的边框并添加y轴断裂符号
+    ax1.spines['bottom'].set_visible(False)
+    ax2.spines['top'].set_visible(False)
+    ax1.xaxis.tick_top()
+    ax2.xaxis.tick_bottom()
+    ax1.xaxis.set_ticks_position('none')
+
+    # 添加断裂符号
+    d = .015  # 符号尺寸
+    kwargs = dict(transform=ax1.transAxes, color='k', clip_on=False)
+    ax1.plot((-d, +d), (-d, +d), **kwargs)        # 左
+    ax1.plot((1 - d, 1 + d), (-d, +d), **kwargs)  # 右
+
+    kwargs.update(transform=ax2.transAxes)  # 传递到下一个子图
+    ax2.plot((-d, +d), (1 - d, 1 + d), **kwargs)  # 左
+    ax2.plot((1 - d, 1 + d), (1 - d, 1 + d), **kwargs)  # 右
+
+    fig.text(0.5, 0.0, 'Probability of Unguidance', ha='center')
+    fig.text(0.08, 0.5, 'Recall@1 (%)', va='center', rotation='vertical')
+
+    custom_lines = [
+        Line2D([0], [0], color='orange', marker='s', label='Cross-area Camera+LiDAR'),
+        Line2D([0], [0], color='green', marker='s', label='Same-area Camera+LiDAR'),
+        Line2D([0], [0], color='orange', linestyle='--', alpha=0.5, label='Cross-area Camera-only'),
+        Line2D([0], [0], color='green', linestyle='--', alpha=0.5, label='Same-area Camera-only'),
+    ]
+    ax1.legend(handles=custom_lines, loc='upper center', bbox_to_anchor=(0.84, 0.99), ncol=1)  # 调整图例位置
+
+    # 显示图例
+    # plt.legend()
+
+    # 显示图表
+    plt.show()
+    plt.savefig('prob_unguide.pdf', transparent=True, bbox_inches='tight', pad_inches=0)
+
+
 if __name__ == '__main__':
     # gen_attitudes()
     # draw_attitude_roll_pitch_2()
@@ -414,7 +477,8 @@ if __name__ == '__main__':
     # resize_img()
     # gen_attitudes()
     # draw_attitude_roll_pitch_2()
-    draw_attitude_yaw()
+    # draw_attitude_yaw()
+    plot_unguide_prob()
     # draw_attitude_roll_pitch()
     # draw_altitude()
     # draw_scenes_pie()
