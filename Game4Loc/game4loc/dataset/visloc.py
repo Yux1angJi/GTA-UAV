@@ -80,6 +80,30 @@ def tile_center_latlon(left_top_lat, left_top_lon, right_bottom_lat, right_botto
     return center_lat, center_lon
 
 
+def tile_topleft_latlon(left_top_lat, left_top_lon, right_bottom_lat, right_bottom_lon, zoom, x, y, str_i):
+    """Calculate the topleft lat/lon of a tile."""
+    sate_h, sate_w = SATE_SIZE[str_i][0], SATE_SIZE[str_i][1]
+    max_dim = max(sate_h, sate_w)
+    max_zoom = math.ceil(math.log(max_dim / TILE_SIZE, 2))
+    scale = 2 ** (max_zoom - zoom)
+
+    scaled_width = math.ceil(sate_w / scale)
+    scaled_height = math.ceil(sate_h / scale)
+
+    coe_lon = (x) * TILE_SIZE / scaled_width
+    coe_lat = (y) * TILE_SIZE / scaled_height
+
+    # Calculate the size of each tile in degrees
+    lat_diff = left_top_lat - right_bottom_lat
+    lon_diff = right_bottom_lon - left_top_lon
+
+    # Calculate the center of the tile in degrees
+    topleft_lat = left_top_lat - coe_lat * lat_diff
+    topleft_lon = left_top_lon + coe_lon * lon_diff
+
+    return topleft_lat, topleft_lon
+
+
 def tile2sate(tile_name):
     tile_name = tile_name.replace('.png', '')
     str_i, zoom_level, tile_x, tile_y = tile_name.split('_')
@@ -87,7 +111,8 @@ def tile2sate(tile_name):
     tile_x = int(tile_x)
     tile_y = int(tile_y)
     lt_lat, lt_lon, rb_lat, rb_lon = SATE_LATLON[str_i]
-    return tile_center_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y, str_i)
+    return tile_center_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y, str_i), \
+        tile_topleft_latlon(lt_lat, lt_lon, rb_lat, rb_lon, zoom_level, tile_x, tile_y, str_i)
 
 def get_sate_data(root_dir):
     sate_img_dir_list = []
@@ -107,10 +132,9 @@ class VisLocDatasetTrain(Dataset):
                  drone2sate=True,
                  transforms_query=None,
                  transforms_gallery=None,
-                 group_len=2,
                  prob_flip=0.5,
                  shuffle_batch_size=128,
-                 mode='iou',
+                 mode='pos_semipos',
                  train_ratio=1.0):
         super().__init__()
         
@@ -183,151 +207,6 @@ class VisLocDatasetTrain(Dataset):
     def __len__(self):
         return len(self.samples)
 
-
-    def shuffle_group(self, ):
-        '''
-        custom shuffle function for unique class_id sampling in batch
-        '''
-        print("\nShuffle Dataset in Groups:")
-        
-        pair_pool = copy.deepcopy(self.pairs)
-        # Shuffle pairs order
-        random.shuffle(pair_pool)
-        
-        sate_batch = set()
-        drone_batch = set()
-        
-        # Lookup if already used in epoch
-        pairs_epoch = set()   
-
-        # buckets
-        batches = []
-        current_batch = []
-        
-        # counter
-        break_counter = 0
-        
-        # progressbar
-        # pbar = tqdm()
-
-        while True:
-            # pbar.update()
-            # print(break_counter)
-            if len(pair_pool) > 0:
-                if break_counter >= 16384:
-                    break
-
-                pair = pair_pool.pop(0)
-                
-                drone_img_path, sate_img_path, _ = pair
-                drone_img_dir = os.path.dirname(drone_img_path)
-                sate_img_dir = os.path.dirname(sate_img_path)
-
-                drone_img_name_i = drone_img_path.split('/')[-1]
-                sate_img_name_i = sate_img_path.split('/')[-1]
-
-                pair_name = (drone_img_name_i, sate_img_name_i)
-
-                if drone_img_name_i in drone_batch or pair_name in pairs_epoch:
-                    if pair_name not in pairs_epoch:
-                            pair_pool.append(pair)
-                    break_counter += 1
-                    continue
-
-                pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name_i]
-                random.shuffle(pairs_drone2sate)
-
-                subset_sate_len = itertools.combinations(pairs_drone2sate, self.group_len)
-                
-                subset_drone = None
-                subset_sate = None
-                for subset_sate_i in subset_sate_len:
-                    flag = True
-                    sate2drone_inter_set = None
-
-                    #### Check for sate
-                    for sate_img in subset_sate_i:
-                        if sate_img in sate_batch:
-                            flag = False
-                            break
-                        
-                        if sate2drone_inter_set == None:
-                            sate2drone_inter_set = set(self.pairs_sate2drone_dict[sate_img])
-                        else:
-                            sate2drone_inter_set = sate2drone_inter_set.intersection(self.pairs_sate2drone_dict[sate_img])
-                    
-                        
-                    if not flag or sate2drone_inter_set == None or len(sate2drone_inter_set) < self.group_len:
-                        continue
-
-                    sate2drone_inter_set = list(sate2drone_inter_set)
-                    random.shuffle(sate2drone_inter_set)
-                    subset_drone_len = itertools.combinations(sate2drone_inter_set, self.group_len)
-                    #### Check for drone
-                    for subset_drone_i in subset_drone_len:
-                        if drone_img_name_i not in subset_drone_i:
-                            continue
-                        flag = True
-                        for drone_img in subset_drone_i:
-                            if drone_img in drone_batch or flag == False:
-                                flag = False
-                                break
-                            for sate_img in subset_sate_i:
-                                pair_tmp = (drone_img, sate_img)
-                                if pair_tmp in pairs_epoch:
-                                    flag = False
-                                    break
-                        if flag:
-                            subset_drone = subset_drone_i
-                            subset_sate = subset_sate_i
-                            break
-                
-                if subset_drone != None and subset_sate != None:
-                    # random.shuffle(subset_drone)
-                    # random.shuffle(subset_sate)
-                    for drone_img_name, sate_img_name in zip(subset_drone, subset_sate):
-                        drone_img_path = os.path.join(drone_img_dir, drone_img_name)
-                        sate_img_path = os.path.join(sate_img_dir, sate_img_name)
-                        current_batch.append((drone_img_path, sate_img_path, 1.0))
-                        pairs_epoch.add((drone_img_name, sate_img_name))
-                    for drone_img in subset_drone:
-                        pairs_drone2sate = self.pairs_drone2sate_dict[drone_img_name]
-                        for sate in pairs_drone2sate:
-                            sate_batch.add(sate)
-                    for sate_img in subset_sate:
-                        pairs_sate2drone = self.pairs_sate2drone_dict[sate_img_name]
-                        for drone in pairs_sate2drone:
-                            drone_batch.add(drone)
-                else:
-                    if pair_name not in pairs_epoch:
-                            pair_pool.append(pair)        
-                    break_counter += 1
-
-                if break_counter >= 16384:
-                    break
-            else:
-                break
-            if len(current_batch) >= self.shuffle_batch_size:
-                # empty current_batch bucket to batches
-                batches.extend(current_batch)
-                sate_batch = set()
-                drone_batch = set()
-                current_batch = []
-    
-        # pbar.close()
-        
-        # wait before closing progress bar
-        time.sleep(0.3)
-        
-        self.samples = batches
-        
-        print("Original Length: {} - Length after Shuffle: {}".format(len(self.pairs), len(self.samples))) 
-        print("Break Counter:", break_counter)
-        print("Pairs left out of last batch to avoid creating noise:", len(self.pairs) - len(self.samples))
-        print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][0], self.samples[-1][0]))  
-        print("First Element ID: {} - Last Element ID: {}".format(self.samples[0][1], self.samples[-1][1]))  
-
-    
     def shuffle(self, ):
 
             '''
@@ -440,7 +319,9 @@ class VisLocDatasetEval(Dataset):
 
         self.images_name = []
         self.images_path = []
-        self.images_loc_xy = []
+        self.images_center_loc_xy = []
+        # For finer localization with image matching
+        self.images_topleft_loc_xy = []
 
         self.pairs_sate2drone_dict = {}
         self.pairs_drone2sate_dict = {}
@@ -460,7 +341,7 @@ class VisLocDatasetEval(Dataset):
                 if len(pair_sate_img_list) != 0:
                     self.images_path.append(os.path.join(data_root, drone_img_dir, drone_img_name))
                     self.images_name.append(drone_img_name)
-                    self.images_loc_xy.append((drone_loc_xy[0], drone_loc_xy[1]))
+                    self.images_center_loc_xy.append((drone_loc_xy[0], drone_loc_xy[1]))
 
         elif view == 'sate':
             if query_mode == 'D2S':
@@ -468,7 +349,9 @@ class VisLocDatasetEval(Dataset):
                 for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
                     self.images_path.append(os.path.join(data_root, sate_img_dir, sate_img))
                     self.images_name.append(sate_img)
-                    self.images_loc_xy.append(tile2sate(sate_img))
+                    loc_center, loc_topleft = tile2sate(sate_img)
+                    self.images_center_loc_xy.append(loc_center)
+                    self.images_topleft_loc_xy.append(loc_topleft)
             else:
                 sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
                 for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
@@ -476,7 +359,9 @@ class VisLocDatasetEval(Dataset):
                         continue
                     self.images_path.append(os.path.join(data_root, sate_img_dir, sate_img))
                     self.images_name.append(sate_img)
-                    self.images_loc_xy.append(tile2sate(sate_img))
+                    loc_center, loc_topleft = tile2sate(sate_img)
+                    self.images_center_loc_xy.append(loc_center)
+                    self.images_topleft_loc_xy.append(loc_topleft)
         self.transforms = transforms
 
 
@@ -558,4 +443,5 @@ def get_transforms(img_size,
 
 
 if __name__ == '__main__':
-    pass
+    print(tile2sate('04_6_007_011.png'))
+    

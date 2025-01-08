@@ -13,6 +13,8 @@ from PIL import Image
 import pickle
 import os
 
+from ..matcher.gim_dkm import GimDKM
+
 
 def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
     query_x, query_y = query_loc
@@ -32,7 +34,7 @@ def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
     return sdm_list
 
 
-def get_dis(query_loc, index, gallery_loc_xy_list, disk_list):
+def get_dis(query_loc, index, gallery_loc_xy_list, disk_list, match_loc=None):
     query_x, query_y = query_loc
     dis_list = []
     for k in disk_list:
@@ -42,9 +44,23 @@ def get_dis(query_loc, index, gallery_loc_xy_list, disk_list):
             gallery_x, gallery_y = gallery_loc_xy_list[idx]
             dis = np.sqrt((query_x - gallery_x)**2 + (query_y - gallery_y)**2)
             dis_sum += dis
-        dis_list.append(dis_sum / k)
+        
+        # For matcher estimated location
+        if k == 1 and match_loc != None:
+            match_loc_x, match_loc_y = match_loc
+            dis_match = np.sqrt((query_x - match_loc_x)**2 + (query_y - match_loc_y)**2)
+
+            dis_list.append(dis_match)
+        else:
+            dis_list.append(dis_sum / k)
 
     return dis_list
+
+
+def get_dis_target(query_loc, target_loc):
+    query_x, query_y = query_loc
+    target_x, target_y = target_loc
+    return np.sqrt((query_x-target_x)**2 + (query_y-target_y)**2)
 
 
 def get_top10(index, gallery_list):
@@ -55,86 +71,94 @@ def get_top10(index, gallery_list):
     return top10
 
 
-def predict(config, model, query_feature, dataloader):
+def predict(train_config, model, dataloader):
     
     model.eval()
     
     # wait before starting progress bar
     time.sleep(0.1)
     
-    if config.verbose:
+    if train_config.verbose:
         bar = tqdm(dataloader, total=len(dataloader))
     else:
         bar = dataloader
         
-    features_list = []
+    query_features_list = []
     
     with torch.no_grad():
         
         for sample in bar:
                     
             with autocast():
-                for k, v in sample.items():
-                    sample[k] = v.to(config.device)
+            
+                drone_img = sample['drone_img'].to(train_config.device)
+                drone_lidar_pts = None
+                drone_lidar_clr = None
+                drone_depth = sample['drone_depth'].to(train_config.device)
+                drone_desc = sample['drone_desc']
+                drone_desc = {key: value.to(train_config.device) for key, value in drone_desc.items()}
                 
-                features = model(**sample)
-                features = features[query_feature]             
+                query_feature = model.forward_query(drone_img=drone_img, 
+                                    drone_lidar_pts=drone_lidar_pts,
+                                    drone_lidar_clr=drone_lidar_clr,
+                                    drone_desc=drone_desc,
+                                    drone_depth=drone_depth,
+                                    )
             
                 # normalize is calculated in fp32
-                if config.normalize_features:
-                    features = F.normalize(features, dim=-1)
+                if train_config.normalize_features:
+                    query_feature = F.normalize(query_feature, dim=-1)
             
             # save features in fp32 for sim calculation
-            features_list.append(features.to(torch.float32))
+            query_features_list.append(query_feature.to(torch.float32))
 
         # keep Features on GPU
-        final_features = torch.cat(features_list, dim=0) 
+        query_features = torch.cat(query_features_list, dim=0) 
         
-    if config.verbose:
+    if train_config.verbose:
         bar.close()
     
-    return final_features
+    return query_features
 
 
-def evaluate(config,
-                model,
-                query_loader,
-                gallery_loader,
-                query_list,
-                query_loc_xy_list,
-                query_feature,
-                gallery_list,
-                gallery_loc_xy_list,
-                gallery_feature,
-                pairs_dict,
-                ranks_list=[1, 5, 10],
-                sdmk_list=[1, 3, 5],
-                disk_list=[1, 3, 5],
-                step_size=1000,
-                cleanup=True,
-                dis_threshold_list=[4*(i+1) for i in range(50)],
-                plot_acc_threshold=False,
-                top10_log=False):
+def evaluate(
+        config,
+        model,
+        query_loader,
+        gallery_loader,
+        query_list,
+        query_loc_xy_list,
+        gallery_list,
+        gallery_loc_xy_list,
+        pairs_dict,
+        ranks_list=[1, 5, 10],
+        sdmk_list=[1, 3, 5],
+        disk_list=[1, 3, 5],
+        step_size=1000,
+        cleanup=True,
+        dis_threshold_list=[4*(i+1) for i in range(50)],
+        plot_acc_threshold=False,
+        top10_log=False,
+    ):
+
     print("Extract Features and Compute Scores:")
-    features_query = predict(config, model, query_feature, query_loader)
+    query_features = predict(config, model, query_loader)
 
     all_scores = []
     model.eval()
     with torch.no_grad():
-        for sample in gallery_loader:
+        for gallery_batch in gallery_loader:
             with autocast():
-                for k, v in sample.items():
-                    sample[k] = v.to(config.device)
-                gallery_features_batch = model(**sample)
-                gallery_features_batch = gallery_features_batch[gallery_feature]
+                gallery_batch = {key: value.to(config.device) for key, value in gallery_batch.items()}
+                # print(gallery_batch, flush=True)
+                gallery_features_batch = model.forward_reference(**gallery_batch)
                 if config.normalize_features:
                     gallery_features_batch = F.normalize(gallery_features_batch, dim=-1)
 
-            scores_batch = features_query @ gallery_features_batch.T
+            scores_batch = query_features @ gallery_features_batch.T
             all_scores.append(scores_batch.cpu())
     
     all_scores = torch.cat(all_scores, dim=1).numpy()
-    # print('jyxjyxjyx', all_scores.shape)
 
     ap = 0.0
 
@@ -152,7 +176,7 @@ def evaluate(config,
 
     matches_tensor = [torch.tensor(matches, dtype=torch.long) for matches in matches_list]
 
-    query_num = features_query.shape[0]
+    query_num = query_features.shape[0]
 
     all_ap = []
     cmc = np.zeros(len(gallery_list))
@@ -160,17 +184,25 @@ def evaluate(config,
     dis_list = []
     acc_threshold = [0 for _ in range(len(dis_threshold_list))]
 
+    # for log
     top10_list = []
     loc1_list = []
+    dis_ori_list = []
+    dis_match_list = []
 
-    for i in range(query_num):
+    for i in tqdm(range(query_num), desc="Processing each query"):
         score = all_scores[i]    
         # predict index
         index = np.argsort(score)[::-1]
+        top1_index = index[0]
 
+        dis_match_list.append(None)
+        
+        dis_ori_list.append(get_dis_target(query_loc_xy_list[i], gallery_loc_xy_list[top1_index]))
+            
         sdm_list.append(sdm(query_loc_xy_list[i], sdmk_list, index, gallery_loc_xy_list))
 
-        dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list, disk_list))
+        dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list, disk_list, None))
 
         top10_list.append(get_top10(index, gallery_list))
         loc1_x, loc1_y = gallery_loc_xy_list[index[0]]
@@ -220,49 +252,24 @@ def evaluate(config,
     
     # cleanup and free memory on GPU
     if cleanup:
-        del features_query, gallery_features_batch, scores_batch
+        del query_features, gallery_features_batch, scores_batch
         gc.collect()
         #torch.cuda.empty_cache()
 
     if top10_log:
-        satellite_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
-        pickle_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/test_pair_meta.pkl'
-        save_dir = '/home/xmuairmud/jyx/GTA-UAV/Game4Loc/visualization'
-        with open(pickle_path, 'rb') as f:
-            data = pickle.load(f)
-            test_semi_drone2sate_dict = data['pairs_semi_iou_drone2sate_dict']
-            test_pos_drone2sate_dict = data['pairs_iou_drone2sate_dict']
-        for query_img, top10, loc in zip(query_list, top10_list, loc1_list):
+        for query_img, top10, loc, dis_ori, dis_match in zip(query_list, top10_list, loc1_list, dis_ori_list, dis_match_list):
             print('Query', query_img)
             print('Top10', top10)
             print('Query loc', loc[0], loc[1])
             print('Top1 loc', loc[2], loc[3])
             
-            imgs_path = []
             imgs_type = []
             for img_name in top10[:5]:
-                imgs_path.append(os.path.join(satellite_dir, img_name))
-                if img_name in test_pos_drone2sate_dict[query_img]:
+                if img_name in pairs_dict[query_img]:
                     imgs_type.append('Pos')
-                elif img_name in test_semi_drone2sate_dict[query_img]:
-                    imgs_type.append('Semi')
                 else:
                     imgs_type.append('Null')
             print(imgs_type)
-
-            images = [Image.open(x) for x in imgs_path]
-
-            gap_width = 40
-            total_width = sum(i.size[0] for i in images) + gap_width * (len(images) - 1)
-            height = images[0].size[1]
-            new_im = new_im = Image.new('RGBA', (total_width, height), (255, 255, 255, 0))
-
-            x_offset = 0
-            for im in images:
-                new_im.paste(im, (x_offset, 0))
-                x_offset += im.size[0] + gap_width  # 在每张图片后添加间隙
-            new_im.save(f'{save_dir}/same_{query_img}')
-
 
 
     if plot_acc_threshold:
@@ -270,22 +277,22 @@ def evaluate(config,
         x = np.array(dis_threshold_list)
         y = y / query_num * 100
 
-        x_new = np.linspace(x.min(), x.max(), 500)
-        spl = make_interp_spline(x, y, k=3)  
-        y_smooth = spl(x_new)
+        # x_new = np.linspace(x.min(), x.max(), 500)
+        # spl = make_interp_spline(x, y, k=3)  
+        # y_smooth = spl(x_new)
 
-        plt.figure(figsize=(10, 6), dpi=300)
-        plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
-        plt.scatter(x, y, label='Discrete Points', color='blue')
+        # plt.figure(figsize=(10, 6), dpi=300)
+        # plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
+        # plt.scatter(x, y, label='Discrete Points', color='blue')
 
-        plt.xlabel('X Axis')
-        plt.ylabel('Y Axis')
-        plt.title('Smooth Curve with Discrete Points')
-        plt.legend()
+        # plt.xlabel('X Axis')
+        # plt.ylabel('Y Axis')
+        # plt.title('Smooth Curve with Discrete Points')
+        # plt.legend()
 
-        # 调整边框
-        plt.gca().spines['top'].set_visible(False)
-        plt.gca().spines['right'].set_visible(False)
+        # # 调整边框
+        # plt.gca().spines['top'].set_visible(False)
+        # plt.gca().spines['right'].set_visible(False)
 
         # 显示图表
         # plt.tight_layout()

@@ -32,6 +32,7 @@ class Configuration:
 
     # Model
     model: str = 'convnext_base.fb_in22k_ft_in1k_384'
+    global_pool: std = 'avg'
     
     # Override model image size
     img_size: int = 384
@@ -186,7 +187,8 @@ def train_script(config):
                     pretrained=True,
                     img_size=config.img_size,
                     share_weights=config.share_weights,
-                    diff_guidance=config.diff_guidance)
+                    diff_guidance=config.diff_guidance,
+                    global_pool=config.global_pool)
                           
     data_config = model.get_config()
     print(data_config)
@@ -566,6 +568,8 @@ def parse_args():
     parser.add_argument('--diff_guidance', type=float, default=0.0, help='Differential guidance')
     
     parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
+
+    parser.add_argument('--global_pool', type=str, default='avg', help='Global pool of model')
     
     args = parser.parse_args()
     return args
@@ -604,5 +608,6 @@ if __name__ == '__main__':
     config.query_mode = args.query_mode
     config.train_ratio = args.train_ratio
     config.diff_guidance = args.diff_guidance
+    config.global_pool = args.global_pool
 
     train_script(config)

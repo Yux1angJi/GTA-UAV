@@ -13,6 +13,8 @@ from PIL import Image
 import pickle
 import os
 
+from ..matcher.gim_dkm import GimDKM
+
 
 def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
     query_x, query_y = query_loc
@@ -32,7 +34,7 @@ def sdm(query_loc, sdmk_list, index, gallery_loc_xy_list, s=0.001):
     return sdm_list
 
 
-def get_dis(query_loc, index, gallery_loc_xy_list, disk_list):
+def get_dis(query_loc, index, gallery_loc_xy_list, disk_list, match_loc=None):
     query_x, query_y = query_loc
     dis_list = []
     for k in disk_list:
@@ -42,9 +44,23 @@ def get_dis(query_loc, index, gallery_loc_xy_list, disk_list):
             gallery_x, gallery_y = gallery_loc_xy_list[idx]
             dis = np.sqrt((query_x - gallery_x)**2 + (query_y - gallery_y)**2)
             dis_sum += dis
-        dis_list.append(dis_sum / k)
+        
+        # For matcher estimated location
+        if k == 1 and match_loc != None:
+            match_loc_x, match_loc_y = match_loc
+            dis_match = np.sqrt((query_x - match_loc_x)**2 + (query_y - match_loc_y)**2)
+
+            dis_list.append(dis_match)
+        else:
+            dis_list.append(dis_sum / k)
 
     return dis_list
+
+
+def get_dis_target(query_loc, target_loc):
+    query_x, query_y = query_loc
+    target_x, target_y = target_loc
+    return np.sqrt((query_x-target_x)**2 + (query_y-target_y)**2)
 
 
 def get_top10(index, gallery_list):
@@ -94,23 +110,28 @@ def predict(train_config, model, dataloader):
     return img_features
 
 
-def evaluate(config,
-                model,
-                query_loader,
-                gallery_loader,
-                query_list,
-                query_loc_xy_list,
-                gallery_list,
-                gallery_loc_xy_list,
-                pairs_dict,
-                ranks_list=[1, 5, 10],
-                sdmk_list=[1, 3, 5],
-                disk_list=[1, 3, 5],
-                step_size=1000,
-                cleanup=True,
-                dis_threshold_list=[4*(i+1) for i in range(50)],
-                plot_acc_threshold=False,
-                top10_log=False):
+def evaluate(
+        config,
+        model,
+        query_loader,
+        gallery_loader,
+        query_list,
+        query_center_loc_xy_list,
+        gallery_list,
+        gallery_center_loc_xy_list,
+        gallery_topleft_loc_xy_list,
+        pairs_dict,
+        ranks_list=[1, 5, 10],
+        sdmk_list=[1, 3, 5],
+        disk_list=[1, 3, 5],
+        step_size=1000,
+        cleanup=True,
+        dis_threshold_list=[4*(i+1) for i in range(50)],
+        plot_acc_threshold=False,
+        top10_log=False,
+        with_match=False,
+    ):
+
     print("Extract Features and Compute Scores:")
     img_features_query = predict(config, model, query_loader)
     # img_features_gallery = predict(config, model, gallery_loader)
@@ -129,7 +150,10 @@ def evaluate(config,
             all_scores.append(scores_batch.cpu())
     
     all_scores = torch.cat(all_scores, dim=1).numpy()
-    # print('jyxjyxjyx', all_scores.shape)
+
+    # with image match for finer loc
+    if with_match:
+        matcher = GimDKM(device=config.device)
 
     ap = 0.0
 
@@ -155,21 +179,38 @@ def evaluate(config,
     dis_list = []
     acc_threshold = [0 for _ in range(len(dis_threshold_list))]
 
+    # for log
     top10_list = []
     loc1_list = []
+    dis_ori_list = []
+    dis_match_list = []
 
-    for i in range(query_num):
+    for i in tqdm(range(query_num), desc="Processing each query"):
         score = all_scores[i]    
         # predict index
         index = np.argsort(score)[::-1]
+        top1_index = index[0]
 
-        sdm_list.append(sdm(query_loc_xy_list[i], sdmk_list, index, gallery_loc_xy_list))
+        # with image match for finer loc
+        match_loc = None
+        if with_match:
+            match_loc = matcher.est_center(gallery_loader.dataset[top1_index], query_loader.dataset[i], 
+                gallery_center_loc_xy_list[top1_index], gallery_topleft_loc_xy_list[top1_index])
+            dis_match_list.append(get_dis_target(query_center_loc_xy_list[i], match_loc))
+        else:
+            dis_match_list.append(None)
+        
+        dis_ori_list.append(get_dis_target(query_center_loc_xy_list[i], gallery_center_loc_xy_list[top1_index]))
+            
+        sdm_list.append(sdm(query_center_loc_xy_list[i], sdmk_list, index, gallery_center_loc_xy_list))
 
-        dis_list.append(get_dis(query_loc_xy_list[i], index, gallery_loc_xy_list, disk_list))
+        dis_list.append(get_dis(query_center_loc_xy_list[i], index, gallery_center_loc_xy_list, disk_list, match_loc))
 
         top10_list.append(get_top10(index, gallery_list))
-        loc1_x, loc1_y = gallery_loc_xy_list[index[0]]
-        loc1_list.append((query_loc_xy_list[i][0], query_loc_xy_list[i][1], loc1_x, loc1_y))
+        loc1_x, loc1_y = gallery_center_loc_xy_list[index[0]]
+        if with_match:
+            loc1_x, loc1_y = match_loc
+        loc1_list.append((query_center_loc_xy_list[i][0], query_center_loc_xy_list[i][1], loc1_x, loc1_y))
 
         for j in range(len(dis_threshold_list)):
             if dis_list[i][0] < dis_threshold_list[j]:
@@ -220,44 +261,22 @@ def evaluate(config,
         #torch.cuda.empty_cache()
 
     if top10_log:
-        satellite_dir = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/satellite_z41'
-        pickle_path = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/same_h23456_z41_iou4_oc4/test_pair_meta.pkl'
-        save_dir = '/home/xmuairmud/jyx/GTA-UAV/Game4Loc/visualization'
-        with open(pickle_path, 'rb') as f:
-            data = pickle.load(f)
-            test_semi_drone2sate_dict = data['pairs_semi_iou_drone2sate_dict']
-            test_pos_drone2sate_dict = data['pairs_iou_drone2sate_dict']
-        for query_img, top10, loc in zip(query_list, top10_list, loc1_list):
+        for query_img, top10, loc, dis_ori, dis_match in zip(query_list, top10_list, loc1_list, dis_ori_list, dis_match_list):
             print('Query', query_img)
             print('Top10', top10)
             print('Query loc', loc[0], loc[1])
             print('Top1 loc', loc[2], loc[3])
             
-            imgs_path = []
             imgs_type = []
             for img_name in top10[:5]:
-                imgs_path.append(os.path.join(satellite_dir, img_name))
-                if img_name in test_pos_drone2sate_dict[query_img]:
+                if img_name in pairs_dict[query_img]:
                     imgs_type.append('Pos')
-                elif img_name in test_semi_drone2sate_dict[query_img]:
-                    imgs_type.append('Semi')
                 else:
                     imgs_type.append('Null')
             print(imgs_type)
 
-            images = [Image.open(x) for x in imgs_path]
-
-            gap_width = 40
-            total_width = sum(i.size[0] for i in images) + gap_width * (len(images) - 1)
-            height = images[0].size[1]
-            new_im = new_im = Image.new('RGBA', (total_width, height), (255, 255, 255, 0))
-
-            x_offset = 0
-            for im in images:
-                new_im.paste(im, (x_offset, 0))
-                x_offset += im.size[0] + gap_width  # 在每张图片后添加间隙
-            new_im.save(f'{save_dir}/same_{query_img}')
-
+            if dis_ori < dis_match:
+                print(f'before match is better, dis_ori={dis_ori}, dis_match={dis_match}')
 
 
     if plot_acc_threshold:
@@ -265,22 +284,22 @@ def evaluate(config,
         x = np.array(dis_threshold_list)
         y = y / query_num * 100
 
-        x_new = np.linspace(x.min(), x.max(), 500)
-        spl = make_interp_spline(x, y, k=3)  
-        y_smooth = spl(x_new)
+        # x_new = np.linspace(x.min(), x.max(), 500)
+        # spl = make_interp_spline(x, y, k=3)  
+        # y_smooth = spl(x_new)
 
-        plt.figure(figsize=(10, 6), dpi=300)
-        plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
-        plt.scatter(x, y, label='Discrete Points', color='blue')
+        # plt.figure(figsize=(10, 6), dpi=300)
+        # plt.plot(x_new, y_smooth, label='Smooth Curve', color='red')
+        # plt.scatter(x, y, label='Discrete Points', color='blue')
 
-        plt.xlabel('X Axis')
-        plt.ylabel('Y Axis')
-        plt.title('Smooth Curve with Discrete Points')
-        plt.legend()
+        # plt.xlabel('X Axis')
+        # plt.ylabel('Y Axis')
+        # plt.title('Smooth Curve with Discrete Points')
+        # plt.legend()
 
-        # 调整边框
-        plt.gca().spines['top'].set_visible(False)
-        plt.gca().spines['right'].set_visible(False)
+        # # 调整边框
+        # plt.gca().spines['top'].set_visible(False)
+        # plt.gca().spines['right'].set_visible(False)
 
         # 显示图表
         # plt.tight_layout()

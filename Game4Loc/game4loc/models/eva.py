@@ -38,27 +38,68 @@ from timm.layers import PatchEmbed, Mlp, GluMlp, SwiGLU, LayerNorm, DropPath, Pa
     apply_rot_embed_cat, apply_keep_indices_nlc, trunc_normal_, resample_patch_embed, resample_abs_pos_embed, \
     to_2tuple, use_fused_attn
 
+class GeM(nn.Module):
+    def __init__(self, p=3, eps=1e-6):
+        super(GeM, self).__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)  # p 是可训练的参数
+        self.eps = eps
 
+    def forward(self, x):
+        # x shape: b x n x d
+        x = x.clamp(min=self.eps).pow(self.p)  # 对数值加上eps并提升到p次方
+        x = x.mean(dim=1)                      # 对 n 维进行平均池化
+        return x.pow(1. / self.p)               # 还原 p 次方，返回 b x d
+
+
+# class Adapter(nn.Module):  # Adapter is used to add to the transformer block for global adaptation
+#     def __init__(self, D_features, mlp_ratio=0.75, act_layer=nn.ReLU, skip_connect=True):
+#         # mlp_ratio is the bottleneck ratio of adapters
+#         super().__init__()
+#         self.skip_connect = skip_connect
+#         D_hidden_features = int(D_features * mlp_ratio)
+#         self.act = act_layer()
+#         self.D_fc1 = nn.Linear(D_features, D_hidden_features)
+#         self.D_fc2 = nn.Linear(D_hidden_features, D_features)
+        
+#     def forward(self, x):
+#         # x is (BT, HW+1, D)
+#         xs = self.D_fc1(x)
+#         xs = self.act(xs)
+#         xs = self.D_fc2(xs)
+#         if self.skip_connect:
+#             x = x + xs
+#         else:
+#             x = xs
+#         return x
 class Adapter(nn.Module):  # Adapter is used to add to the transformer block for global adaptation
     def __init__(self, D_features, mlp_ratio=0.75, act_layer=nn.ReLU, skip_connect=True):
         # mlp_ratio is the bottleneck ratio of adapters
         super().__init__()
         self.skip_connect = skip_connect
         D_hidden_features = int(D_features * mlp_ratio)
-        self.act = act_layer()
-        self.D_fc1 = nn.Linear(D_features, D_hidden_features)
-        self.D_fc2 = nn.Linear(D_hidden_features, D_features)
         
-    def forward(self, x):
-        # x is (BT, HW+1, D)
-        xs = self.D_fc1(x)
-        xs = self.act(xs)
-        xs = self.D_fc2(xs)
-        if self.skip_connect:
-            x = x + xs
-        else:
-            x = xs
-        return x
+        self.scale_mlp = nn.Sequential(
+            nn.Linear(D_features, D_features),
+            nn.ReLU(),
+            nn.Linear(D_features, 1)  # Output 1 value per position
+        )
+        self.shift_mlp = nn.Sequential(
+            nn.Linear(D_features, D_features),
+            nn.ReLU(),
+            nn.Linear(D_features, 1)  # Output 1 value per position
+        )
+        
+    def forward(self, rgb_features, depth_features):
+        scale = self.scale_mlp(depth_features)  # Output shape: (B, N, 1)
+        shift = self.shift_mlp(depth_features)  # Output shape: (B, N, 1)
+
+        # Broadcast scale and shift to match the shape of rgb_features
+        scale = scale.expand(-1, -1, rgb_features.size(-1))  # Shape: (B, N, C)
+        shift = shift.expand(-1, -1, rgb_features.size(-1))  # Shape: (B, N, C)
+
+        # Apply modulation to the RGB features
+        modulated_features = scale * rgb_features + shift
+        return modulated_features
 
 
 class EvaCrossAttentionBlock(nn.Module):
@@ -443,13 +484,13 @@ class EvaBlock(nn.Module):
         ############## Adapter
         if self.adapter:
             self.serial_adapter = Adapter(D_features=dim, mlp_ratio=0.5)
-            self.parallel_adapter = Adapter(D_features=dim, mlp_ratio=0.5, skip_connect=False)
+            # self.parallel_adapter = Adapter(D_features=dim, mlp_ratio=0.5, skip_connect=False)
         ################
 
     def forward(self, rgb, d, rope: Optional[torch.Tensor] = None, attn_mask: Optional[torch.Tensor] = None):
         def attn_residual_func(rgb, d, rope, attn_mask):
             rgb = self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask)
-            rgb = self.serial_adapter(rgb)
+            rgb = self.serial_adapter(rgb, d)
             return rgb
 
         def ffn_residual_func(rgb):
@@ -460,8 +501,8 @@ class EvaBlock(nn.Module):
             ################################
             ## Adapter
                 rgb = rgb + self.drop_path1(attn_residual_func(rgb, d, rope, attn_mask))
-                rgb = rgb + self.drop_path2(ffn_residual_func(rgb))
-                # rgb = rgb + self.drop_path2(self.mlp(self.norm2(rgb)))
+                # rgb = rgb + self.drop_path2(ffn_residual_func(rgb))
+                rgb = rgb + self.drop_path2(self.mlp(self.norm2(rgb)))
             ################################
             else:
                 rgb = rgb + self.drop_path1(self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask))
@@ -471,8 +512,8 @@ class EvaBlock(nn.Module):
             ################################
             ## Adapter
                 rgb = rgb + self.drop_path1(self.gamma_1 * attn_residual_func(rgb, d, rope, attn_mask))
-                rgb = rgb + self.drop_path2(self.gamma_2 * ffn_residual_func(rgb))
-                # rgb = rgb + self.drop_path2(self.gamma_2 * self.mlp(self.norm2(rgb)))
+                # rgb = rgb + self.drop_path2(self.gamma_2 * ffn_residual_func(rgb))
+                rgb = rgb + self.drop_path2(self.gamma_2 * self.mlp(self.norm2(rgb)))
             ################################
             else:
                 rgb = rgb + self.drop_path1(self.gamma_1 * self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask))
@@ -721,11 +762,14 @@ class Eva(nn.Module):
         self.feature_info = [
             dict(module=f'blocks.{i}', num_chs=embed_dim, reduction=r) for i in range(depth)]
 
-        use_fc_norm = self.global_pool == 'avg'
+        use_fc_norm = self.global_pool != 'token'
         self.norm = nn.Identity() if use_fc_norm else norm_layer(embed_dim)
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
         self.head_drop = nn.Dropout(drop_rate)
         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
+        if self.global_pool == 'gem':
+            self.gem = GeM()
 
         self.apply(self._init_weights)
         if self.pos_embed is not None:
@@ -839,8 +883,12 @@ class Eva(nn.Module):
             return x
 
     def forward_head(self, x, pre_logits: bool = False):
-        if self.global_pool:
-            x = x[:, self.num_prefix_tokens:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
+        if self.global_pool == 'avg':
+            x = x[:, self.num_prefix_tokens:].mean(dim=1)
+        elif self.global_pool == 'max':
+            x = x[:, self.num_prefix_tokens:].max(dim=1)[0]
+        elif self.global_pool == 'gem':
+            x = self.gem(x[:, self.num_prefix_tokens:])
         x = self.fc_norm(x)
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
@@ -1250,6 +1298,7 @@ def vit_base_patch16_rope_reg1_gap_256(
         pretrained=False, 
         in_chans=3,
         img_size=384,
+        global_pool='avg',
         **kwargs,
     ) -> Eva:
     model_args = dict(
@@ -1267,6 +1316,7 @@ def vit_base_patch16_rope_reg1_gap_256(
         use_rot_pos_emb=True,
         use_abs_pos_emb=False,
         ref_feat_shape=(16, 16),  # 224/14
+        global_pool=global_pool,
     )
     model = Eva(**model_args)
     if pretrained:

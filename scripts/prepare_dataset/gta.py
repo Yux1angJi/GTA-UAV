@@ -1,3 +1,8 @@
+# ---------------------------------------------------------------
+# Copyright (c) 2024-2025 Yuxiang Ji. All rights reserved.
+# Licensed under the Apache License, Version 2.0
+# ---------------------------------------------------------------
+
 import os
 import cv2
 import numpy as np

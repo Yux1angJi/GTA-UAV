@@ -16,14 +16,17 @@ class Configuration:
     model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
     
     # Override model image size
-    img_size: int = 384
+    img_size: int = 224
     
     # Evaluation
     batch_size: int = 128
     verbose: bool = True
-    gpu_ids: tuple = (0,1)
+    gpu_ids: tuple = (0)
     normalize_features: bool = True
     eval_gallery_n: int = -1             # -1 for all or int
+
+    # With Fine Matching
+    with_match: bool = False
 
     # set num_workers to 0 if on Windows
     num_workers: int = 0 if os.name == 'nt' else 4 
@@ -40,13 +43,25 @@ class Configuration:
     # checkpoint_start = 'work_dir/denseuav/convnext_base.fb_in22k_ft_in1k_384/0630155817/weights_end.pth'
     # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0810002619/weights_end.pth'
     # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0809045532/weights_end.pth'
-    checkpoint_start = 'work_dir/gta/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0912030534/weights_end.pth'
+    # checkpoint_start = '/home/xmuairmud/jyx/GTA-UAV/Game4Loc/pretrained/gta/same_area/selavpr.pth'
+    checkpoint_start = 'pretrained/gta/cross_area/game4loc.pth'
 
-    data_root: str = "/home/xmuairmud/data/GTA-UAV-data/randcam2_5area"
+    # data_root: str = "/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar"
+    data_root: str = "/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-official/GTA-UAV-LR-hf"
 
-    train_pairs_meta_file = 'offset13_cross-area-drone2sate-train.json'
-    test_pairs_meta_file = 'offset13_cross-area-drone2sate-test.json'
-    sate_img_dir = 'satellite_overlap/offset_13'
+    train_pairs_meta_file = 'cross-area-drone2sate-train.json'
+    test_pairs_meta_file = 'cross-area-drone2sate-test.json'
+    sate_img_dir = 'satellite'
+
+    dis_threshold_list = None
+    if 'cross' in test_pairs_meta_file:
+        ####### Cross-area
+        print("cross-area eval")
+        dis_threshold_list = [10*(i+1) for i in range(50)]
+    else:
+        ####### Same-area
+        print("same-area eval")
+        dis_threshold_list = [4*(i+1) for i in range(50)]
 
 
 #-----------------------------------------------------------------------------#
@@ -141,9 +156,10 @@ if __name__ == '__main__':
                                             mode='pos',
                                         )
     query_img_list = query_dataset_test.images_name
-    query_loc_xy_list = query_dataset_test.images_loc_xy
+    query_center_loc_xy_list = query_dataset_test.images_center_loc_xy
 
-    gallery_loc_xy_list = gallery_dataset_test.images_loc_xy
+    gallery_center_loc_xy_list = gallery_dataset_test.images_center_loc_xy
+    gallery_topleft_loc_xy_list = gallery_dataset_test.images_topleft_loc_xy
     gallery_img_list = gallery_dataset_test.images_name
 
     query_dataloader_test = DataLoader(query_dataset_test,
@@ -160,7 +176,7 @@ if __name__ == '__main__':
     print("Query Images Test:", len(query_dataset_test))
     print("Gallery Images Test:", len(gallery_dataset_test))
     
-    print("\n{}[{}]{}".format(30*"-", "GTA-VisLoc", 30*"-"))  
+    print("\n{}[{}]{}".format(30*"-", "Evaluating GTA-UAV", 30*"-"))  
 
     r1_test = evaluate(config=config,
                            model=model,
@@ -170,10 +186,13 @@ if __name__ == '__main__':
                            gallery_list=gallery_img_list,
                            pairs_dict=pairs_dict,
                            ranks_list=[1, 5, 10],
-                           query_loc_xy_list=query_loc_xy_list,
-                           gallery_loc_xy_list=gallery_loc_xy_list,
+                           query_center_loc_xy_list=query_center_loc_xy_list,
+                           gallery_center_loc_xy_list=gallery_center_loc_xy_list,
+                           gallery_topleft_loc_xy_list=gallery_topleft_loc_xy_list,
                            step_size=1000,
+                           dis_threshold_list=config.dis_threshold_list,
                            cleanup=True,
                            plot_acc_threshold=True,
-                           top10_log=False)
+                           top10_log=True,
+                           with_match=config.with_match)
  

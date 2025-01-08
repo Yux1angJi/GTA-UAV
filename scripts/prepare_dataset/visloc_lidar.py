@@ -1,4 +1,8 @@
-from operator import length_hint
+# ---------------------------------------------------------------
+# Copyright (c) 2024-2025 Yuxiang Ji. All rights reserved.
+# Licensed under the Apache License, Version 2.0
+# ---------------------------------------------------------------
+
 import os
 import cv2
 import numpy as np
@@ -709,8 +713,8 @@ def get_subset(s, group_len):
 
 if __name__ == '__main__':
     root = '/home/xmuairmud/data/UAV_VisLoc_dataset_Lidar'
-    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset_Lidar/cross_area_z31'
-    process_visloc_data(root, save_root, 'cross')
+    save_root = '/home/xmuairmud/data/UAV_VisLoc_dataset_Lidar/same_area_z31'
+    process_visloc_data(root, save_root, 'same')
     # cp_tile()
 
     # tile_satellite()

@@ -355,7 +355,7 @@ def gen_attitudes():
     df.to_csv('output.csv', index=False)
 
 
-def draw_loc():
+def draw_loc_gta():
 
     train_pickle = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/train_pair_meta.pkl'
     test_pickle = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/test_pair_meta.pkl'
@@ -398,6 +398,61 @@ def draw_loc():
     # 隐藏坐标轴
     plt.axis('off')
     plt.savefig('GTA-UAV-sample-dist-cross.png', transparent=True, bbox_inches='tight', pad_inches=0)
+
+def draw_loc_visloc():
+
+    # image_path = '/home/xmuairmud/jyx/data/UAV_VisLoc_dataset/03/satellite03.tif'
+    # top_left = 32.355491,119.805926
+    # bottom_right = 32.29029,119.900052
+    # meta_path = '/home/xmuairmud/jyx/data/UAV_VisLoc_dataset/03/03.csv'
+
+    image_path = '/home/xmuairmud/jyx/data/UAV_VisLoc_dataset/04/satellite04.tif'
+    top_left = 32.254036,119.90598
+    bottom_right = 32.151018,119.954509
+    meta_path = '/home/xmuairmud/jyx/data/UAV_VisLoc_dataset/04/04.csv'
+
+    import pandas as pd
+    df = pd.read_csv(meta_path)
+    points_list = df[['lat', 'lon']].values.tolist()
+
+    # 打开图像
+    image = Image.open(image_path)
+    original_size = image.size  # (width, height)
+    resize_factor = 0.1
+    resized_size = (int(original_size[0] * resize_factor), int(original_size[1] * resize_factor))
+    image_resized = image.resize(resized_size, Image.Resampling.LANCZOS)
+
+    # 经纬度范围
+    lat_range = top_left[0] - bottom_right[0]
+    lon_range = bottom_right[1] - top_left[1]
+
+    # 转换经纬度点为像素点（基于缩小后的图像尺寸）
+    def lat_lon_to_pixel(lat, lon):
+        x = (lon - top_left[1]) / lon_range * resized_size[0]
+        y = (top_left[0] - lat) / lat_range * resized_size[1]
+        return x, y
+
+    # 将所有经纬度点转换为像素坐标
+    pixel_points = [lat_lon_to_pixel(lat, lon) for lat, lon in points_list]
+
+    # 检查是否有超出图像范围的点
+    valid_pixel_points = [(px, py) for px, py in pixel_points if 0 <= px < resized_size[0] and 0 <= py < resized_size[1]]
+    x, y = zip(*valid_pixel_points)
+
+    width, height = resized_size
+
+    # 绘制图像和有效点
+    fig, ax = plt.subplots(figsize=(width / 500, height / 500), dpi=500)
+
+    plt.imshow(image_resized, extent=[0, width, height, 0])  # 确保图像填充
+    plt.scatter(x, y, color='blue', s=2)  # 训练点红色
+    
+    # ax.set_title("Resized Satellite Image with Points")
+    ax.axis("off")
+
+    # 保存结果图像
+    fig.savefig('visloc-sample-cross-area-test.pdf', transparent=True, bbox_inches='tight', pad_inches=0, dpi=300)
+    plt.close(fig)
 
 
 def resize_img():
@@ -482,3 +537,4 @@ if __name__ == '__main__':
     # draw_attitude_roll_pitch()
     # draw_altitude()
     # draw_scenes_pie()
+    draw_loc_visloc()
