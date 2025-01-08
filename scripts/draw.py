@@ -333,28 +333,6 @@ def plot_func():
     pass
 
 
-def gen_attitudes():
-    yaw_range = [-180, 180]
-    pitch_range = [-110, -70]
-    roll_range = [-10, 10]
-    std = 5
-    pitchs = [gaussin_random_truncted(pitch_range[0], pitch_range[1], -90, std) for _ in range(50000)]
-    rolls = [gaussin_random_truncted(roll_range[0], roll_range[1], 0, std) for _ in range(50000)]
-    yaws = [random.uniform(-180.0, 180.0) for _ in range(50000)]
-
-    # 创建一个简单的数据框
-    data = {
-        'Pitch': pitchs,
-        'Roll': rolls,
-        'Yaw': yaws
-    }
-
-    df = pd.DataFrame(data)
-
-    # 写出数据到CSV文件
-    df.to_csv('output.csv', index=False)
-
-
 def draw_loc_gta():
 
     train_pickle = '/home/xmuairmud/data/GTA-UAV-data/randcam2_std0_stable_all/cross_h23456_z41_iou4_oc4/train_pair_meta.pkl'
@@ -526,11 +504,9 @@ def plot_unguide_prob():
 
 
 if __name__ == '__main__':
-    # gen_attitudes()
     # draw_attitude_roll_pitch_2()
     # draw_loc()
     # resize_img()
-    # gen_attitudes()
     # draw_attitude_roll_pitch_2()
     # draw_attitude_yaw()
     plot_unguide_prob()
