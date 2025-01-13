@@ -14,7 +14,7 @@ from transformers import get_constant_schedule_with_warmup, get_polynomial_decay
 from game4loc.dataset.visloc_rgbd import VisLocRGBDDatasetEval, VisLocRGBDDatasetTrain, get_transforms
 from game4loc.utils import setup_system, Logger
 from game4loc.trainer.trainer import train, train_with_weight
-from game4loc.evaluate.visloc import evaluate
+from game4loc.evaluate.visloc_rgbd import evaluate
 from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, ReconstructionLoss
 from game4loc.models.model_rgbd import DesModelWithRGBD
 
@@ -32,7 +32,7 @@ class Configuration:
 
     # Model
     model: str = 'convnext_base.fb_in22k_ft_in1k_384'
-    global_pool: std = 'avg'
+    global_pool: str = 'avg'
     
     # Override model image size
     img_size: int = 384
@@ -101,7 +101,7 @@ class Configuration:
     dataset: str= "VisLoc-D2S"
     
     # Eval before training
-    zero_shot: bool = False
+    zero_shot: bool = True
     
     # Checkpoint to start from
     checkpoint_start = None

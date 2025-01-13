@@ -100,7 +100,7 @@ class Configuration:
     query_mode: str = "D2S"               # Retrieval in Drone to Satellite
 
     train_mode: str = "pos_semipos"       # Train with positive + semi-positive pairs
-    test_mode: str = "pos"                # Test with semi-positive pairs
+    test_mode: str = "pos"                # Test with positive pairs
 
     # Eval before training
     zero_shot: bool = False
