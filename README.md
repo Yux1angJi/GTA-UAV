@@ -205,7 +205,7 @@ python eval_gta.py \
     --data_root <The directory of the GTA-UAV dataset> \
     --test_pairs_meta_file "cross-area-drone2sate-test.json" \
     --model "vit_base_patch16_rope_reg1_gap_256.sbb_in1k" \
-    --checkpoint_start <The path of the pre-trained checkpoints>
+    --checkpoint_start <The path of the pre-trained checkpoints> \
     --gpu_ids 0
 ```
 
