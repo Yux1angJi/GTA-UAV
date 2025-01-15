@@ -25,7 +25,7 @@
 
 - [x] Part I: Dataset
 - [x] Part II: Train and Test
-- [ ] Part III: Pre-trained Checkpoints
+- [x] Part III: Pre-trained Checkpoints
 
 ## <a id="news"></a> 🔥 News
 
