@@ -1,11 +1,20 @@
 import os
+import sys
 import torch
+import argparse
 from dataclasses import dataclass
 from torch.utils.data import DataLoader
 
 from game4loc.dataset.gta import GTADatasetEval, get_transforms
 from game4loc.evaluate.gta import evaluate
 from game4loc.models.model import DesModel
+
+
+def parse_tuple(s):
+    try:
+        return tuple(map(int, s.split(',')))
+    except ValueError:
+        raise argparse.ArgumentTypeError("Tuple must be integers separated by commas")
 
 
 @dataclass
@@ -16,14 +25,13 @@ class Configuration:
     model: str = 'vit_base_patch16_rope_reg1_gap_256.sbb_in1k'
     
     # Override model image size
-    img_size: int = 224
+    img_size: int = 384
     
     # Evaluation
     batch_size: int = 128
     verbose: bool = True
     gpu_ids: tuple = (0)
     normalize_features: bool = True
-    eval_gallery_n: int = -1             # -1 for all or int
 
     # With Fine Matching
     with_match: bool = False
@@ -39,10 +47,6 @@ class Configuration:
     # query_mode: str = 'S2D'
 
     # Checkpoint to start from
-    # checkpoint_start = 'pretrained/university/convnext_base.fb_in22k_ft_in1k_384/weights_e1_0.9515.pth'
-    # checkpoint_start = 'work_dir/denseuav/convnext_base.fb_in22k_ft_in1k_384/0630155817/weights_end.pth'
-    # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0810002619/weights_end.pth'
-    # checkpoint_start = 'work_dir/sues/vit_base_patch16_rope_reg1_gap_256.sbb_in1k/0809045532/weights_end.pth'
     # checkpoint_start = '/home/xmuairmud/jyx/GTA-UAV/Game4Loc/pretrained/gta/same_area/selavpr.pth'
     checkpoint_start = 'pretrained/gta/cross_area/game4loc.pth'
 
@@ -53,25 +57,12 @@ class Configuration:
     test_pairs_meta_file = 'cross-area-drone2sate-test.json'
     sate_img_dir = 'satellite'
 
-    dis_threshold_list = None
-    if 'cross' in test_pairs_meta_file:
-        ####### Cross-area
-        print("cross-area eval")
-        dis_threshold_list = [10*(i+1) for i in range(50)]
-    else:
-        ####### Same-area
-        print("same-area eval")
-        dis_threshold_list = [4*(i+1) for i in range(50)]
 
+def eval_script(config):
 
-#-----------------------------------------------------------------------------#
-# Config                                                                      #
-#-----------------------------------------------------------------------------#
-
-config = Configuration()
-
-
-if __name__ == '__main__':
+    if config.log_to_file:
+        f = open(config.log_path, 'w')
+        sys.stdout = f
 
     #-----------------------------------------------------------------------------#
     # Model                                                                       #
@@ -81,8 +72,9 @@ if __name__ == '__main__':
 
 
     model = DesModel(config.model,
-                          pretrained=True,
-                          img_size=config.img_size)
+                    pretrained=True,
+                    img_size=config.img_size,
+                    share_weights=config.share_weights)
                           
     data_config = model.get_config()
     print(data_config)
@@ -95,7 +87,7 @@ if __name__ == '__main__':
     if config.checkpoint_start is not None:  
         print("Start from:", config.checkpoint_start)
         model_state_dict = torch.load(config.checkpoint_start)  
-        model.load_state_dict(model_state_dict, strict=False)     
+        model.load_state_dict(model_state_dict, strict=True)     
 
     # Data parallel
     print("GPUs available:", torch.cuda.device_count())  
@@ -175,6 +167,17 @@ if __name__ == '__main__':
     
     print("Query Images Test:", len(query_dataset_test))
     print("Gallery Images Test:", len(gallery_dataset_test))
+
+    # For Test Log (distance threshold) 
+    dis_threshold_list = None
+    if 'cross' in config.test_pairs_meta_file:
+        ####### Cross-area for total 500m/10m
+        print("cross-area eval")
+        dis_threshold_list = [10*(i+1) for i in range(50)]
+    else:
+        ####### Same-area for total 200m/4m
+        print("same-area eval")
+        dis_threshold_list = [4*(i+1) for i in range(50)]
     
     print("\n{}[{}]{}".format(30*"-", "Evaluating GTA-UAV", 30*"-"))  
 
@@ -190,9 +193,64 @@ if __name__ == '__main__':
                            gallery_center_loc_xy_list=gallery_center_loc_xy_list,
                            gallery_topleft_loc_xy_list=gallery_topleft_loc_xy_list,
                            step_size=1000,
-                           dis_threshold_list=config.dis_threshold_list,
+                           dis_threshold_list=dis_threshold_list,
                            cleanup=True,
-                           plot_acc_threshold=True,
-                           top10_log=True,
+                           plot_acc_threshold=False,
+                           top10_log=False,
                            with_match=config.with_match)
+
+    if config.log_to_file:
+        f.close()
+        sys.stdout = sys.__stdout__  
  
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Training script for gta.")
+
+    parser.add_argument('--log_to_file', action='store_true', help='Log saving to file')
+
+    parser.add_argument('--log_path', type=str, default=None, help='Log file path')
+
+    parser.add_argument('--data_root', type=str, default='./data/GTA-UAV-data', help='Data root')
+   
+    parser.add_argument('--test_pairs_meta_file', type=str, default='cross-area-drone2sate-test.json', help='Test metafile path')
+
+    parser.add_argument('--model', type=str, default='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', help='Model architecture')
+
+    parser.add_argument('--no_share_weights', action='store_true', help='Model not sharing wieghts')
+
+    parser.add_argument('--with_match', action='store_true', help='Test with post-process image matching (GIM, etc)')
+
+    parser.add_argument('--gpu_ids', type=parse_tuple, default=(0,1), help='GPU ID')
+
+    parser.add_argument('--batch_size', type=int, default=40, help='Batch size')
+
+    parser.add_argument('--checkpoint_start', type=str, default=None, help='Training from checkpoint')
+
+    parser.add_argument('--test_mode', type=str, default='pos', help='Test with positive pairs')
+
+    parser.add_argument('--query_mode', type=str, default='D2S', help='Retrieval with drone to satellite')
+
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == '__main__':
+    args = parse_args()
+
+    config = Configuration()
+    config.data_root = args.data_root
+    config.test_pairs_meta_file = args.test_pairs_meta_file
+    config.log_to_file = args.log_to_file
+    config.log_path = args.log_path
+    config.batch_size = args.batch_size
+    config.gpu_ids = args.gpu_ids
+    config.checkpoint_start = args.checkpoint_start
+    config.model = args.model
+    config.share_weights = not(args.no_share_weights)
+    config.test_mode = args.test_mode
+    config.query_mode = args.query_mode
+    config.with_match = args.with_match
+
+    eval_script(config)

@@ -427,7 +427,7 @@ def train_script(config):
                                 step_size=1000,
                                 cleanup=True)
                 
-            if r1_test > best_score:
+            if r1_test > best_score or epoch == config.epochs:
 
                 best_score = r1_test
 
