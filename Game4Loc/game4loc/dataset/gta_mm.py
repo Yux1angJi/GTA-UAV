@@ -148,13 +148,15 @@ class GTAMMDatasetTrain(Dataset):
         #     drone_lidar = torch.from_numpy(drone_lidar)
 
         drone_depth = cv2.imread(drone_depth_path, cv2.IMREAD_UNCHANGED)
-        
+        drone_depth = (drone_depth / 256).astype(np.uint8)
+        if len(drone_depth.shape) == 2:
+            drone_depth = np.expand_dims(drone_depth, axis=2)
+
         satellite_img = cv2.imread(satellite_img_path)
         satellite_img = cv2.cvtColor(satellite_img, cv2.COLOR_BGR2RGB)
         
         if np.random.random() < self.prob_flip:
             drone_img = cv2.flip(drone_img, 1)
-            satellite_img = cv2.flip(satellite_img, 1) 
             drone_depth = cv2.flip(drone_depth, 1)
 
         if self.transforms_drone_geo is not None:
@@ -718,7 +720,7 @@ def get_transforms(img_size,
                                                                min_width=int(0.1*img_size[0]),
                                                                p=1.0),
                                               ], p=0.3),
-                                      A.RandomRotate90(p=1.0),
+                                      # A.RandomRotate90(p=1.0),
                                       A.Normalize(mean, std),
                                       ToTensorV2(),
                                       ])
