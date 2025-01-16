@@ -167,8 +167,7 @@ What's more, you can also refer to it and modify (extend) it to fit your custom 
 First, install dependencies   
 ```bash
 cd Game4Loc
-# install project   
-pip install -e .   
+# install requirements 
 pip install -r requirements.txt
 ```
 
