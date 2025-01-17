@@ -25,7 +25,7 @@
 
 - [x] Part I: Dataset
 - [x] Part II: Train and Test
-- [ ] Part III: Pre-trained Checkpoints
+- [x] Part III: Pre-trained Checkpoints
 
 ## <a id="news"></a> 🔥 News
 
@@ -167,8 +167,7 @@ What's more, you can also refer to it and modify (extend) it to fit your custom 
 First, install dependencies   
 ```bash
 cd Game4Loc
-# install project   
-pip install -e .   
+# install requirements 
 pip install -r requirements.txt
 ```
 
@@ -198,6 +197,17 @@ python train_visloc.py \
     --with_weight --k 5
 ```
 
+Or directly run evaluating script from [pre-trained checkpoints](#pre-trained-checkpoints) by
+```bash
+# run experiment (example: GTA-UAV cross-area setting)  
+python eval_gta.py \
+    --data_root <The directory of the GTA-UAV dataset> \
+    --test_pairs_meta_file "cross-area-drone2sate-test.json" \
+    --model "vit_base_patch16_rope_reg1_gap_256.sbb_in1k" \
+    --checkpoint_start <The path of the pre-trained checkpoints> \
+    --gpu_ids 0
+```
+
 ## <a id="more-features"></a> 💡 More Features
 
 ### Finer Localization with Post-process
@@ -206,7 +216,7 @@ Nevertheless, we also provide support for finer localization based on image matc
 Set `with_match=True` in [eval script](Game4Loc/eval_gta.py) if needed.
 
 ## <a id="pre-trained-checkpoints"></a> 🤗 Pre-trained Checkpoints
-To be released soon.
+The pre-trained models (two version: cross-area/same-area) are available at [Huggingface](https://huggingface.co/Yux1ang/gta_uav_pretrained_models) and [BaiduDisk](https://pan.baidu.com/s/1jle03w4iB9MXg6ATZubSjg?pwd=37jq).
 
 ## <a id="license"></a> 🎫 License
 This project is licensed under the [Apache 2.0 license](LICENSE).
