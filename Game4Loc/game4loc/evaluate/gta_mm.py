@@ -98,20 +98,13 @@ def predict(train_config, model, dataloader):
                 drone_desc = sample['drone_desc']
                 drone_desc = {key: value.to(train_config.device) for key, value in drone_desc.items()}
                 
-                if torch.cuda.device_count() > 1 and len(train_config.gpu_ids):
-                    query_feature = model.module.forward_query(drone_img=drone_img, 
-                                        drone_lidar_pts=drone_lidar_pts,
-                                        drone_lidar_clr=drone_lidar_clr,
-                                        drone_desc=drone_desc,
-                                        drone_depth=drone_depth,
-                                        )
-                else:
-                    query_feature = model.forward_query(drone_img=drone_img, 
-                                        drone_lidar_pts=drone_lidar_pts,
-                                        drone_lidar_clr=drone_lidar_clr,
-                                        drone_desc=drone_desc,
-                                        drone_depth=drone_depth,
-                                        )
+                query_feature = model(
+                                    drone_img=drone_img, 
+                                    drone_lidar_pts=drone_lidar_pts,
+                                    drone_lidar_clr=drone_lidar_clr,
+                                    drone_desc=drone_desc,
+                                    drone_depth=drone_depth,
+                                )
             
                 # normalize is calculated in fp32
                 if train_config.normalize_features:
@@ -157,12 +150,15 @@ def evaluate(
     with torch.no_grad():
         for gallery_batch in gallery_loader:
             with autocast():
-                gallery_batch = {key: value.to(config.device) for key, value in gallery_batch.items()}
+                satellite_img = gallery_batch['satellite_img'].to(config.device)
+                satellite_desc = gallery_batch['satellite_desc']
+                satellite_desc = {key: value.to(config.device) for key, value in satellite_desc.items()}
+                
                 # print(gallery_batch, flush=True)
-                if torch.cuda.device_count() > 1 and len(config.gpu_ids):
-                    gallery_features_batch = model.module.forward_reference(**gallery_batch)
-                else:
-                    gallery_features_batch = model.forward_reference(**gallery_batch)
+                gallery_features_batch = model(
+                    satellite_img=satellite_img,
+                    satellite_desc=satellite_desc,
+                )
                 if config.normalize_features:
                     gallery_features_batch = F.normalize(gallery_features_batch, dim=-1)
 

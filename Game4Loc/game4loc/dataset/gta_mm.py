@@ -189,6 +189,15 @@ class GTAMMDatasetTrain(Dataset):
             )
         drone_img_desc = {k: v.squeeze() for k, v in drone_img_desc.items()}
 
+        satellite_img_desc = self.tokenizer(
+                ["satellite image"],
+                padding="max_length",  # 短文本自动填充
+                truncation=True,       # 长文本自动截断
+                max_length=77, # 固定最大长度
+                return_tensors="pt"    # 返回 PyTorch 张量
+            )
+        satellite_img_desc = {k: v.squeeze() for k, v in satellite_img_desc.items()}
+
         if self.transforms_satellite is not None:
             satellite_img = self.transforms_satellite(image=satellite_img)['image']
         
@@ -199,6 +208,7 @@ class GTAMMDatasetTrain(Dataset):
             "drone_desc": drone_img_desc,
             "drone_depth": drone_depth,
             "satellite_img": satellite_img, 
+            "satellite_desc": satellite_img_desc,
             "positive_weight": positive_weight,
         }
 
@@ -458,6 +468,17 @@ class GTAMMDatasetEval(Dataset):
             img = self.transforms_rgb(image=img)['image']
             
             sample["satellite_img"] = img
+
+            ## Description text
+            sate_desc = ""
+            sate_desc = self.tokenizer(
+                [sate_desc],
+                padding="max_length",  # 短文本自动填充
+                truncation=True,       # 长文本自动截断
+                max_length=77, # 固定最大长度
+                return_tensors="pt"    # 返回 PyTorch 张量
+            )
+            sample["satellite_desc"] = {k: v.squeeze() for k, v in sate_desc.items()}
 
         return sample
 

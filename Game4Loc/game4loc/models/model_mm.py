@@ -323,20 +323,17 @@ class DesModelWithMM(nn.Module):
 
         embed_dim = self.img_model.embed_dim
         if with_text:
-            # configuration = CLIPTextConfig()
-            # self.drone_desc_model = CLIPTextModel(configuration)
-            self.drone_desc_model = CLIPTextModel.from_pretrained("openai/clip-vit-base-patch32")
+            self.desc_model = CLIPTextModel.from_pretrained("openai/clip-vit-base-patch32")
             self.text_projection = nn.Linear(512, embed_dim, bias=False)
-            # print(self.drone_desc_model)
         elif with_depth:
             # self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size, in_chans=1)
 
             # self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, img_size=img_size, num_classes=0)
-            self.drone_depth_model = vit_base_patch16_rope_reg1_gap_256(in_chans=1, pretrained=pretrained, global_pool='gem')
+            self.depth_model = vit_base_patch16_rope_reg1_gap_256(in_chans=1, pretrained=pretrained, global_pool='gem')
             # conv1_weight = self.drone_depth_model.patch_embed.proj.weight
             # self.drone_depth_model.patch_embed.proj.weight = torch.nn.Parameter(conv1_weight.mean(dim=1, keepdim=True))
             
-            self.drone_depth_model.set_grad_checkpointing() 
+            self.depth_model.set_grad_checkpointing() 
 
         self.img_model.set_grad_checkpointing()
         self.grad_checkpointing = True
@@ -354,17 +351,8 @@ class DesModelWithMM(nn.Module):
         return data_config
     
     def set_grad_checkpointing(self, enable=True):
-        if self.share_weights:
-            self.img_model.set_grad_checkpointing(enable)
-        else:
-            self.drone_img_model.set_grad_checkpointing(enable)
-            self.satellite_img_model.set_grad_checkpointing(enable)
-        
-        if self.with_lidar:
-            self.drone_lidar_model.set_grad_checkpointing(enable)
-        if self.with_depth:
-            self.drone_depth_model.set_grad_checkpointing(enable)
-
+        pass
+    
     def forward_uni(
             self, 
             drone_img=None, 
@@ -418,38 +406,53 @@ class DesModelWithMM(nn.Module):
             drone_lidar_clr=None,
             drone_depth=None,
             drone_desc=None,
-            satellite_img=None
+            satellite_img=None,
+            satellite_desc=None,
         ):
-        query_features = self.forward_query(
-                                drone_img, 
-                                drone_lidar_pts,
-                                drone_lidar_clr,
-                                drone_depth,
-                                drone_desc
-                            )
-        gallery_features = self.forward_reference(satellite_img)
-        return query_features, gallery_features
+        if drone_img != None:
+            query_features = self.forward_one_view(
+                img=drone_img,
+                lidar_pts=drone_lidar_pts,
+                lidar_clr=drone_lidar_clr,
+                depth=drone_depth,
+                desc=drone_desc,
+            )
+        if satellite_img != None:
+            gallery_features = self.forward_one_view(
+                img=satellite_img,
+                desc=satellite_desc,
+            )
+        
+        if drone_img != None and satellite_img != None:
+            return query_features, gallery_features
+        elif drone_img != None:
+            return query_features
+        elif satellite_img != None:
+            return gallery_features
         
     
-    def forward_query(
+    def forward_one_view(
         self, 
-        drone_img=None,
-        drone_lidar_pts=None,
-        drone_lidar_clr=None,
-        drone_depth=None,
-        drone_desc=None,
+        img=None,
+        lidar_pts=None,
+        lidar_clr=None,
+        depth=None,
+        desc=None,
     ):
+        
         if self.with_depth:
-            depth_features, d_intermediate = self.drone_depth_model.forward_features(drone_depth, intermediate=True)
-        drone_img_embed = self.img_model.patch_embed(drone_img)
-        drone_img_embed, rot_pos_embed = self.img_model._pos_embed(drone_img_embed)
+            if depth == None:
+                N, C, H, W = img.shape
+                depth = torch.zeros((N, 1, H, W)).to(device=img.device)
+            depth_features = self.depth_model.forward_features(depth)
+        img_embed = self.img_model.patch_embed(img)
+        img_embed, rot_pos_embed = self.img_model._pos_embed(img_embed)
         for i, blk in enumerate(self.img_model.blocks):
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                drone_img_embed = checkpoint(blk, drone_img_embed, d_intermediate[i], rope=rot_pos_embed, use_reentrant=False)
+                img_embed = checkpoint(blk, img_embed, None, rope=rot_pos_embed, use_reentrant=False)
             else:
-                drone_img_embed = blk(drone_img_embed, d_intermediate[i], rope=rot_pos_embed)
-        img_features = self.img_model.norm(drone_img_embed)
-        # img_features = self.img_model.forward_features(drone_img)
+                img_embed = blk(img_embed, None, rope=rot_pos_embed)
+        img_features = self.img_model.norm(img_embed)
         
         if self.with_depth:
             # depth_features = self.drone_depth_model.forward_features(drone_depth)
@@ -457,7 +460,7 @@ class DesModelWithMM(nn.Module):
         
         elif self.with_text:
             rot_pos_embed = None
-            text_outputs = self.drone_desc_model(**drone_desc)
+            text_outputs = self.desc_model(**desc)
             desc_features = self.text_projection(text_outputs[0])
             img_collab_features = self.collab_model(query=img_features, key_value=desc_features, rope=rot_pos_embed)
         
@@ -467,13 +470,6 @@ class DesModelWithMM(nn.Module):
         # img_collab_features = self.fc_norm(img_collab_features)
 
         return img_collab_features
-    
-    def forward_reference(
-        self,
-        satellite_img,
-    ):
-        img_features = self.img_model(satellite_img)
-        return img_features
 
 
 if __name__ == '__main__':
