@@ -41,14 +41,14 @@ from timm.layers import PatchEmbed, Mlp, GluMlp, SwiGLU, LayerNorm, DropPath, Pa
 class GeM(nn.Module):
     def __init__(self, p=3, eps=1e-6):
         super(GeM, self).__init__()
-        self.p = nn.Parameter(torch.ones(1) * p)  # p 是可训练的参数
+        self.p = nn.Parameter(torch.ones(1) * p)
         self.eps = eps
 
     def forward(self, x):
         # x shape: b x n x d
-        x = x.clamp(min=self.eps).pow(self.p)  # 对数值加上eps并提升到p次方
-        x = x.mean(dim=1)                      # 对 n 维进行平均池化
-        return x.pow(1. / self.p)               # 还原 p 次方，返回 b x d
+        x = x.clamp(min=self.eps).pow(self.p)
+        x = x.mean(dim=1)                
+        return x.pow(1. / self.p)       
 
 
 # class Adapter(nn.Module):  # Adapter is used to add to the transformer block for global adaptation
@@ -889,11 +889,13 @@ class Eva(nn.Module):
             x = x[:, self.num_prefix_tokens:].max(dim=1)[0]
         elif self.global_pool == 'gem':
             x = self.gem(x[:, self.num_prefix_tokens:])
+        elif self.global_pool == 'cls':
+            x = x[:, 0]
         x = self.fc_norm(x)
         x = self.head_drop(x)
         return x if pre_logits else self.head(x)
 
-    def forward(self, rgb, d):
+    def forward(self, rgb, d=None):
         x = self.forward_features(rgb, d)
         x = self.forward_head(x)
         return x
