@@ -52,6 +52,8 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
                 drone_desc = sample['drone_desc']
                 drone_desc = {key: value.cuda() for key, value in drone_desc.items()}
                 satellite_img = sample['satellite_img'].to(train_config.device)
+                satellite_desc = sample['satellite_desc']
+                satellite_desc = {key: value.cuda() for key, value in satellite_desc.items()}
                 weight = sample['positive_weight'].to(train_config.device)
             
                 # # Forward pass
@@ -63,6 +65,7 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
                                            drone_desc=drone_desc,
                                            drone_depth=drone_depth,
                                            satellite_img=satellite_img,
+                                           satellite_desc=satellite_desc,
                                            )
 
                 if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
