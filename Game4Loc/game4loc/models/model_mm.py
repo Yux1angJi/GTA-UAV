@@ -299,8 +299,8 @@ class DesModelWithMM(nn.Module):
                 self.img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
         else:
             if "vit" in model_name or "swin" in model_name:
-                self.drone_img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size)
-                self.satellite_img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size)
+                self.drone_img_model = vit_base_patch16_rope_reg1_gap_256(in_chans=3, pretrained=pretrained, global_pool='gem')
+                self.satellite_img_model = vit_base_patch16_rope_reg1_gap_256(in_chans=3, pretrained=pretrained, global_pool='gem')
             else:
                 self.drone_img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
                 self.satellite_img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
@@ -321,7 +321,14 @@ class DesModelWithMM(nn.Module):
                     else:
                         print(f"Skipping layer: {k}")
 
-        embed_dim = self.img_model.embed_dim
+        if share_weights:
+            embed_dim = self.img_model.embed_dim
+            self.img_model.set_grad_checkpointing()
+        else:
+            embed_dim = self.drone_img_model.embed_dim
+            self.drone_img_model.set_grad_checkpointing()
+            self.satellite_img_model.set_grad_checkpointing()
+        
         if with_text:
             self.desc_model = CLIPTextModel.from_pretrained("openai/clip-vit-base-patch32")
             self.text_projection = nn.Linear(512, embed_dim, bias=False)
@@ -335,7 +342,6 @@ class DesModelWithMM(nn.Module):
             
             self.depth_model.set_grad_checkpointing() 
 
-        self.img_model.set_grad_checkpointing()
         self.grad_checkpointing = True
 
         self.collab_model = EvaCrossAttentionBlock(dim=768, num_heads=12)
@@ -409,28 +415,98 @@ class DesModelWithMM(nn.Module):
             satellite_img=None,
             satellite_desc=None,
         ):
-        if drone_img != None:
-            query_features = self.forward_one_view(
-                img=drone_img,
-                lidar_pts=drone_lidar_pts,
-                lidar_clr=drone_lidar_clr,
-                depth=drone_depth,
-                desc=drone_desc,
-            )
-        if satellite_img != None:
-            gallery_features = self.forward_one_view(
-                img=satellite_img,
-                desc=satellite_desc,
-            )
-        
-        if drone_img != None and satellite_img != None:
-            return query_features, gallery_features
-        elif drone_img != None:
-            return query_features
-        elif satellite_img != None:
-            return gallery_features
-        
+
+        if not self.share_weights:
+            if drone_img != None:
+                query_features = self.forward_drone_view(
+                    img=drone_img,
+                    lidar_pts=drone_lidar_pts,
+                    lidar_clr=drone_lidar_clr,
+                    depth=drone_depth,
+                    desc=drone_desc,
+                )
+            if satellite_img != None:
+                gallery_features = self.forward_satellite_view(
+                    img=satellite_img,
+                )
+            
+            if drone_img != None and satellite_img != None:
+                return query_features, gallery_features
+            elif drone_img != None:
+                return query_features
+            elif satellite_img != None:
+                return gallery_features
+
+        else:
+            if drone_img != None:
+                query_features = self.forward_one_view(
+                    img=drone_img,
+                    lidar_pts=drone_lidar_pts,
+                    lidar_clr=drone_lidar_clr,
+                    depth=drone_depth,
+                    desc=drone_desc,
+                )
+            if satellite_img != None:
+                gallery_features = self.forward_one_view(
+                    img=satellite_img,
+                    desc=satellite_desc,
+                )
+            
+            if drone_img != None and satellite_img != None:
+                return query_features, gallery_features
+            elif drone_img != None:
+                return query_features
+            elif satellite_img != None:
+                return gallery_features
+
+
+    def forward_satellite_view(
+        self,
+        img,
+    ):
+        img_features = self.satellite_img_model(img)
+        return img_features
     
+        
+    def forward_drone_view(
+        self, 
+        img=None,
+        lidar_pts=None,
+        lidar_clr=None,
+        depth=None,
+        desc=None,
+    ):
+        if self.with_depth:
+            if depth == None:
+                N, C, H, W = img.shape
+                depth = torch.zeros((N, 1, H, W)).to(device=img.device)
+            depth_features = self.depth_model.forward_features(depth)
+            # depth_features = depth_features.detach()
+        img_embed = self.drone_img_model.patch_embed(img)
+        img_embed, rot_pos_embed = self.drone_img_model._pos_embed(img_embed)
+        for i, blk in enumerate(self.drone_img_model.blocks):
+            if self.grad_checkpointing and not torch.jit.is_scripting():
+                img_embed = checkpoint(blk, img_embed, None, rope=rot_pos_embed, use_reentrant=False)
+            else:
+                img_embed = blk(img_embed, None, rope=rot_pos_embed)
+        img_features = self.drone_img_model.norm(img_embed)
+        # img_features = img_features.detach()
+        
+        if self.with_depth:
+            # depth_features = self.drone_depth_model.forward_features(drone_depth)
+            img_collab_features = self.collab_model(query=img_features, key_value=depth_features, rope=rot_pos_embed)
+        
+        elif self.with_text:
+            rot_pos_embed = None
+            text_outputs = self.desc_model(**desc)
+            desc_features = self.text_projection(text_outputs[0])
+            img_collab_features = self.collab_model(query=img_features, key_value=desc_features, rope=rot_pos_embed)
+        
+        img_collab_features = self.drone_img_model.forward_head(img_collab_features)
+
+        return img_collab_features
+    
+
     def forward_one_view(
         self, 
         img=None,

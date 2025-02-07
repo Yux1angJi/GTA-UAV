@@ -191,7 +191,11 @@ def train_script(config):
         model_state_dict_new = {}
         for k, v in model_state_dict.items():
             model_state_dict_new[k.replace('model.', '')] = v
-        model.img_model.load_state_dict(model_state_dict_new, strict=False)
+        if config.share_weights:
+            model.img_model.load_state_dict(model_state_dict_new, strict=False)
+        else:
+            model.drone_img_model.load_state_dict(model_state_dict_new, strict=False)
+            model.satellite_img_model.load_state_dict(model_state_dict_new, strict=False)
 
     print("Freeze model layers:", config.freeze_layers, config.frozen_stages)
     if config.freeze_layers:
@@ -230,7 +234,7 @@ def train_script(config):
                                     transforms_drone_depth=train_drone_depth_transforms,
                                     transforms_satellite=train_sat_transforms,
                                     prob_flip=config.prob_flip,
-                                    prob_drop_depth=0.2,
+                                    prob_drop_depth=config.prob_drop_depth,
                                     prob_drop_text=0.2,
                                     shuffle_batch_size=config.batch_size,
                                     mode=config.train_mode,
@@ -510,6 +514,8 @@ def parse_args():
 
     parser.add_argument('--global_pool', type=str, default='avg', help='Global pool of model')
 
+    parser.add_argument('--prob_drop_depth', type=float, default=0.2, help='Probability of drop depth')
+
     args = parser.parse_args()
     return args
 
@@ -548,5 +554,6 @@ if __name__ == '__main__':
     config.with_text = args.with_text
     config.with_depth = args.with_depth
     config.global_pool = args.global_pool
+    config.prob_drop_depth = args.prob_drop_depth
 
     train_script(config)
