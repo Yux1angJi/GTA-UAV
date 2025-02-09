@@ -98,7 +98,7 @@ class DesModelWithRGBD(nn.Module):
 
     def get_config(self,):
         if self.share_weights:
-            data_config = timm.data.resolve_model_data_config(self.model)
+            data_config = timm.data.resolve_model_data_config(self.model.vit_model)
         else:
             data_config = timm.data.resolve_model_data_config(self.model1)
         return data_config

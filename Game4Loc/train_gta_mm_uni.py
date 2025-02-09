@@ -10,10 +10,10 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from transformers import get_constant_schedule_with_warmup, get_polynomial_decay_schedule_with_warmup, get_cosine_schedule_with_warmup
 
-from game4loc.dataset.gta_mm import GTAMMDatasetEval, GTAMMDatasetTrain, get_transforms
+from game4loc.dataset.gta_mm import GTAMMDatasetEvalUni, GTAMMDatasetTrain, get_transforms
 from game4loc.utils import setup_system, Logger
-from game4loc.trainer.trainer_mm import train_mm_with_weight
-from game4loc.evaluate.gta_mm import evaluate
+from game4loc.trainer.trainer_mm_uni import train_mm_with_weight
+from game4loc.evaluate.gta_mm_uni import evaluate
 from game4loc.loss import InfoNCE, MMWeightedInfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
 from game4loc.models.model_mm import DesModelWithMM
 
@@ -84,6 +84,11 @@ class Configuration:
     # Loss
     label_smoothing: float = 0.1
     k: float = 3
+
+    # Multi-modal setting
+    with_text: bool = False
+    with_depth: bool = True
+    with_pc: bool = False
     
     # Learning Rate
     lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
@@ -103,7 +108,7 @@ class Configuration:
     test_mode: str = "pos"                # Test with positive pairs
 
     # Eval before training
-    zero_shot: bool = False
+    zero_shot: bool = True
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -161,11 +166,20 @@ def train_script(config):
     # Model                                                                       #
     #-----------------------------------------------------------------------------#
     print("\nModel: {}".format(config.model))
+    print(f"Train with depth? {config.with_depth}")
+    print(f"Train with text? {config.with_text}")
+    print(f"Train with point cloud? {config.with_pc}")
 
-    model = DesModelWithMM(model_name=config.model, 
+    model = DesModelWithMM(
+                    uni_modal=True,
+                    model_name=config.model, 
                     pretrained=True,
                     img_size=config.img_size,
-                    share_weights=config.share_weights)
+                    share_weights=config.share_weights,
+                    with_text=config.with_text,
+                    with_depth=config.with_depth,
+                    with_pc=config.with_pc,
+                )
                         
     data_config = model.get_config()
     print(data_config)
@@ -183,9 +197,8 @@ def train_script(config):
         model_state_dict = torch.load(config.checkpoint_start)
         model_state_dict_new = {}
         for k, v in model_state_dict.items():
-            if 'model' in k:
-                model_state_dict_new[k.replace('model', 'img_model')] = v
-        model.load_state_dict(model_state_dict, strict=False)
+            model_state_dict_new[k.replace('model.', '')] = v
+        model.img_model.load_state_dict(model_state_dict_new, strict=False)
         for param in model.img_model.parameters():
             param.requires_grad = False 
 
@@ -214,17 +227,17 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
 
     # Transforms
-    val_sat_transforms, val_drone_img_transforms, val_drone_depth_transforms, \
-        train_sat_transforms, train_drone_rgb_transforms, train_drone_depth_transforms \
-            = get_transforms(img_size, mean=mean, std=std)
+    val_sat_transforms, val_drone_rgb_transforms, val_drone_depth_transforms, train_sat_transforms, \
+        train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms \
+         = get_transforms(img_size, mean=mean, std=std)
                                                                                                               
     # Train
     train_dataset = GTAMMDatasetTrain(data_root=config.data_root,
                                     pairs_meta_file=config.train_pairs_meta_file,
-                                    transforms_satellite=train_sat_transforms,
+                                    transforms_drone_geo=train_drone_geo_transforms,
                                     transforms_drone_img=train_drone_rgb_transforms,
                                     transforms_drone_depth=train_drone_depth_transforms,
-                                    group_len=config.group_len,
+                                    transforms_satellite=train_sat_transforms,
                                     prob_flip=config.prob_flip,
                                     shuffle_batch_size=config.batch_size,
                                     mode=config.train_mode,
@@ -241,8 +254,11 @@ def train_script(config):
     if config.query_mode == 'DImg2SImg':
         query_view = 'drone_img'
         gallery_view = 'sate_img'
-    elif config.query_mode == 'DLidar2SImg':
-        query_view = 'drone_lidar'
+    elif config.query_mode == 'DPC2SImg':
+        query_view = 'drone_pc'
+        gallery_view = 'sate_img'
+    elif config.query_mode == 'DText2SImg':
+        query_view = 'drone_desc'
         gallery_view = 'sate_img'
     elif config.query_mode == 'DDepth2SImg':
         query_view = 'drone_depth'
@@ -253,7 +269,7 @@ def train_script(config):
     elif config.query_mode == 'DImg2DDepth':
         query_view = 'drone_img'
         gallery_view = 'drone_depth'
-    query_dataset_test = GTAMMDatasetEval(data_root=config.data_root,
+    query_dataset_test = GTAMMDatasetEvalUni(data_root=config.data_root,
                                         pairs_meta_file=config.test_pairs_meta_file,
                                         view=query_view,
                                         transforms=val_drone_depth_transforms,
@@ -272,7 +288,7 @@ def train_script(config):
                                        pin_memory=True)
     
     # Test gallery
-    gallery_dataset_test = GTAMMDatasetEval(data_root=config.data_root,
+    gallery_dataset_test = GTAMMDatasetEvalUni(data_root=config.data_root,
                                           pairs_meta_file=config.test_pairs_meta_file,
                                           view=gallery_view,
                                           transforms=val_sat_transforms,
@@ -307,12 +323,14 @@ def train_script(config):
         label_smoothing=config.label_smoothing,
         k=config.k,
         dimg2simg=False,
-        dlidar2simg=False,
-        dimg2dlidar=False,
+        dpc2simg=False,
+        dimg2dpc=False,
         ddepth2dimg=False,
-        ddepth2simg=True,
-        with_depth=True,
-        with_lidar=False
+        ddepth2simg=False,
+        ddesc2simg=True,
+        with_depth=config.with_depth,
+        with_pc=config.with_pc,
+        with_text=config.with_text,
     )
     ## For TripletLoss
     # loss_function_normal = TripletLoss(device=config.device)
@@ -388,12 +406,16 @@ def train_script(config):
         query_feature = 'drone_img_features'
         gallery_feature = 'satellite_img_features'
         pairs_dict = pairs_drone2sate_dict
-    elif config.query_mode == 'DLidar2SImg':
-        query_feature = 'drone_lidar_features'
+    elif config.query_mode == 'DPC2SImg':
+        query_feature = 'drone_pc_features'
         gallery_feature = 'satellite_img_features'
         pairs_dict = pairs_drone2sate_dict
     elif config.query_mode == 'DDepth2SImg':
         query_feature = 'drone_depth_features'
+        gallery_feature = 'satellite_img_features'
+        pairs_dict = pairs_drone2sate_dict
+    elif config.query_mode == 'DText2SImg':
+        query_feature = 'drone_desc_features'
         gallery_feature = 'satellite_img_features'
         pairs_dict = pairs_drone2sate_dict
     elif config.query_mode == 'DDepth2DImg':
@@ -549,6 +571,12 @@ def parse_args():
 
     parser.add_argument('--k', type=float, default=5, help='weighted k')
 
+    parser.add_argument('--with_text', action='store_true', help='Train with text collaboration')
+
+    parser.add_argument('--with_depth', action='store_true', help='Train with depth collaboration')
+
+    parser.add_argument('--with_pc', action='store_true', help='Train with point cloud collaboration')
+    
     parser.add_argument('--no_custom_sampling', action='store_true', help='Train without custom sampling')
     
     parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
@@ -589,5 +617,8 @@ if __name__ == '__main__':
     config.test_mode = args.test_mode
     config.query_mode = args.query_mode
     config.train_ratio = args.train_ratio
+    config.with_text = args.with_text
+    config.with_depth = args.with_depth
+    config.with_pc = args.with_pc
 
     train_script(config)

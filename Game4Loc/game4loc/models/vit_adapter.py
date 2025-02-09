@@ -94,6 +94,7 @@ class ViTAdapter(nn.Module):
 
     def set_grad_checkpointing(self, enable=True):
         self.vit_model.set_grad_checkpointing(enable)
+        self.depth_encoder.set_grad_checkpointing(enable)
     
     def forward(self, x):
 

@@ -48,7 +48,24 @@ class GeM(nn.Module):
         # x shape: b x n x d
         x = x.clamp(min=self.eps).pow(self.p)
         x = x.mean(dim=1)                
-        return x.pow(1. / self.p)       
+        return x.pow(1. / self.p) 
+
+
+def resize_pos_embed(pos_embed_checkpoint, new_grid_size):
+    """
+    通过插值调整位置编码的大小
+    """
+    cls_token = pos_embed_checkpoint[:, :1, :]  # 提取 [CLS] token
+    pos_tokens = pos_embed_checkpoint[:, 1:, :]  # 去掉 [CLS] token
+
+    old_grid_size = int((pos_tokens.shape[1]) ** 0.5)  # 计算旧的 grid_size
+    pos_tokens = pos_tokens.reshape(1, old_grid_size, old_grid_size, -1).permute(0, 3, 1, 2)
+
+    pos_tokens = F.interpolate(pos_tokens, size=(new_grid_size, new_grid_size), mode='bicubic', align_corners=False)
+    pos_tokens = pos_tokens.permute(0, 2, 3, 1).reshape(1, new_grid_size * new_grid_size, -1)
+
+    new_pos_embed = torch.cat([cls_token, pos_tokens], dim=1)  # 重新拼接 [CLS] token
+    return new_pos_embed      
 
 
 # class Adapter(nn.Module):  # Adapter is used to add to the transformer block for global adaptation
@@ -1160,7 +1177,7 @@ def eva_giant_patch14_clip_224(pretrained=False, **kwargs) -> Eva:
 def eva02_base_patch16_clip_224(pretrained=False, **kwargs) -> Eva:
     """ A EVA-CLIP specific variant that adds additional attn scale layernorm to eva02_base """
     model_args = dict(
-        img_size=224,
+        img_size=384,
         patch_size=16,
         embed_dim=768,
         depth=12,
@@ -1172,9 +1189,19 @@ def eva02_base_patch16_clip_224(pretrained=False, **kwargs) -> Eva:
         scale_attn_inner=True,
         use_rot_pos_emb=True,
         ref_feat_shape=(16, 16),  # 224/14
-        global_pool=kwargs.pop('global_pool', 'token'),
+        global_pool=kwargs.pop('global_pool', 'cls'),
     )
     model = Eva(**model_args)
+    if pretrained:
+        checkpoint = torch.load('./pretrained/openclip/open_clip_pytorch_model_base.bin', map_location="cpu")
+        model_state_dict = {}
+        for k, v in checkpoint.items():
+            if 'visual.trunk.' in k:
+                model_state_dict[k.replace('visual.trunk.', '')] = v
+        pos_embed_checkpoint = model_state_dict['pos_embed']  # 适用于 `timm` 结构
+        new_grid_size = 24  # 384x384 对应的 `patch grid` 大小
+        model_state_dict['pos_embed'] = resize_pos_embed(pos_embed_checkpoint, new_grid_size)
+        model.load_state_dict(model_state_dict, strict=False)
     return model
 
 
@@ -1329,3 +1356,15 @@ def vit_base_patch16_rope_reg1_gap_256(
             checkpoint['patch_embed.proj.weight'] = new_weight  # 更新权重
         model.load_state_dict(checkpoint, strict=False)
     return model
+
+
+if __name__ == '__main__':
+    model = eva02_base_patch16_clip_224()
+    checkpoint = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/pretrained/openclip/open_clip_pytorch_model_base.bin', map_location="cpu")
+    model_state_dict = {}
+    for k, v in checkpoint.items():
+        if 'visual.trunk.' in k:
+            model_state_dict[k.replace('visual.trunk.', '')] = v
+
+    print(model)
+    model.load_state_dict(model_state_dict)

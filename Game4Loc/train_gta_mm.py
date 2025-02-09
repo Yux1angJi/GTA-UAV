@@ -85,6 +85,7 @@ class Configuration:
     # Multi-modal setting
     with_text: bool = False
     with_depth: bool = True
+    with_pc: bool = False
 
     # Learning Rate
     lr: float = 0.001                    # 1 * 10^-4 for ViT | 1 * 10^-1 for CNN
@@ -104,7 +105,7 @@ class Configuration:
     test_mode: str = "pos"                # Test with positive pairs
 
     # Eval before training
-    zero_shot: bool = True
+    zero_shot: bool = False
     
     # Checkpoint to start from
     checkpoint_start = None
@@ -165,6 +166,7 @@ def train_script(config):
     print(f"Drone and satellite image encoder share weights? {config.share_weights}")
     print(f"Train with depth? {config.with_depth}")
     print(f"Train with text? {config.with_text}")
+    print(f"Train with point cloud? {config.with_pc}")
 
     model = DesModelWithMM(model_name=config.model, 
                     pretrained=True,
@@ -172,6 +174,7 @@ def train_script(config):
                     share_weights=config.share_weights,
                     with_text=config.with_text,
                     with_depth=config.with_depth,
+                    with_pc=config.with_pc,
                 )
 
     data_config = model.get_config()
@@ -236,6 +239,7 @@ def train_script(config):
                                     prob_flip=config.prob_flip,
                                     prob_drop_depth=config.prob_drop_depth,
                                     prob_drop_text=0.2,
+                                    prob_drop_pc=0.0,
                                     shuffle_batch_size=config.batch_size,
                                     mode=config.train_mode,
                                     train_ratio=config.train_ratio,
@@ -508,6 +512,8 @@ def parse_args():
 
     parser.add_argument('--with_depth', action='store_true', help='Train with depth collaboration')
 
+    parser.add_argument('--with_pc', action='store_true', help='Train with point cloud collaboration')
+
     parser.add_argument('--no_custom_sampling', action='store_true', help='Train without custom sampling')
     
     parser.add_argument('--train_ratio', type=float, default=1.0, help='Train on ratio of data')
@@ -553,6 +559,7 @@ if __name__ == '__main__':
     config.diff_guidance = args.diff_guidance
     config.with_text = args.with_text
     config.with_depth = args.with_depth
+    config.with_pc = args.with_pc
     config.global_pool = args.global_pool
     config.prob_drop_depth = args.prob_drop_depth
 

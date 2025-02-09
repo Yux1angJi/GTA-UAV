@@ -75,8 +75,10 @@ def predict(config, model, query_feature, dataloader):
                     
             with autocast():
                 for k, v in sample.items():
-                    sample[k] = v.to(config.device)
-                
+                    if k == 'drone_desc':
+                        sample[k] = {key: value.to(config.device) for key, value in v.items()}
+                    else:
+                        sample[k] = v.to(config.device)
                 features = model(**sample)
                 features = features[query_feature]             
             

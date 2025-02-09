@@ -10,7 +10,7 @@ from ..utils import AverageMeter
 def train_mm_with_weight(train_config, model, dataloader, loss_function, optimizer, 
                          scheduler=None, scaler=None, 
                          recon_weight=0.1, loss_recon=None, train_with_recon=False, 
-                         with_weight=False, with_depth=True, with_lidar=False):
+                         with_weight=False, with_depth=True, with_pc=False, with_text=False):
 
     # set model train mode
     model.train()
@@ -41,11 +41,11 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
             with autocast():
                 # data (batches) to device
                 drone_img = sample['drone_img'].to(train_config.device)
-                # drone_lidar_pts = sample['drone_lidar_pts'].to(train_config.device)
-                # drone_lidar_clr = sample['drone_lidar_clr'].to(train_config.device)
-                drone_lidar_pts = None
-                drone_lidar_clr = None
+                drone_lidar_pts = sample['drone_lidar_pts'].to(train_config.device)
+                drone_lidar_clr = sample['drone_lidar_clr'].to(train_config.device)
                 drone_depth = sample['drone_depth'].to(train_config.device)
+                drone_desc = sample['drone_desc']
+                drone_desc = {key: value.cuda() for key, value in drone_desc.items()}
                 satellite_img = sample['satellite_img'].to(train_config.device)
                 weight = sample['positive_weight'].to(train_config.device)
             
@@ -56,40 +56,47 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
                           drone_lidar_pts=drone_lidar_pts,
                           drone_lidar_clr=drone_lidar_clr,
                           drone_depth=drone_depth,
+                          drone_desc=drone_desc,
                           satellite_img=satellite_img,
                          )
                 drone_img_features = x['drone_img_features']
-                drone_lidar_features = x['drone_lidar_features']
+                drone_pc_features = x['drone_pc_features']
                 drone_depth_features = x['drone_depth_features']
+                drone_desc_features = x['drone_desc_features']
+                
                 satellite_img_features = x['satellite_img_features']
 
                 if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
                     if with_weight:
                         loss_sim = loss_function(drone_img_features=drone_img_features, 
-                                                 drone_lidar_features=drone_lidar_features, 
+                                                 drone_pc_features=drone_pc_features, 
                                                  drone_depth_features=drone_depth_features, 
+                                                 drone_desc_features=drone_desc_features,
                                                  satellite_img_features=satellite_img_features, 
                                                  logit_scale=model.module.logit_scale.exp(), 
                                                  positive_weights=weight)
                     else:
                         loss_sim = loss_function(drone_img_features=drone_img_features, 
-                                                 drone_lidar_features=drone_lidar_features, 
+                                                 drone_pc_features=drone_pc_features, 
                                                  drone_depth_features=drone_depth_features, 
+                                                 drone_desc_features=drone_desc_features,
                                                  satellite_img_features=satellite_img_features, 
                                                  logit_scale=model.module.logit_scale.exp(), 
                                                  )
                 else:
                     if with_weight:
                         loss_sim = loss_function(drone_img_features=drone_img_features, 
-                                                 drone_lidar_features=drone_lidar_features, 
+                                                 drone_pc_features=drone_pc_features, 
                                                  drone_depth_features=drone_depth_features, 
+                                                 drone_desc_features=drone_desc_features,
                                                  satellite_img_features=satellite_img_features, 
                                                  logit_scale=model.logit_scale.exp(), 
                                                  positive_weights=weight)
                     else: 
                         loss_sim = loss_function(drone_img_features=drone_img_features, 
-                                                 drone_lidar_features=drone_lidar_features, 
-                                                 drone_depth_features=drone_depth_features, 
+                                                 drone_pc_features=drone_pc_features, 
+                                                 drone_depth_features=drone_depth_features,
+                                                 drone_desc_features=drone_desc_features, 
                                                  satellite_img_features=satellite_img_features, 
                                                  logit_scale=model.logit_scale.exp(), 
                                                  )

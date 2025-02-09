@@ -13,8 +13,6 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
                       recon_weight=0.1, 
                       loss_recon=None, 
                       with_weight=False,
-                      with_depth=False,
-                      with_text=False
                      ):
 
     # set model train mode
@@ -46,8 +44,8 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
             with autocast():
                 # data (batches) to device   
                 drone_img = sample['drone_img'].to(train_config.device)
-                drone_lidar_pts = None
-                drone_lidar_clr = None
+                drone_lidar_pts = sample['drone_lidar_pts'].to(train_config.device)
+                drone_lidar_clr = sample['drone_lidar_clr'].to(train_config.device)
                 drone_depth = sample['drone_depth'].to(train_config.device)
                 drone_desc = sample['drone_desc']
                 drone_desc = {key: value.cuda() for key, value in drone_desc.items()}

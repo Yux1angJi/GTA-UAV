@@ -302,7 +302,7 @@ def data_clean():
     print("Processing complete.")
 
 
-def lidar2rgbd():
+def lidar2depth():
     lidar_dir = data_root + "lidars"
     image_dir = data_root + "images"
     
@@ -335,9 +335,62 @@ def lidar2rgbd():
     print('Lidar 2 RGBD Done!')
 
 
+def sample_point_cloud(pcd, m):
+    """均匀或随机采样点云到m个点"""
+    points = np.asarray(pcd.points)
+    if len(points) <= m:
+        return pcd  # 如果点数小于m，保持不变
+    
+    indices = np.random.choice(len(points), m, replace=False)
+    pcd_sampled = pcd.select_by_index(indices)
+    return pcd_sampled
+
+def process_ply_files(input_dir, output_dir, m):
+    """遍历输入目录中的所有 .ply 文件，采样点云，并存储到输出目录"""
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    for file_name in os.listdir(input_dir):
+        if file_name.endswith(".ply"):
+            file_path = os.path.join(input_dir, file_name)
+            output_path = os.path.join(output_dir, file_name)
+            
+            # 读取点云文件
+            pcd = o3d.io.read_point_cloud(file_path)
+            sampled_pcd = sample_point_cloud(pcd, m)
+            
+            # 保存采样后的点云
+            o3d.io.write_point_cloud(output_path, sampled_pcd)
+            print(f"Processed: {file_name} -> {output_path}")
+
+
+def lidar_sample():
+    input_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/drone/lidars'
+    output_dir = '/home/xmuairmud/data/GTA-UAV-data/GTA-UAV-Lidar/GTA-UAV-Lidar/drone/lidars_sample'
+    m = 8192
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    files = [f for f in os.listdir(input_dir) if f.endswith(".ply")]
+    
+    for file_name in tqdm(files, desc="Processing PLY Files"):
+        if file_name.endswith(".ply"):
+            file_path = os.path.join(input_dir, file_name)
+            output_path = os.path.join(output_dir, file_name)
+            
+            # 读取点云文件
+            pcd = o3d.io.read_point_cloud(file_path)
+            sampled_pcd = sample_point_cloud(pcd, m)
+            
+            # 保存采样后的点云
+            o3d.io.write_point_cloud(output_path, sampled_pcd)
+
+
 if __name__ == "__main__":
     # data_clean()
-    lidar2rgbd()
+    # lidar2depth()
+
+    lidar_sample()
 
     # rgbd = cv2.imread('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/rgbd/200_0001_0000004776.png', cv2.IMREAD_UNCHANGED)
     # bgr = cv2.imread('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/images/200_0001_0000004776.png')

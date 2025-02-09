@@ -279,24 +279,28 @@ class MMWeightedInfoNCE(nn.Module):
                  label_smoothing=0.05, 
                  k=5,
                  dimg2simg=True,
-                 dlidar2simg=False,
-                 ddepth2dimg=True,
-                 ddepth2simg=True,
-                 dimg2dlidar=False,
+                 dpc2simg=False,
+                 ddepth2dimg=False,
+                 ddepth2simg=False,
+                 ddesc2simg=False,
+                 dimg2dpc=False,
                  with_depth=True,
-                 with_lidar=False,
+                 with_pc=False,
+                 with_text=False,
                  device='cuda' if torch.cuda.is_available() else 'cpu'):
         super().__init__()
         self.label_smoothing = label_smoothing
         self.device = device
         self.k = k
         self.dimg2simg = dimg2simg
-        self.dlidar2simg = dlidar2simg
-        self.dimg2dlidar = dimg2dlidar
+        self.dpc2simg = dpc2simg
+        self.dimg2dpc = dimg2dpc
         self.ddepth2dimg = ddepth2dimg
         self.ddepth2simg = ddepth2simg
+        self.ddesc2simg = ddesc2simg
         self.with_depth = with_depth
-        self.with_lidar = with_lidar
+        self.with_pc = with_pc
+        self.with_text = with_text
 
     def loss(self, similarity_matrix, eps_all):
         n = similarity_matrix.shape[0]
@@ -312,22 +316,24 @@ class MMWeightedInfoNCE(nn.Module):
                 drone_img_features, 
                 satellite_img_features, 
                 logit_scale, 
-                drone_lidar_features=None,
+                drone_pc_features=None,
                 drone_depth_features=None, 
+                drone_desc_features=None,
                 positive_weights=None
                 ):
         
-        # print('jyxjyxjyx drone_lidar_features nan num', torch.isnan(drone_lidar_features).sum())
         # Normalize the features
         drone_img_features = F.normalize(drone_img_features, dim=-1)
         satellite_img_features = F.normalize(satellite_img_features, dim=-1)
 
-        if self.with_lidar:
-            drone_lidar_features = F.normalize(drone_lidar_features, dim=-1)
+        if self.with_pc:
+            drone_pc_features = F.normalize(drone_pc_features, dim=-1)
         if self.with_depth:
             drone_depth_features = F.normalize(drone_depth_features, dim=-1)
+        if self.with_text:
+            drone_desc_features = F.normalize(drone_desc_features, dim=-1)
 
-        # Apply positive weights if provided
+        ## Apply positive weights if provided
         if positive_weights is not None:
             eps_weight = 1. - (1. - self.label_smoothing) / (1 + torch.exp(-self.k * positive_weights))
             eps = [self.label_smoothing for _ in range(drone_img_features.shape[0])]
@@ -339,12 +345,12 @@ class MMWeightedInfoNCE(nn.Module):
         logits_drone_img2satellite_img = logit_scale * drone_img_features @ satellite_img_features.T
         logits_satellite_img2drone_img = logits_drone_img2satellite_img.T
 
-        if self.with_lidar:
-            logits_drone_img2drone_lidar = logit_scale * drone_img_features @ drone_lidar_features.T
-            logits_drone_lidar2drone_img = logits_drone_img2drone_lidar.T
+        if self.with_pc:
+            logits_drone_img2drone_pc = logit_scale * drone_img_features @ drone_pc_features.T
+            logits_drone_pc2drone_img = logits_drone_img2drone_pc.T
 
-            logits_drone_lidar2satellite_img = logit_scale * drone_lidar_features @ satellite_img_features.T
-            logits_satellite_img2drone_lidar = logits_drone_lidar2satellite_img.T
+            logits_drone_pc2satellite_img = logit_scale * drone_pc_features @ satellite_img_features.T
+            logits_satellite_img2drone_pc = logits_drone_pc2satellite_img.T
 
         if self.with_depth:
             logits_drone_depth2drone_img = logit_scale * drone_depth_features @ drone_img_features.T
@@ -353,20 +359,25 @@ class MMWeightedInfoNCE(nn.Module):
             logits_drone_depth2satellite_img = logit_scale * drone_depth_features @ satellite_img_features.T
             logits_satellite_img2drone_depth = logits_drone_depth2satellite_img.T
 
+
+        if self.with_text:
+            logits_drone_desc2satellite_img = logit_scale * drone_desc_features @ satellite_img_features.T
+            logits_satellite_img2drone_desc = logits_drone_desc2satellite_img.T
+
         if self.dimg2simg:
             loss_drone_img_satellite_img = (self.loss(logits_drone_img2satellite_img, eps_weight) + self.loss(logits_satellite_img2drone_img, eps_weight)) / 2
         else:
             loss_drone_img_satellite_img = 0.
 
-        if self.dimg2dlidar:
-                loss_drone_img_drone_lidar = (self.loss(logits_drone_img2drone_lidar, eps) + self.loss(logits_drone_lidar2drone_img, eps)) / 2
+        if self.dimg2dpc:
+                loss_drone_img_drone_pc = (self.loss(logits_drone_img2drone_pc, eps) + self.loss(logits_drone_pc2drone_img, eps)) / 2
         else:
-            loss_drone_img_drone_lidar = 0.
+            loss_drone_img_drone_pc = 0.
 
-        if self.dlidar2simg:
-            loss_drone_lidar_satellite_img = (self.loss(logits_drone_lidar2satellite_img, eps_weight) + self.loss(logits_satellite_img2drone_lidar, eps_weight)) / 2
+        if self.dpc2simg:
+            loss_drone_pc_satellite_img = (self.loss(logits_drone_pc2satellite_img, eps_weight) + self.loss(logits_satellite_img2drone_pc, eps_weight)) / 2
         else:
-            loss_drone_lidar_satellite_img = 0.
+            loss_drone_pc_satellite_img = 0.
 
         if self.ddepth2dimg:
             loss_drone_depth_drone_img = (self.loss(logits_drone_img2drone_depth, eps) + self.loss(logits_drone_depth2drone_img, eps)) / 2
@@ -378,12 +389,19 @@ class MMWeightedInfoNCE(nn.Module):
         else:
             loss_drone_depth_satellite_img = 0.
 
+        if self.ddesc2simg:
+            loss_drone_desc_satellite_img = (self.loss(logits_satellite_img2drone_desc, eps_weight) + self.loss(logits_drone_desc2satellite_img, eps_weight)) / 2
+        else:
+            loss_drone_desc_satellite_img = 0.
+
+
         return {
-            "contrastive_drone_img_drone_lidar": loss_drone_img_drone_lidar,
-            "contrastive_drone_lidar_satellite_img": loss_drone_lidar_satellite_img,
+            "contrastive_drone_img_drone_pc": loss_drone_img_drone_pc,
+            "contrastive_drone_pc_satellite_img": loss_drone_pc_satellite_img,
             "contrastive_drone_img_satellite_img": loss_drone_img_satellite_img,
             "contrastive_drone_depth_drone_img": loss_drone_depth_drone_img,
             "contrastive_drone_depth_satellite_img": loss_drone_depth_satellite_img,
+            "contrastive_drone_desc_satellite_img": loss_drone_desc_satellite_img,
         }
 
 if __name__ == '__main__':

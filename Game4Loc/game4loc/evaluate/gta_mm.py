@@ -92,8 +92,8 @@ def predict(train_config, model, dataloader):
             with autocast():
             
                 drone_img = sample['drone_img'].to(train_config.device)
-                drone_lidar_pts = None
-                drone_lidar_clr = None
+                drone_lidar_pts = sample['drone_lidar_pts'].to(train_config.device)
+                drone_lidar_clr = sample['drone_lidar_clr'].to(train_config.device)
                 drone_depth = sample['drone_depth'].to(train_config.device)
                 drone_desc = sample['drone_desc']
                 drone_desc = {key: value.to(train_config.device) for key, value in drone_desc.items()}
@@ -151,13 +151,11 @@ def evaluate(
         for gallery_batch in gallery_loader:
             with autocast():
                 satellite_img = gallery_batch['satellite_img'].to(config.device)
-                satellite_desc = gallery_batch['satellite_desc']
-                satellite_desc = {key: value.to(config.device) for key, value in satellite_desc.items()}
                 
                 # print(gallery_batch, flush=True)
                 gallery_features_batch = model(
                     satellite_img=satellite_img,
-                    satellite_desc=satellite_desc,
+                    satellite_desc=None,
                 )
                 if config.normalize_features:
                     gallery_features_batch = F.normalize(gallery_features_batch, dim=-1)
