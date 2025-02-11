@@ -135,7 +135,10 @@ class GTAMMDatasetTrain(Dataset):
         drone_lidar = np.array(drone_lidar.points, dtype=np.float32)
 
         N = drone_lidar.shape[0]
-        indices = np.random.choice(N, 2048, replace=False)
+        if N > 2048:
+            indices = np.random.choice(N, 2048, replace=False)
+        else:
+            indices = np.random.choice(N, 2048, replace=True)
 
         drone_lidar = drone_lidar[indices]
 
@@ -444,7 +447,10 @@ class GTAMMDatasetEval(Dataset):
             lidar = np.array(lidar.points, dtype=np.float32)
 
             N = lidar.shape[0]
-            indices = np.random.choice(N, 2048, replace=False)
+            if N > 2048:
+                indices = np.random.choice(N, 2048, replace=False)
+            else:
+                indices = np.random.choice(N, 2048, replace=True)
             lidar = lidar[indices]
 
             ## TODO point cloud error
@@ -681,7 +687,10 @@ class GTAMMDatasetEvalUni(Dataset):
             lidar = np.array(lidar.points, dtype=np.float32)
 
             N = lidar.shape[0]
-            indices = np.random.choice(N, 2048, replace=False)
+            if N > 2048:
+                indices = np.random.choice(N, 2048, replace=False)
+            else:
+                indices = np.random.choice(N, 2048, replace=True)
             lidar = lidar[indices]
 
             ## TODO point cloud error
