@@ -68,55 +68,55 @@ def resize_pos_embed(pos_embed_checkpoint, new_grid_size):
     return new_pos_embed      
 
 
-# class Adapter(nn.Module):  # Adapter is used to add to the transformer block for global adaptation
-#     def __init__(self, D_features, mlp_ratio=0.75, act_layer=nn.ReLU, skip_connect=True):
-#         # mlp_ratio is the bottleneck ratio of adapters
-#         super().__init__()
-#         self.skip_connect = skip_connect
-#         D_hidden_features = int(D_features * mlp_ratio)
-#         self.act = act_layer()
-#         self.D_fc1 = nn.Linear(D_features, D_hidden_features)
-#         self.D_fc2 = nn.Linear(D_hidden_features, D_features)
-        
-#     def forward(self, x):
-#         # x is (BT, HW+1, D)
-#         xs = self.D_fc1(x)
-#         xs = self.act(xs)
-#         xs = self.D_fc2(xs)
-#         if self.skip_connect:
-#             x = x + xs
-#         else:
-#             x = xs
-#         return x
 class Adapter(nn.Module):  # Adapter is used to add to the transformer block for global adaptation
     def __init__(self, D_features, mlp_ratio=0.75, act_layer=nn.ReLU, skip_connect=True):
         # mlp_ratio is the bottleneck ratio of adapters
         super().__init__()
         self.skip_connect = skip_connect
         D_hidden_features = int(D_features * mlp_ratio)
+        self.act = act_layer()
+        self.D_fc1 = nn.Linear(D_features, D_hidden_features)
+        self.D_fc2 = nn.Linear(D_hidden_features, D_features)
         
-        self.scale_mlp = nn.Sequential(
-            nn.Linear(D_features, D_features),
-            nn.ReLU(),
-            nn.Linear(D_features, 1)  # Output 1 value per position
-        )
-        self.shift_mlp = nn.Sequential(
-            nn.Linear(D_features, D_features),
-            nn.ReLU(),
-            nn.Linear(D_features, 1)  # Output 1 value per position
-        )
+    def forward(self, x):
+        # x is (BT, HW+1, D)
+        xs = self.D_fc1(x)
+        xs = self.act(xs)
+        xs = self.D_fc2(xs)
+        if self.skip_connect:
+            x = x + xs
+        else:
+            x = xs
+        return x
+# class Adapter(nn.Module):  # Adapter is used to add to the transformer block for global adaptation
+#     def __init__(self, D_features, mlp_ratio=0.75, act_layer=nn.ReLU, skip_connect=True):
+#         # mlp_ratio is the bottleneck ratio of adapters
+#         super().__init__()
+#         self.skip_connect = skip_connect
+#         D_hidden_features = int(D_features * mlp_ratio)
         
-    def forward(self, rgb_features, depth_features):
-        scale = self.scale_mlp(depth_features)  # Output shape: (B, N, 1)
-        shift = self.shift_mlp(depth_features)  # Output shape: (B, N, 1)
+#         self.scale_mlp = nn.Sequential(
+#             nn.Linear(D_features, D_features),
+#             nn.ReLU(),
+#             nn.Linear(D_features, 1)  # Output 1 value per position
+#         )
+#         self.shift_mlp = nn.Sequential(
+#             nn.Linear(D_features, D_features),
+#             nn.ReLU(),
+#             nn.Linear(D_features, 1)  # Output 1 value per position
+#         )
+        
+#     def forward(self, rgb_features, depth_features):
+#         scale = self.scale_mlp(depth_features)  # Output shape: (B, N, 1)
+#         shift = self.shift_mlp(depth_features)  # Output shape: (B, N, 1)
 
-        # Broadcast scale and shift to match the shape of rgb_features
-        scale = scale.expand(-1, -1, rgb_features.size(-1))  # Shape: (B, N, C)
-        shift = shift.expand(-1, -1, rgb_features.size(-1))  # Shape: (B, N, C)
+#         # Broadcast scale and shift to match the shape of rgb_features
+#         scale = scale.expand(-1, -1, rgb_features.size(-1))  # Shape: (B, N, C)
+#         shift = shift.expand(-1, -1, rgb_features.size(-1))  # Shape: (B, N, C)
 
-        # Apply modulation to the RGB features
-        modulated_features = scale * rgb_features + shift
-        return modulated_features
+#         # Apply modulation to the RGB features
+#         modulated_features = scale * rgb_features + shift
+#         return modulated_features
 
 
 class EvaCrossAttentionBlock(nn.Module):
@@ -501,13 +501,13 @@ class EvaBlock(nn.Module):
         ############## Adapter
         if self.adapter:
             self.serial_adapter = Adapter(D_features=dim, mlp_ratio=0.5)
-            # self.parallel_adapter = Adapter(D_features=dim, mlp_ratio=0.5, skip_connect=False)
+            self.parallel_adapter = Adapter(D_features=dim, mlp_ratio=0.5, skip_connect=False)
         ################
 
-    def forward(self, rgb, d, rope: Optional[torch.Tensor] = None, attn_mask: Optional[torch.Tensor] = None):
-        def attn_residual_func(rgb, d, rope, attn_mask):
+    def forward(self, rgb, d=None, rope: Optional[torch.Tensor] = None, attn_mask: Optional[torch.Tensor] = None):
+        def attn_residual_func(rgb, rope, attn_mask):
             rgb = self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask)
-            rgb = self.serial_adapter(rgb, d)
+            rgb = self.serial_adapter(rgb)
             return rgb
 
         def ffn_residual_func(rgb):
@@ -517,9 +517,9 @@ class EvaBlock(nn.Module):
             if self.adapter:
             ################################
             ## Adapter
-                rgb = rgb + self.drop_path1(attn_residual_func(rgb, d, rope, attn_mask))
-                # rgb = rgb + self.drop_path2(ffn_residual_func(rgb))
-                rgb = rgb + self.drop_path2(self.mlp(self.norm2(rgb)))
+                rgb = rgb + self.drop_path1(attn_residual_func(rgb, rope, attn_mask))
+                rgb = rgb + self.drop_path2(ffn_residual_func(rgb))
+                # rgb = rgb + self.drop_path2(self.mlp(self.norm2(rgb)))
             ################################
             else:
                 rgb = rgb + self.drop_path1(self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask))
@@ -528,9 +528,9 @@ class EvaBlock(nn.Module):
             if self.adapter:
             ################################
             ## Adapter
-                rgb = rgb + self.drop_path1(self.gamma_1 * attn_residual_func(rgb, d, rope, attn_mask))
-                # rgb = rgb + self.drop_path2(self.gamma_2 * ffn_residual_func(rgb))
-                rgb = rgb + self.drop_path2(self.gamma_2 * self.mlp(self.norm2(rgb)))
+                rgb = rgb + self.drop_path1(self.gamma_1 * attn_residual_func(rgb, rope, attn_mask))
+                rgb = rgb + self.drop_path2(self.gamma_2 * ffn_residual_func(rgb))
+                # rgb = rgb + self.drop_path2(self.gamma_2 * self.mlp(self.norm2(rgb)))
             ################################
             else:
                 rgb = rgb + self.drop_path1(self.gamma_1 * self.attn(self.norm1(rgb), rope=rope, attn_mask=attn_mask))
@@ -1359,12 +1359,23 @@ def vit_base_patch16_rope_reg1_gap_256(
 
 
 if __name__ == '__main__':
-    model = eva02_base_patch16_clip_224()
-    checkpoint = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/pretrained/openclip/open_clip_pytorch_model_base.bin', map_location="cpu")
-    model_state_dict = {}
-    for k, v in checkpoint.items():
-        if 'visual.trunk.' in k:
-            model_state_dict[k.replace('visual.trunk.', '')] = v
+    pass
+    # from PointcloudEncoder
+    # point_transformer = eva02_base_patch14_448()
+    # model = PointcloudEncoder(point_transformer)
+    # checkpoint = torch.load('/home/xmuairmud/jyx/GTA-UAV/Game4Loc/pretrained/uni3d/model.pt', map_location="cpu")
+    # state_dict = checkpoint['module']
+    # model.load_state_dict(state_dict)
 
-    print(model)
-    model.load_state_dict(model_state_dict)
+    # state_dict_new = {}
+    # for k, v in state_dict.items():
+    #     state_dict_new[k.replace('point_encoder.', '')] = v
+    # for k, v in state_dict_new.items():
+    #     if k in model.state_dict().keys():
+    #         model.state_dict()[k] = v
+    #     else:
+    #         print(f"Skipping layer: {k}")
+    # print(len(model.blocks))
+    # print(state_dict.keys())
+    # print(model.state_dict().keys())
+    # model.load_state_dict(model_state_dict)

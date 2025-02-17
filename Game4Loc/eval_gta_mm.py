@@ -116,7 +116,7 @@ if __name__ == '__main__':
     # Transforms
     val_sat_transforms, val_drone_rgb_transforms, val_drone_depth_transforms, train_sat_transforms, \
         train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms \
-         = get_transforms(img_size, mean=mean, std=std)
+         = get_transforms(img_size, mean=mean, std=std, eval_robust=False)
 
     query_view = 'drone'
     gallery_view = 'sate'

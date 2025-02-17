@@ -3,6 +3,7 @@ import time
 import math
 import shutil
 import sys
+import gc
 import torch
 import argparse
 from dataclasses import dataclass
@@ -10,11 +11,11 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from transformers import get_constant_schedule_with_warmup, get_polynomial_decay_schedule_with_warmup, get_cosine_schedule_with_warmup
 
-from game4loc.dataset.gta_mm import GTAMMDatasetEval, GTAMMDatasetTrain, get_transforms
+from game4loc.dataset.visloc_mm import VisLocMMDatasetEval, VisLocMMDatasetTrain, get_transforms
 from game4loc.utils import setup_system, Logger
 from game4loc.trainer.trainer_mm import train_with_weight
-from game4loc.evaluate.gta_mm import evaluate
-from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, TripletLoss
+from game4loc.evaluate.visloc_mm import evaluate
+from game4loc.loss import InfoNCE, WeightedInfoNCE, GroupInfoNCE, ReconstructionLoss
 from game4loc.models.model_mm import DesModelWithMM
 
 
@@ -26,8 +27,7 @@ def parse_tuple(s):
 
 
 @dataclass
-class Configuration:
-    
+class Configuration:  
     # Model
     model: str = 'convnext_base.fb_in22k_ft_in1k_384'
     model_hub: str = 'timm'
@@ -35,10 +35,6 @@ class Configuration:
     
     # Override model image size
     img_size: int = 384
- 
-    # Please Ignore
-    freeze_layers: bool = False
-    frozen_stages = [0,0,0,0]
 
     # Training with sharing weights
     share_weights: bool = True
@@ -97,7 +93,7 @@ class Configuration:
     prob_flip: float = 0.5               # flipping the sat image and drone image simultaneously
     
     # Savepath for model checkpoints
-    model_path: str = "./work_dir/gta"
+    model_path: str = "./work_dir/visloc"
 
     query_mode: str = "D2S"               # Retrieval in Drone to Satellite
 
@@ -122,18 +118,14 @@ class Configuration:
     # make cudnn deterministic
     cudnn_deterministic: bool = False
 
-    data_root: str = "./data/GTA-UAV-data"
+    data_root: str = "./data/UAV-VisLoc-data"
 
-    train_pairs_meta_file = 'cross-area-drone2sate-train.json'
-    test_pairs_meta_file = 'cross-area-drone2sate-test.json'
-    sate_img_dir = 'satellite'
+    train_pairs_meta_file: str = ''
+    test_pairs_meta_file: str = ''
+    sate_img_dir: str = 'satellite'
 
 
-#-----------------------------------------------------------------------------#
-# Train Config                                                                #
-#-----------------------------------------------------------------------------#
-
-def train_script(config):
+def train_script(config):    
 
     if config.log_to_file:
         f = open(config.log_path, 'w')
@@ -228,9 +220,10 @@ def train_script(config):
     val_sat_transforms, val_drone_rgb_transforms, val_drone_depth_transforms, train_sat_transforms, \
         train_drone_geo_transforms, train_drone_rgb_transforms, train_drone_depth_transforms \
          = get_transforms(img_size, mean=mean, std=std)
-                                                                                                                                 
+    
+                                                                                                                    
     # Train
-    train_dataset = GTAMMDatasetTrain(data_root=config.data_root,
+    train_dataset = VisLocMMDatasetTrain(data_root=config.data_root,
                                     pairs_meta_file=config.train_pairs_meta_file,
                                     transforms_drone_geo=train_drone_geo_transforms,
                                     transforms_drone_img=train_drone_rgb_transforms,
@@ -258,7 +251,7 @@ def train_script(config):
     else:
         query_view = 'sate'
         gallery_view = 'drone'
-    query_dataset_test = GTAMMDatasetEval(data_root=config.data_root,
+    query_dataset_test = VisLocMMDatasetEval(data_root=config.data_root,
                                         pairs_meta_file=config.test_pairs_meta_file,
                                         view=query_view,
                                         transforms_rgb=val_drone_rgb_transforms,
@@ -278,7 +271,7 @@ def train_script(config):
                                        pin_memory=True)
     
     # Test gallery
-    gallery_dataset_test = GTAMMDatasetEval(data_root=config.data_root,
+    gallery_dataset_test = VisLocMMDatasetEval(data_root=config.data_root,
                                           pairs_meta_file=config.test_pairs_meta_file,
                                           view=gallery_view,
                                           transforms_rgb=val_sat_transforms,
@@ -456,13 +449,13 @@ def train_script(config):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Training script for gta.")
+    parser = argparse.ArgumentParser(description="Training script for visloc.")
 
     parser.add_argument('--log_to_file', action='store_true', help='Log saving to file')
 
     parser.add_argument('--log_path', type=str, default=None, help='Log file path')
 
-    parser.add_argument('--data_root', type=str, default='./data/GTA-UAV-data', help='Data root')
+    parser.add_argument('--data_root', type=str, default='./data/UAV_VisLoc_data', help='Data root')
 
     parser.add_argument('--train_pairs_meta_file', type=str, default='cross-area-drone2sate-train.json', help='Training metafile path')
    

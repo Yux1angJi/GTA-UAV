@@ -8,10 +8,21 @@ from thop import profile
 from transformers import CLIPTextConfig, CLIPTextModel, CLIPModel, AutoTokenizer
 from torch.utils.checkpoint import checkpoint
 from timm.layers import LayerNorm
+from peft import LoraConfig, get_peft_model, TaskType, PeftModel
 
-from .eva import eva02_base_patch16_clip_224, vit_base_patch16_rope_reg1_gap_256, EvaAttention, EvaBlock, EvaCrossAttention, EvaCrossAttentionBlock
+from .eva import *
 
 from pointnet2_ops import pointnet2_utils
+
+
+class CustomPeftModel(PeftModel):
+    def __init__(self, model, peft_config):
+        super().__init__(model, peft_config)  # 🚀 传入 peft_config
+
+    def forward(self, *args, **kwargs):
+        kwargs.pop("input_ids", None)  # 🚀 移除 input_ids
+        return self.base_model(*args, **kwargs)
+
 
 def fps(data, number):
     '''
@@ -204,7 +215,7 @@ class PointcloudEncoder(nn.Module):
         self.visual = point_transformer
 
 
-    def forward(self, pts, colors):
+    def forward(self, pts, colors, **kwargs):
         # divide the point cloud in the same form. This is important
         _, center, features = self.group_divider(pts, colors)
 
@@ -350,7 +361,9 @@ class DesModelWithMM(nn.Module):
             self.satellite_img_model.set_grad_checkpointing()
         
         if with_pc:
-            point_transformer = timm.create_model(pc_model_name, pretrained=pretrained, drop_path_rate=drop_path_rate)
+            # point_transformer = timm.create_model(pc_model_name, pretrained=pretrained, drop_path_rate=drop_path_rate)
+            point_transformer = eva02_base_patch14_448(adapter_list=[0,1,2,3,4,5,6,7,8,9,10,11])
+            # point_transformer = eva02_base_patch14_448(adapter_list=[])
             point_transformer.set_grad_checkpointing()
             self.drone_lidar_model = PointcloudEncoder(point_transformer)
 
@@ -365,21 +378,50 @@ class DesModelWithMM(nn.Module):
                         self.drone_lidar_model.state_dict()[k] = v
                     else:
                         print(f"Skipping layer: {k}")
-            self.assist_token = nn.Parameter(torch.randn(513, 768))
+
+            # num_blocks = len(self.drone_lidar_model.visual.blocks)
+
+            # target_modules = [f"blocks.{i}.attn.q_proj" for i in range(num_blocks)] + \
+            #      [f"blocks.{i}.attn.v_proj" for i in range(num_blocks)]
+
+            # lora_config = LoraConfig(
+            #     r=4,  # 低秩分解的秩
+            #     lora_alpha=16,  # LoRA scaling factor
+            #     lora_dropout=0.2,  # dropout 防止过拟合
+            #     target_modules=target_modules,  # 只在 Transformer 的 Q, V 进行 LoRA
+            #     task_type=TaskType.FEATURE_EXTRACTION  # 任务类型
+            # )
+
+            # peft_model = get_peft_model(self.drone_lidar_model.visual, lora_config)
+
+            # print(type(peft_model.peft_config))
+
+            # self.drone_lidar_model.visual = CustomPeftModel(peft_model.base_model, lora_config)
+            
+            for name, param in self.drone_lidar_model.named_parameters():
+                if 'adapter' not in name:
+                    param.requires_grad = False
+
+            self.assist_token = nn.Parameter(torch.randn(50, 768))
 
         elif with_text:
             self.desc_model = CLIPTextModel.from_pretrained("openai/clip-vit-base-patch32")
             self.text_projection = nn.Linear(512, embed_dim, bias=False)
-            self.assist_token = nn.Parameter(torch.randn(77, 768))
+            self.assist_token = nn.Parameter(torch.randn(50, 768))
 
         elif with_depth:
             # self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size, in_chans=1)
 
             # self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, img_size=img_size, num_classes=0)
-            self.depth_model = vit_base_patch16_rope_reg1_gap_256(in_chans=1, pretrained=pretrained, global_pool='gem')
+            self.depth_model = vit_base_patch16_rope_reg1_gap_256(in_chans=1, pretrained=pretrained, global_pool='gem', adapter_list=[0,1,2,3,4,5,6,7,8,9])
             
             self.depth_model.set_grad_checkpointing() 
-            self.assist_token = nn.Parameter(torch.randn(577, 768))
+
+            for name, param in self.depth_model.named_parameters():
+                if 'adapter' not in name:
+                    param.requires_grad = False
+
+            self.assist_token = nn.Parameter(torch.randn(50, 768))
         
         self.uni_modal = uni_modal
         self.global_pool = 'avg'
@@ -607,6 +649,7 @@ class DesModelWithMM(nn.Module):
             else:
                 depth_features = self.depth_model.forward_features(depth)
             # depth_features = self.drone_depth_model.forward_features(drone_depth)
+            rot_pos_embed = None
             img_collab_features = self.collab_model(query=img_features, key_value=depth_features, rope=rot_pos_embed)
         
         elif self.with_text:
@@ -658,9 +701,9 @@ if __name__ == '__main__':
 
     model = DesModelWithMM(model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', 
                            pc_model_name='eva02_base_patch14_448.mim_in22k_ft_in1k',
-                           with_pc=False,
+                           with_pc=True,
                            with_text=False,
-                           with_depth=True,
+                           with_depth=False,
                            uni_modal=False,
                            img_size=384)
     model.cuda()
