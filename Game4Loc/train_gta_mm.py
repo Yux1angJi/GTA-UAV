@@ -175,6 +175,7 @@ def train_script(config):
                     with_text=config.with_text,
                     with_depth=config.with_depth,
                     with_pc=config.with_pc,
+                    token_length=config.token_length,
                 )
 
     data_config = model.get_config()
@@ -522,6 +523,8 @@ def parse_args():
 
     parser.add_argument('--prob_drop_depth', type=float, default=0.0, help='Probability of drop depth')
 
+    parser.add_argument('--token_length', type=int, default=50, help='Length of learnable token')
+
     args = parser.parse_args()
     return args
 
@@ -562,5 +565,6 @@ if __name__ == '__main__':
     config.with_pc = args.with_pc
     config.global_pool = args.global_pool
     config.prob_drop_depth = args.prob_drop_depth
+    config.token_length = args.token_length
 
     train_script(config)

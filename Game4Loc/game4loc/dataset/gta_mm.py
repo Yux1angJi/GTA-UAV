@@ -145,6 +145,7 @@ class GTAMMDatasetTrain(Dataset):
         ## TODO point cloud error
         drone_lidar = drone_lidar[:, [1, 2, 0]]
         drone_lidar[:, 0] = -drone_lidar[:, 0]
+        drone_lidar[:, 1] = -drone_lidar[:, 1]
         drone_lidar[:, 2] = -drone_lidar[:, 2]
 
         drone_lidar = self.pc_norm(drone_lidar)
@@ -456,6 +457,7 @@ class GTAMMDatasetEval(Dataset):
             ## TODO point cloud error
             lidar = lidar[:, [1, 2, 0]]
             lidar[:, 0] = -lidar[:, 0]
+            lidar[:, 1] = -lidar[:, 1]
             lidar[:, 2] = -lidar[:, 2]
             
             lidar = self.pc_norm(lidar)
@@ -696,6 +698,7 @@ class GTAMMDatasetEvalUni(Dataset):
             ## TODO point cloud error
             lidar = lidar[:, [1, 2, 0]]
             lidar[:, 0] = -lidar[:, 0]
+            lidar[:, 1] = -lidar[:, 1]
             lidar[:, 2] = -lidar[:, 2]
             
             lidar = self.pc_norm(lidar)

@@ -217,7 +217,9 @@ class PointcloudEncoder(nn.Module):
 
     def forward(self, pts, colors, **kwargs):
         # divide the point cloud in the same form. This is important
-        _, center, features = self.group_divider(pts, colors)
+        neighborhood, center, features = self.group_divider(pts, colors)
+
+        # torch.save(neighborhood, '/home/xmuairmud/jyx/GTA-UAV/Game4Loc/iccv/pc_xyz.pth')
 
         # encoder the input cloud patches
         group_input_tokens = self.encoder(features)  #  B G N
@@ -326,6 +328,7 @@ class DesModelWithMM(nn.Module):
                  with_text=False,
                  uni_modal=False,
                  train_with_offset=False,
+                 token_length=50,
                  ):
                  
         super(DesModelWithMM, self).__init__()
@@ -335,6 +338,7 @@ class DesModelWithMM(nn.Module):
         self.with_depth = with_depth
         self.with_pc = with_pc
         self.with_text = with_text
+        self.token_length = token_length
         if share_weights:
             if "vit" in model_name or "swin" in model_name:
                 # automatically change interpolate pos-encoding to img_size
@@ -402,12 +406,12 @@ class DesModelWithMM(nn.Module):
                 if 'adapter' not in name:
                     param.requires_grad = False
 
-            self.assist_token = nn.Parameter(torch.randn(50, 768))
+            self.assist_token = nn.Parameter(torch.randn(self.token_length, 768))
 
         elif with_text:
             self.desc_model = CLIPTextModel.from_pretrained("openai/clip-vit-base-patch32")
             self.text_projection = nn.Linear(512, embed_dim, bias=False)
-            self.assist_token = nn.Parameter(torch.randn(50, 768))
+            self.assist_token = nn.Parameter(torch.randn(self.token_length, 768))
 
         elif with_depth:
             # self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size, in_chans=1)
@@ -421,7 +425,7 @@ class DesModelWithMM(nn.Module):
                 if 'adapter' not in name:
                     param.requires_grad = False
 
-            self.assist_token = nn.Parameter(torch.randn(50, 768))
+            self.assist_token = nn.Parameter(torch.randn(self.token_length, 768))
         
         self.uni_modal = uni_modal
         self.global_pool = 'avg'
@@ -719,17 +723,17 @@ if __name__ == '__main__':
     indices = np.random.choice(N, 2048, replace=False)
     points = points[indices]
     
-    print(points)
-    points = pc_norm(points)
-    print(points)
+    # print(points)
+    # points = pc_norm(points)
+    # print(points)
 
-    points = augment_pc(points)
-    print(np.isnan(points).sum())
-    print(points.shape)
+    # points = augment_pc(points)
+    # print(np.isnan(points).sum())
+    # print(points.shape)
     points = torch.from_numpy(points).cuda()
     points = points[None, ...]
     colors = torch.ones_like(points).cuda()
-    print(torch.isnan(points).sum())
+    # print(torch.isnan(points).sum())
 
     desc = 'This is a test.'
     tokenizer = AutoTokenizer.from_pretrained("openai/clip-vit-base-patch32")
@@ -745,22 +749,12 @@ if __name__ == '__main__':
 
     batch = {'drone_img': img, 'drone_lidar_pts': points, 'drone_lidar_clr': colors, 'drone_desc': desc, 'satellite_desc': desc}
 
-    # result = model(**batch)
-    # print(result['drone_img_features'].shape)
-    # print(result['drone_lidar_features'].shape)
-    # print(torch.isnan(result['drone_lidar_features']).sum())
-
-    # print(result['drone_desc_features'].shape)
-
     print('img shape', img.shape)
     print('desc shape', desc['input_ids'].shape, desc['attention_mask'].shape)
 
-    # query = model(**batch)['drone_pc_features']
     query = model(**batch)
     print(query.shape)
 
-    # flops, params = profile(model, inputs=(x,))
-    # # print(img.size)
-    # # img = transform(img)
-    # # print(img.size)
+
+
 
