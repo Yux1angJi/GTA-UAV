@@ -409,7 +409,7 @@ def process_per_image(drone_meta_data):
         "drone_img": drone_img,
         "lat": lat,
         "lon": lon,
-        "sate_img_dir": os.path.join(file_dir, 'satellite'),
+        "sate_img_dir": os.path.join(os.path.dirname(file_dir), 'satellite'),
         "pair_pos_sate_img_list": [],
         "pair_pos_sate_weight_list": [],
         "pair_pos_sate_loc_lat_lon_list": [],
