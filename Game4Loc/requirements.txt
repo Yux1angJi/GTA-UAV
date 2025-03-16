@@ -13,3 +13,8 @@ thop
 kornia
 loguru
 pytorch_lightning
+matplotlib
+einops
+yacs
+omegaconf
+peft
