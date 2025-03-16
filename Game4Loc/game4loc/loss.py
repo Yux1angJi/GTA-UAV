@@ -71,7 +71,7 @@ class WeightedInfoNCE(nn.Module):
         
         # Apply positive weights if provided
         if positive_weights is not None:
-            eps = 1. - (1. - self.label_smoothing) / (1 + torch.exp(-self.k * positive_weights))
+            eps = 1. - 1. / (1 + torch.exp(-self.k * positive_weights))
         else:
             eps = [self.label_smoothing for _ in range(image_features1.shape[0])]
         

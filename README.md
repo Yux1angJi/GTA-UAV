@@ -179,9 +179,8 @@ python train_gta.py \
     --train_pairs_meta_file "cross-area-drone2sate-train.json" \
     --test_pairs_meta_file "cross-area-drone2sate-test.json" \
     --model "vit_base_patch16_rope_reg1_gap_256.sbb_in1k" \
-    --gpu_ids 0 --label_smoothing 0.05 \
-    --lr 0.0001 --batch_size 64 --epoch 5 \
-    --with_weight --k 5
+    --gpu_ids 0 --lr 0.0001 --batch_size 64 \
+    --with_weight --k 5 --epoch 5
 ```
 
 Or run the training experiments on UAV-VisLoc by
@@ -192,9 +191,8 @@ python train_visloc.py \
     --train_pairs_meta_file "same-area-drone2sate-train.json" \
     --test_pairs_meta_file "same-area-drone2sate-test.json" \
     --model "vit_base_patch16_rope_reg1_gap_256.sbb_in1k" \
-    --gpu_ids 0 --label_smoothing 0.05 \
-    --lr 0.0001 --batch_size 64 --epoch 20 \
-    --with_weight --k 5
+    --gpu_ids 0 --lr 0.0001 --batch_size 64 \
+    --with_weight --k 5 --epoch 20
 ```
 
 Or directly run evaluating script from [pre-trained checkpoints](#pre-trained-checkpoints) by
