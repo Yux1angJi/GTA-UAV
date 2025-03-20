@@ -23,9 +23,10 @@
   <a href="https://arxiv.org/abs/2409.16925"><strong>[Arxiv]</strong></a>
 </p>
 
-- [x] Part I: Dataset
+- [x] Part I: LR Dataset
 - [x] Part II: Train and Test
 - [x] Part III: Pre-trained Checkpoints
+- [x] Part IV: HR Dataset and Supplementary
 
 ## <a id="news"></a> 🔥 News
 
@@ -60,11 +61,11 @@
 - Drone (camera) 6-DoF labels for each drone image.
 
 ## <a id="dataset-access"></a> 💾 Dataset Access
-The dataset is released in two versions: low resolution (512x384, 12.8G) and high resolution (1920x1440, 133.6G).
+The dataset is released in two versions: low resolution (512x384, 12.8G) and high resolution (1920x1440, 143.3G).
 
 |                                      Low Resolution Version                                      |                                     High Resolution Version                                      |
 |:------------------------------------------------------------------------------------------------:|:------------------------------------------------------------------------------------------------:|
-| [HuggingFace🤗](https://huggingface.co/datasets/Yux1ang/GTA-UAV-LR) | Released soon |
+| [HuggingFace🤗](https://huggingface.co/datasets/Yux1ang/GTA-UAV-LR) | [HuggingFace🤗](https://huggingface.co/datasets/Yux1ang/GTA-UAV-HR) |
 | [BaiduDisk](https://pan.baidu.com/s/1vjbyDh8sYz47GoP5KBRMZQ?pwd=gtav) | Released soon |
 
 
