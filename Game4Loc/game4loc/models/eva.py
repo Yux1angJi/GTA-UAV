@@ -888,12 +888,12 @@ class Eva(nn.Module):
         x_intermediate = []
         for blk in self.blocks:
             if self.grad_checkpointing and not torch.jit.is_scripting():
-                x = checkpoint(blk, rgb, d, rope=rot_pos_embed, use_reentrant=False)
+                rgb = checkpoint(blk, rgb, d, rope=rot_pos_embed, use_reentrant=False)
             else:
-                x = blk(rgb, d, rope=rot_pos_embed)
+                rgb = blk(rgb, d, rope=rot_pos_embed)
             if intermediate:
-                x_intermediate.append(x)
-        x = self.norm(x)
+                x_intermediate.append(rgb)
+        x = self.norm(rgb)
         if intermediate:
             return x, x_intermediate
         else:
