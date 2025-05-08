@@ -231,10 +231,13 @@ This work draws inspiration from the following code as references. We extend our
 ## <a id="citation"></a> 📌 Citation
 If you find our repository useful for your research, please consider citing our paper:
 ```bibtex
-@article{ji2024game4loc,
-    title  = {Game4Loc: A UAV Geo-Localization Benchmark from Game Data},
-    author = {Ji, Yuxiang and He, Boyong and Tan, Zhuoyue and Wu, Liaoni},
-    journal= {arXiv preprint arXiv:2409.16925},
-    year   = {2024},
+@inproceedings{ji2025game4loc,
+  title={Game4loc: A uav geo-localization benchmark from game data},
+  author={Ji, Yuxiang and He, Boyong and Tan, Zhuoyue and Wu, Liaoni},
+  booktitle={Proceedings of the AAAI Conference on Artificial Intelligence},
+  volume={39},
+  number={4},
+  pages={3913--3921},
+  year={2025}
 }
 ```
