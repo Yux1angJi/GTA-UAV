@@ -37,7 +37,6 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
     
     # for loop over one epoch
     for sample in bar:
-        # print('jyxjyxjyx', query.shape)
         start_time = time.time()
         
         if scaler:
@@ -57,7 +56,7 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
                 # # Forward pass
                 loss = {}
 
-                features1, features2 = model(drone_img=drone_img, 
+                drone_features, satellite_features = model(drone_img=drone_img, 
                                            drone_lidar_pts=drone_lidar_pts,
                                            drone_lidar_clr=drone_lidar_clr,
                                            drone_desc=drone_desc,
@@ -66,18 +65,29 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
                                            satellite_desc=satellite_desc,
                                            )
 
+                drone_img_features = drone_features['img_features']
+                drone_extra_features = drone_features['extra_features']
+                satellite_img_features = satellite_features['img_features']
+                satellite_extra_features = satellite_features['extra_features']
+
                 if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
                     if with_weight:
-                        loss_sim = loss_function(features1, features2, model.module.logit_scale.exp(), weight)
+                        loss_sim = loss_function(drone_img_features, satellite_img_features, model.module.logit_scale.exp(), weight)
+                        # loss_sim_extra = loss_function(drone_extra_features, satellite_extra_features, model.module.logit_scale.exp(), weight)
                     else:
-                        loss_sim = loss_function(features1, features2, model.module.logit_scale.exp())
+                        loss_sim = loss_function(drone_img_features, satellite_img_features, model.module.logit_scale.exp())
+                        # loss_sim_extra = loss_function(drone_extra_features, satellite_extra_features, model.module.logit_scale.exp())
                 else:
                     if with_weight:
-                        loss_sim = loss_function(features1, features2, model.logit_scale.exp(), weight)
-                    else: 
-                        loss_sim = loss_function(features1, features2, model.logit_scale.exp()) 
+                        loss_sim = loss_function(drone_img_features, satellite_img_features, model.logit_scale.exp(), weight)
+                        # loss_sim_extra = loss_function(drone_extra_features, satellite_extra_features, model.logit_scale.exp(), weight)
+                    else:
+                        loss_sim = loss_function(drone_img_features, satellite_img_features, model.logit_scale.exp())
+                        # loss_sim_extra = loss_function(drone_extra_features, satellite_extra_features, model.logit_scale.exp())
                 
                 loss.update(loss_sim)
+                # loss_sim_extra = {'contrastive_extra': loss_sim_extra['contrastive']}
+                # loss.update(loss_sim_extra)
                 
                 loss_total = sum(loss.values())
                 losses.update(loss_total.item())
@@ -99,7 +109,7 @@ def train_with_weight(train_config, model, dataloader, loss_function, optimizer,
             # Scheduler
             if train_config.scheduler == "polynomial" or train_config.scheduler == "cosine" or train_config.scheduler ==  "constant":
                 scheduler.step()
-   
+
         else:
             raise NotImplementedError
         

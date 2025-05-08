@@ -47,6 +47,8 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
                 drone_desc = sample['drone_desc']
                 drone_desc = {key: value.cuda() for key, value in drone_desc.items()}
                 satellite_img = sample['satellite_img'].to(train_config.device)
+                satellite_desc = sample['satellite_desc']
+                satellite_desc = {key: value.cuda() for key, value in satellite_desc.items()}
                 weight = sample['positive_weight'].to(train_config.device)
             
                 # # Forward pass
@@ -58,6 +60,7 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
                           drone_depth=drone_depth,
                           drone_desc=drone_desc,
                           satellite_img=satellite_img,
+                          satellite_desc=satellite_desc,
                          )
                 drone_img_features = x['drone_img_features']
                 drone_pc_features = x['drone_pc_features']
@@ -65,6 +68,7 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
                 drone_desc_features = x['drone_desc_features']
                 
                 satellite_img_features = x['satellite_img_features']
+                satellite_desc_features = x['satellite_desc_features']
 
                 if torch.cuda.device_count() > 1 and len(train_config.gpu_ids) > 1: 
                     if with_weight:
@@ -73,6 +77,7 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
                                                  drone_depth_features=drone_depth_features, 
                                                  drone_desc_features=drone_desc_features,
                                                  satellite_img_features=satellite_img_features, 
+                                                 satellite_desc_features=satellite_desc_features,
                                                  logit_scale=model.module.logit_scale.exp(), 
                                                  positive_weights=weight)
                     else:
@@ -81,6 +86,7 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
                                                  drone_depth_features=drone_depth_features, 
                                                  drone_desc_features=drone_desc_features,
                                                  satellite_img_features=satellite_img_features, 
+                                                 satellite_desc_features=satellite_desc_features,
                                                  logit_scale=model.module.logit_scale.exp(), 
                                                  )
                 else:
@@ -90,6 +96,7 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
                                                  drone_depth_features=drone_depth_features, 
                                                  drone_desc_features=drone_desc_features,
                                                  satellite_img_features=satellite_img_features, 
+                                                 satellite_desc_features=satellite_desc_features,
                                                  logit_scale=model.logit_scale.exp(), 
                                                  positive_weights=weight)
                     else: 
@@ -98,6 +105,7 @@ def train_mm_with_weight(train_config, model, dataloader, loss_function, optimiz
                                                  drone_depth_features=drone_depth_features,
                                                  drone_desc_features=drone_desc_features, 
                                                  satellite_img_features=satellite_img_features, 
+                                                 satellite_desc_features=satellite_desc_features,
                                                  logit_scale=model.logit_scale.exp(), 
                                                  )
                 

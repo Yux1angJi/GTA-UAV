@@ -269,6 +269,15 @@ def train_script(config):
     elif config.query_mode == 'DImg2DDepth':
         query_view = 'drone_img'
         gallery_view = 'drone_depth'
+    elif config.query_mode == 'DText2DImg':
+        query_view = 'drone_desc'
+        gallery_view = 'drone_img'
+    elif config.query_mode == 'DPC2DImg':
+        query_view = 'drone_pc'
+        gallery_view = 'drone_img'
+    elif config.query_mode == 'SText2SImg':
+        query_view = 'sate_desc'
+        gallery_view = 'sate_img'
     query_dataset_test = GTAMMDatasetEvalUni(data_root=config.data_root,
                                         pairs_meta_file=config.test_pairs_meta_file,
                                         view=query_view,
@@ -277,9 +286,14 @@ def train_script(config):
                                         sate_img_dir=config.sate_img_dir,
                                         query_mode=config.query_mode,
                                         )
-    query_img_list = query_dataset_test.drone_img_names
-    query_loc_xy_list = query_dataset_test.drone_loc_xys
-    pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
+    if 'DImg2' in config.query_mode or 'DText2' in config.query_mode or 'DPC2' in config.query_mode or 'DDepth2' in config.query_mode:
+        query_img_list = query_dataset_test.drone_img_names
+        query_loc_xy_list = query_dataset_test.drone_loc_xys
+        pairs_drone2sate_dict = query_dataset_test.pairs_drone2sate_dict
+    else:
+        query_img_list = query_dataset_test.satellite_img_names
+        query_loc_xy_list = query_dataset_test.satellite_loc_xys
+        pairs_drone2sate_dict = None
     
     query_dataloader_test = DataLoader(query_dataset_test,
                                        batch_size=config.batch_size_eval,
@@ -322,12 +336,15 @@ def train_script(config):
         device=config.device,
         label_smoothing=config.label_smoothing,
         k=config.k,
-        dimg2simg=False,
-        dpc2simg=False,
-        dimg2dpc=False,
-        ddepth2dimg=False,
-        ddepth2simg=False,
-        ddesc2simg=True,
+        dimg2simg=(config.query_mode=="DImg2SImg"),
+        dpc2simg=(config.query_mode=="DPC2SImg"),
+        dimg2dpc=(config.query_mode=="DPC2DImg"),
+        ddepth2dimg=(config.query_mode=="DDepth2DImg"),
+        ddepth2simg=(config.query_mode=="DDepth2SImg"),
+        ddesc2simg=(config.query_mode=="DText2SImg"),
+        ddesc2dimg=(config.query_mode=="DText2DImg"),
+        dpc2dimg=(config.query_mode=="DPC2DImg"),
+        sdesc2simg=(config.query_mode=='SText2SImg'),
         with_depth=config.with_depth,
         with_pc=config.with_pc,
         with_text=config.with_text,
@@ -399,8 +416,12 @@ def train_script(config):
     #-----------------------------------------------------------------------------#
 
     self_dict = {}
-    for k in pairs_drone2sate_dict.keys():
-        self_dict[k] = [k]
+    if pairs_drone2sate_dict is not None:
+        for k in pairs_drone2sate_dict.keys():
+            self_dict[k] = [k]
+    else:
+        for sate_img in query_img_list:
+            self_dict[sate_img] = [sate_img] 
 
     if config.query_mode == 'DImg2SImg':
         query_feature = 'drone_img_features'
@@ -425,6 +446,18 @@ def train_script(config):
     elif config.query_mode == 'DImg2DDepth':
         query_feature = 'drone_img_features'
         gallery_feature = 'drone_depth_features'
+        pairs_dict = self_dict
+    elif config.query_mode == 'DText2DImg':
+        query_feature = 'drone_desc_features'
+        gallery_feature = 'drone_img_features'
+        pairs_dict = self_dict
+    elif config.query_mode == 'DPC2DImg':
+        query_feature = 'drone_pc_features'
+        gallery_feature = 'drone_img_features'
+        pairs_dict = self_dict
+    elif config.query_mode == 'SText2SImg':
+        query_feature = 'satellite_desc_features'
+        gallery_feature = 'satellite_img_features'
         pairs_dict = self_dict
         
     #-----------------------------------------------------------------------------#

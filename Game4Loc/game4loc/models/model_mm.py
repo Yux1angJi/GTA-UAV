@@ -2,10 +2,11 @@ import torch
 import timm
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 from PIL import Image
 from urllib.request import urlopen
 from thop import profile
-from transformers import CLIPTextConfig, CLIPTextModel, CLIPModel, AutoTokenizer
+from transformers import CLIPTextConfig, CLIPTextModel, CLIPVisionModel, CLIPModel, AutoTokenizer
 from torch.utils.checkpoint import checkpoint
 from timm.layers import LayerNorm
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
@@ -13,6 +14,108 @@ from peft import LoraConfig, get_peft_model, TaskType, PeftModel
 from .eva import *
 
 from pointnet2_ops import pointnet2_utils
+
+
+def expand_pos_embedding(orig_emb: torch.Tensor, new_len: int) -> torch.Tensor:
+    """
+    orig_emb: (L_orig, d)
+    return  : (new_len, d)
+    """
+    emb = orig_emb.unsqueeze(0).permute(0, 2, 1)          # (1, d, L_orig)
+    emb_new = F.interpolate(emb, size=new_len,
+                            mode="linear", align_corners=True)
+    return emb_new.permute(0, 2, 1).squeeze(0)
+
+
+class AttenTokenPoolingLayer(nn.Module):
+    def __init__(self,
+                 input_dim: int,
+                 query_dim: int = None,
+                 hidden_dim: int = 0,
+                 num_heads: int = 1,
+                 num_query_tokens: int = 1,
+                 use_bias: bool = True):
+        super().__init__()
+        assert input_dim > 0, 'input_dim must be positive'
+        
+        self.input_dim = input_dim
+        self.query_dim = query_dim or input_dim
+        self.hidden_dim = hidden_dim if hidden_dim > 0 else 4 * input_dim
+        self.num_heads = num_heads
+        self.num_query_tokens = num_query_tokens
+
+        self.pooling_attn_query = nn.Parameter(
+            torch.empty(num_query_tokens, self.query_dim)
+        )
+        nn.init.xavier_uniform_(self.pooling_attn_query)
+
+        self.attn = nn.MultiheadAttention(
+            embed_dim=self.query_dim,
+            num_heads=self.num_heads,
+            bias=use_bias,
+            batch_first=True
+        )
+
+        self.pool_attn_ln = nn.LayerNorm(self.query_dim, eps=1e-6)
+
+        if self.query_dim != self.input_dim:
+            self.query_proj = nn.Linear(self.input_dim, self.query_dim, bias=False)
+        else:
+            self.query_proj = None
+
+    def forward(self, embeds: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            embeds: (batch_size, seq_len, input_dim)
+        Returns:
+            pooled_output: (batch_size, num_query_tokens, query_dim)
+        """
+        batch_size = embeds.size(0)
+
+        if self.query_proj:
+            embeds_proj = self.query_proj(embeds)
+        else:
+            embeds_proj = embeds
+
+        query = self.pooling_attn_query.unsqueeze(0).expand(batch_size, -1, -1)
+
+        attn_output, _ = self.attn(query=query, key=embeds_proj, value=embeds_proj)
+        pooled_output = self.pool_attn_ln(attn_output)
+
+        return pooled_output
+
+
+class BoQBlock(torch.nn.Module):
+    def __init__(self, in_dim, num_queries, nheads=8):
+        super(BoQBlock, self).__init__()
+        
+        self.encoder = torch.nn.TransformerEncoderLayer(d_model=in_dim, nhead=nheads, dim_feedforward=4*in_dim, batch_first=True, dropout=0.)
+        self.queries = torch.nn.Parameter(torch.randn(1, num_queries, in_dim))
+        
+        # the following two lines are used during training only, you can cache their output in eval.
+        self.self_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
+        self.norm_q = torch.nn.LayerNorm(in_dim)
+        #####
+        
+        self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
+        self.norm_out = torch.nn.LayerNorm(in_dim)
+        
+
+    def forward(self, x):
+        B = x.size(0)
+        x = self.encoder(x)
+        
+        q = self.queries.repeat(B, 1, 1)
+        
+        # the following two lines are used during training.
+        # for stability purposes 
+        q = q + self.self_attn(q, q, q)[0]
+        q = self.norm_q(q)
+        #######
+        
+        out, attn = self.cross_attn(q, x, x)        
+        out = self.norm_out(out)
+        return x, out, attn.detach()
 
 
 class CustomPeftModel(PeftModel):
@@ -342,10 +445,12 @@ class DesModelWithMM(nn.Module):
         if share_weights:
             if "vit" in model_name or "swin" in model_name:
                 # automatically change interpolate pos-encoding to img_size
-                # self.img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size)
-                self.img_model = vit_base_patch16_rope_reg1_gap_256(in_chans=3, pretrained=pretrained, global_pool='avg')
+                self.img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size)
+                # self.img_model = vit_base_patch16_rope_reg1_gap_256(in_chans=3, pretrained=pretrained, global_pool='avg')
             elif "clip" in model_name:
-                self.img_model = eva02_base_patch16_clip_224(pretrained=pretrained, global_pool='cls')
+                self.img_model = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
+                self.img_model.embed_dim = 768
+                self.img_projection = nn.Linear(768, 768, bias=False)
             else:
                 self.img_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0)
         else:
@@ -359,17 +464,20 @@ class DesModelWithMM(nn.Module):
         if share_weights:
             embed_dim = self.img_model.embed_dim
             self.img_model.set_grad_checkpointing()
+            # self.img_model._set_gradient_checkpointing()
         else:
             embed_dim = self.drone_img_model.embed_dim
             self.drone_img_model.set_grad_checkpointing()
             self.satellite_img_model.set_grad_checkpointing()
         
         if with_pc:
-            # point_transformer = timm.create_model(pc_model_name, pretrained=pretrained, drop_path_rate=drop_path_rate)
-            point_transformer = eva02_base_patch14_448(adapter_list=[0,1,2,3,4,5,6,7,8,9,10,11])
+            point_transformer = timm.create_model(pc_model_name, pretrained=pretrained, drop_path_rate=drop_path_rate)
+            # point_transformer = eva02_base_patch14_448(adapter_list=[0,1,2,3,4,5,6,7,8,9,10,11])
             # point_transformer = eva02_base_patch14_448(adapter_list=[])
             point_transformer.set_grad_checkpointing()
             self.drone_lidar_model = PointcloudEncoder(point_transformer)
+            self.img2pc = nn.Linear(embed_dim, embed_dim, bias=False)
+            self.pc_projection = nn.Linear(768, embed_dim, bias=False)
 
             if pretrained:
                 checkpoint = torch.load('./pretrained/uni3d/model.pt')
@@ -402,37 +510,104 @@ class DesModelWithMM(nn.Module):
 
             # self.drone_lidar_model.visual = CustomPeftModel(peft_model.base_model, lora_config)
             
-            for name, param in self.drone_lidar_model.named_parameters():
-                if 'adapter' not in name:
-                    param.requires_grad = False
+            # for name, param in self.drone_lidar_model.named_parameters():
+            #     if 'adapter' not in name:
+            #         param.requires_grad = False
 
             self.assist_token = nn.Parameter(torch.randn(self.token_length, 768))
 
         elif with_text:
             self.desc_model = CLIPTextModel.from_pretrained("openai/clip-vit-base-patch32")
+
+            ################# EPE
+            N = 300
+            config = self.desc_model.config
+            config.max_position_embeddings = N
+
+            # ---------- 3. 线性插值 ----------
+            emb_layer = self.desc_model.text_model.embeddings
+            orig_pe = emb_layer.position_embedding.weight
+            L_orig, dim = orig_pe.shape
+
+            # 变成 [1, dim, L_orig] 后做 1D 插值，再还原
+            pe = orig_pe.unsqueeze(0).permute(0, 2, 1)          # [1, dim, 77]
+            pe_interp = F.interpolate(pe, size=N, mode="linear", align_corners=True)
+            new_pe = pe_interp.permute(0, 2, 1).squeeze(0)      # [300, dim]
+
+            dim = new_pe.shape[1]
+            new_embedding = torch.nn.Embedding(N, dim)
+            with torch.no_grad():
+                new_embedding.weight.copy_(new_pe)
+            emb_layer.position_embedding = new_embedding
+            emb_layer.position_embedding.requires_grad_(True)
+
+            emb_layer.register_buffer(              # ★ 关键修复
+                "position_ids",
+                torch.arange(N, device=new_pe.device).expand((1, -1)),
+                persistent=False,
+            )
+
+            # ---------- 更新 max_position_embeddings ----------
+            self.desc_model.config.max_position_embeddings = N
+            self.desc_model.text_model.config.max_position_embeddings = N
+            ###################
+
             self.text_projection = nn.Linear(512, embed_dim, bias=False)
+            self.img2text = nn.Linear(embed_dim, 512, bias=False)
             self.assist_token = nn.Parameter(torch.randn(self.token_length, 768))
+            # for name, param in self.desc_model.named_parameters():
+            #     if 'adapter' not in name:
+            #         param.requires_grad = False
 
         elif with_depth:
-            # self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size, in_chans=1)
+            # self.depth_model = timm.create_model(model_name, pretrained=pretrained, num_classes=0, img_size=img_size, in_chans=1)
 
             # self.drone_depth_model = timm.create_model(model_name, pretrained=pretrained, img_size=img_size, num_classes=0)
             self.depth_model = vit_base_patch16_rope_reg1_gap_256(in_chans=1, pretrained=pretrained, global_pool='gem', adapter_list=[0,1,2,3,4,5,6,7,8,9])
             
             self.depth_model.set_grad_checkpointing() 
 
-            for name, param in self.depth_model.named_parameters():
-                if 'adapter' not in name:
-                    param.requires_grad = False
+            self.img2depth = nn.Linear(embed_dim, embed_dim, bias=False)
+            self.depth_projection = nn.Linear(768, embed_dim, bias=False)
+
+            # for name, param in self.depth_model.named_parameters():
+            #     if 'adapter' not in name:
+            #         param.requires_grad = False
 
             self.assist_token = nn.Parameter(torch.randn(self.token_length, 768))
         
+        # for param in self.img_model.parameters():
+        #     param.requires_grad = False
+        # # unfreeze the last few blocks
+        # for block in self.img_model.blocks[ -2 : ]:
+        #     for param in block.parameters():
+        #         param.requires_grad = True
+
         self.uni_modal = uni_modal
         self.global_pool = 'avg'
+
+        if self.global_pool == 'attn':
+            self.attn_pool = AttenTokenPoolingLayer(
+                input_dim=embed_dim,
+                query_dim=embed_dim,
+                num_heads=12,
+                num_query_tokens=1,
+                use_bias=True,
+            )
 
         self.grad_checkpointing = True
 
         self.collab_model = EvaCrossAttentionBlock(dim=768, num_heads=12)
+        # self.collab_model = nn.ModuleList([
+        #     EvaCrossAttentionBlock(
+        #         dim=768,
+        #         num_heads=12,
+        #     )
+        #     for i in range(4)])
+
+        # self.boqs = torch.nn.ModuleList([
+        #     BoQBlock(embed_dim, 64, nheads=embed_dim//64) for _ in range(2)])
+
         self.fc_norm = LayerNorm(embed_dim)
         
         self.logit_scale = torch.nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
@@ -456,6 +631,8 @@ class DesModelWithMM(nn.Module):
             x = self.gem(x[:, :])
         elif self.global_pool == 'cls':
             x = x[:, 0]
+        elif self.global_pool == 'attn':
+            x = self.attn_pool(x)[:, 0]
         return x
     
     def forward_uni(
@@ -479,8 +656,12 @@ class DesModelWithMM(nn.Module):
         if self.share_weights:
             if drone_img is not None:
                 drone_img_features = self.img_model(drone_img)
+                # drone_img_features = drone_img_features.pooler_output
+                # drone_img_features = self.img_projection(drone_img_features)
             if satellite_img is not None:
                 satellite_img_features = self.img_model(satellite_img)
+                # satellite_img_features = satellite_img_features.pooler_output
+                # satellite_img_features = self.img_projection(satellite_img_features)
         else:
             if drone_img is not None:
                 drone_img_features = self.drone_img_model(drone_img)
@@ -491,17 +672,18 @@ class DesModelWithMM(nn.Module):
             drone_depth_features = self.forward_head(drone_depth_features)
         if self.with_pc and drone_lidar_pts is not None and drone_lidar_clr is not None:
             drone_pc_features = self.drone_lidar_model.forward_token(drone_lidar_pts, drone_lidar_clr)
+            # print(drone_pc_features.shape)
             # drone_pc_features = self.forward_head(drone_pc_features)
         if self.with_text and drone_desc is not None:
             text_outputs = self.desc_model(**drone_desc)
             # print(pooled_output.shape)
-            drone_desc_features = self.text_projection(text_outputs[0])
-            drone_desc_features = self.forward_head(drone_desc_features)
+            drone_desc_features = text_outputs.pooler_output
+            drone_desc_features = self.text_projection(drone_desc_features)
 
         if self.with_text and satellite_desc is not None:
             text_outputs = self.desc_model(**satellite_desc)
-            satellite_desc_features = self.text_projection(text_outputs[0])
-            satellite_desc_features = self.forward_head(satellite_desc_features)
+            satellite_desc_features = text_outputs.pooler_output
+            satellite_desc_features = self.text_projection(satellite_desc_features)
 
         result = {
             "drone_img_features": drone_img_features,
@@ -632,57 +814,88 @@ class DesModelWithMM(nn.Module):
     ):
         N, _, _, _ = img.shape
         
-        img_embed = self.img_model.patch_embed(img)
-        img_embed, rot_pos_embed = self.img_model._pos_embed(img_embed)
-        for i, blk in enumerate(self.img_model.blocks):
-            if self.grad_checkpointing and not torch.jit.is_scripting():
-                img_embed = checkpoint(blk, img_embed, None, rope=rot_pos_embed, use_reentrant=False)
-            else:
-                img_embed = blk(img_embed, None, rope=rot_pos_embed)
-        img_features = self.img_model.norm(img_embed)
+        # img_embed = self.img_model.patch_embed(img)
+        # img_embed, rot_pos_embed = self.img_model._pos_embed(img_embed)
+        # for i, blk in enumerate(self.img_model.blocks):
+        #     if self.grad_checkpointing and not torch.jit.is_scripting():
+        #         img_embed = checkpoint(blk, img_embed, None, rope=rot_pos_embed, use_reentrant=False)
+        #     else:
+        #         img_embed = blk(img_embed, None, rope=rot_pos_embed)
+        img_features = self.img_model.forward_features(img)
         
         if self.with_depth:
             if depth == None or (depth == 0).all():
-                ## Origin
-                # N, C, H, W = img.shape
-                # depth = torch.zeros((N, 1, H, W)).to(device=img.device)
-                # depth_features = self.depth_model.forward_features(depth)
-
-                ## Assist Token
                 depth_features = self.assist_token.unsqueeze(0).expand(N, -1, -1)
+                # depth_features = None
+                # stack_features = img_features
+                # img_features = self.forward_head(stack_features)
+                # return {'img_features': img_features, 'extra_features': None}
             else:
                 depth_features = self.depth_model.forward_features(depth)
-            # depth_features = self.drone_depth_model.forward_features(drone_depth)
-            rot_pos_embed = None
-            img_collab_features = self.collab_model(query=img_features, key_value=depth_features, rope=rot_pos_embed)
+                depth_features = self.depth_projection(depth_features)
+                # stack_features = torch.cat((img_features, depth_features), dim=1)
+            
+            # x = stack_features
+            # for i in range(len(self.boqs)):
+            #     x, out, attn = self.boqs[i](x)
+            # img_features = x
+
+            img_features = self.collab_model(query=img_features, key_value=depth_features)
+            # for blk in self.collab_model:
+            #     stack_features = checkpoint(blk, stack_features, stack_features, use_reentrant=False)
+            img_features = self.forward_head(stack_features)
+            
+            return {'img_features': img_features, 'extra_features': None}
         
         elif self.with_text:
             if desc == None:
                 desc_features = self.assist_token.unsqueeze(0).expand(N, -1, -1)
+                # desc_features = None
+                # stack_features = img_features
+                # img_features = self.forward_head(stack_features)
+                # return {'img_features': img_features, 'extra_features': None}
             else:
                 text_outputs = self.desc_model(**desc)
                 desc_features = self.text_projection(text_outputs[0])
-            rot_pos_embed = None
-            img_collab_features = self.collab_model(query=img_features, key_value=desc_features, rope=rot_pos_embed)
+                # stack_features = torch.cat((img_features, desc_features), dim=1)
+            
+            # x = stack_features
+            # for i in range(len(self.boqs)):
+            #     x, out, attn = self.boqs[i](x)
+            # img_features = x
+
+            img_features = self.collab_model(query=img_features, key_value=desc_features)
+            # for blk in self.collab_model:
+            #     stack_features = checkpoint(blk, stack_features, stack_features, use_reentrant=False)
+            img_features = self.forward_head(stack_features)
+
+            return {'img_features': img_features, 'extra_features': None}
 
         elif self.with_pc:
             if lidar_pts == None or (lidar_pts == 0).all():
-                # lidar_pts = torch.zeros((N, 2048, 3)).to(device=img.device)
-                # lidar_clr = torch.zeros((N, 2048, 3)).to(device=img.device)
                 pc_features = self.assist_token.unsqueeze(0).expand(N, -1, -1)
+                # pc_features = None
+                # stack_features = img_features
+                # img_features = self.forward_head(stack_features)
+                # return {'img_features': img_features, 'extra_features': None}
             else:
                 pc_features = self.drone_lidar_model(lidar_pts, lidar_clr)
-            # print('pc_features!!!', pc_features.shape)
-            # print('img_features!!!', img_features.shape)
-            rot_pos_embed = None
-            img_collab_features = self.collab_model(query=img_features, key_value=pc_features, rope=rot_pos_embed)
-        
-        img_collab_features = self.img_model.forward_head(img_collab_features)
-        # img_collab_features = self.fc_norm(img_collab_features)
-        # img_collab_features = img_collab_features[:, 1:].mean(dim=1)
-        # img_collab_features = self.fc_norm(img_collab_features)
+                pc_features = self.pc_projection(pc_features)
+                stack_features = torch.cat((img_features, pc_features), dim=1)
 
-        return img_collab_features
+            # x = stack_features
+            # for i in range(len(self.boqs)):
+            #     x, out, attn = self.boqs[i](x)
+            # img_features = x
+    
+            img_features = self.collab_model(query=img_features, key_value=pc_features)
+            # for blk in self.collab_model:
+            #     stack_features = checkpoint(blk, stack_features, stack_features, use_reentrant=False)
+            img_features = self.forward_head(stack_features)
+            
+            
+            return {'img_features': img_features, 'extra_features': None}
+        
 
 
 if __name__ == '__main__':
@@ -703,16 +916,26 @@ if __name__ == '__main__':
     from dataset.pc_utils import *
     import open3d as o3d
 
-    model = DesModelWithMM(model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', 
+    model = DesModelWithMM(model_name='timm/vit_base_patch16_clip_224.openai', 
+                            # model_name='vit_base_patch16_rope_reg1_gap_256.sbb_in1k', 
                            pc_model_name='eva02_base_patch14_448.mim_in22k_ft_in1k',
-                           with_pc=True,
-                           with_text=False,
+                           with_pc=False,
+                           with_text=True,
                            with_depth=False,
-                           uni_modal=False,
+                           uni_modal=True,
                            img_size=384)
+
+    model_state_dict = torch.load('pretrained/gta_34/cross_area/game4loc.pth')  
+    model_state_dict_new = {}
+    for k, v in model_state_dict.items():
+        model_state_dict_new[k.replace('model.', '')] = v
+    model.img_model.load_state_dict(model_state_dict_new, strict=False)
+
     model.cuda()
+    model.eval()
 
     img = torch.rand((1, 3, 384, 384)).cuda()
+    depth = torch.zeros((1, 1, 384, 384)).cuda()
 
     points = o3d.io.read_point_cloud('/home/xmuairmud/data/GTA-UAV-data/Lidar/drone/lidars/200_0001_0000006374.ply')
     points = np.array(points.points, dtype=np.float32)
@@ -741,20 +964,17 @@ if __name__ == '__main__':
         [desc],
         padding="max_length",  # 短文本自动填充
         truncation=True,       # 长文本自动截断
-        max_length=77, # 固定最大长度
+        max_length=300, # 固定最大长度
         return_tensors="pt"    # 返回 PyTorch 张量
     )
     desc = {key: value.cuda() for key, value in desc.items()}
     print('text', desc)
 
-    batch = {'drone_img': img, 'drone_lidar_pts': points, 'drone_lidar_clr': colors, 'drone_desc': desc, 'satellite_desc': desc}
+    batch = {'drone_img': img, 'drone_lidar_pts': points, 'drone_lidar_clr': colors, 'drone_desc': desc, 'satellite_desc': desc, 'drone_depth': depth}
 
     print('img shape', img.shape)
     print('desc shape', desc['input_ids'].shape, desc['attention_mask'].shape)
 
-    query = model(**batch)
-    print(query.shape)
-
-
-
+    query1 = model(**batch)['drone_img_features']
+    print(query1.shape)
 

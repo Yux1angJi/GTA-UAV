@@ -632,7 +632,7 @@ def get_transforms(img_size,
                                       ])
 
     train_drone_geo_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
-                                            # A.RandomRotate90(p=1.0),
+                                            A.RandomRotate90(p=1.0),
                                            ],
                                            is_check_shapes=False
                                           )

@@ -283,7 +283,10 @@ class MMWeightedInfoNCE(nn.Module):
                  ddepth2dimg=False,
                  ddepth2simg=False,
                  ddesc2simg=False,
+                 ddesc2dimg=False,
                  dimg2dpc=False,
+                 dpc2dimg=False,
+                 sdesc2simg=False,
                  with_depth=True,
                  with_pc=False,
                  with_text=False,
@@ -298,6 +301,9 @@ class MMWeightedInfoNCE(nn.Module):
         self.ddepth2dimg = ddepth2dimg
         self.ddepth2simg = ddepth2simg
         self.ddesc2simg = ddesc2simg
+        self.ddesc2dimg = ddesc2dimg
+        self.dpc2dimg = dpc2dimg
+        self.sdesc2simg = sdesc2simg
         self.with_depth = with_depth
         self.with_pc = with_pc
         self.with_text = with_text
@@ -312,9 +318,11 @@ class MMWeightedInfoNCE(nn.Module):
         total_loss /= n
         return total_loss
 
+
     def forward(self, 
                 drone_img_features, 
                 satellite_img_features, 
+                satellite_desc_features,
                 logit_scale, 
                 drone_pc_features=None,
                 drone_depth_features=None, 
@@ -359,10 +367,17 @@ class MMWeightedInfoNCE(nn.Module):
             logits_drone_depth2satellite_img = logit_scale * drone_depth_features @ satellite_img_features.T
             logits_satellite_img2drone_depth = logits_drone_depth2satellite_img.T
 
-
         if self.with_text:
             logits_drone_desc2satellite_img = logit_scale * drone_desc_features @ satellite_img_features.T
             logits_satellite_img2drone_desc = logits_drone_desc2satellite_img.T
+            
+            logits_drone_desc2drone_img = logit_scale * drone_desc_features @ drone_img_features.T
+            logits_drone_img2drone_desc = logits_drone_desc2drone_img.T
+
+            if self.sdesc2simg:
+                logits_satellite_desc2satellite_img = logit_scale * satellite_desc_features @ satellite_img_features.T
+                logits_satellite_img2satellite_desc = logits_satellite_desc2satellite_img.T
+
 
         if self.dimg2simg:
             loss_drone_img_satellite_img = (self.loss(logits_drone_img2satellite_img, eps_weight) + self.loss(logits_satellite_img2drone_img, eps_weight)) / 2
@@ -394,6 +409,20 @@ class MMWeightedInfoNCE(nn.Module):
         else:
             loss_drone_desc_satellite_img = 0.
 
+        if self.ddesc2dimg:
+            loss_drone_desc_drone_img = (self.loss(logits_drone_desc2drone_img, eps) + self.loss(logits_drone_img2drone_desc, eps)) / 2
+        else:
+            loss_drone_desc_drone_img = 0.
+
+        if self.dpc2dimg:
+            loss_drone_pc_drone_img = (self.loss(logits_drone_pc2drone_img, eps) + self.loss(logits_drone_img2drone_pc, eps)) / 2
+        else:
+            loss_drone_pc_drone_img = 0.
+
+        if self.sdesc2simg:
+            loss_satellite_desc_satellite_img = (self.loss(logits_satellite_desc2satellite_img, eps) + self.loss(logits_satellite_img2satellite_desc, eps)) / 2
+        else:
+            loss_satellite_desc_satellite_img = 0.
 
         return {
             "contrastive_drone_img_drone_pc": loss_drone_img_drone_pc,
@@ -402,6 +431,9 @@ class MMWeightedInfoNCE(nn.Module):
             "contrastive_drone_depth_drone_img": loss_drone_depth_drone_img,
             "contrastive_drone_depth_satellite_img": loss_drone_depth_satellite_img,
             "contrastive_drone_desc_satellite_img": loss_drone_desc_satellite_img,
+            "contrastive_drone_desc_drone_img": loss_drone_desc_drone_img,
+            "contrastive_drone_pc_drone_img": loss_drone_pc_drone_img,
+            "contrastive_satellite_desc_satellite_img": loss_satellite_desc_satellite_img,
         }
 
 if __name__ == '__main__':

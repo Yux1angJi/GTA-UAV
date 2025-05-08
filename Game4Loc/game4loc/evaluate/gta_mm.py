@@ -105,6 +105,7 @@ def predict(train_config, model, dataloader):
                                     drone_desc=drone_desc,
                                     drone_depth=drone_depth,
                                 )
+                query_feature = query_feature['img_features']
             
                 # normalize is calculated in fp32
                 if train_config.normalize_features:
@@ -157,6 +158,7 @@ def evaluate(
                     satellite_img=satellite_img,
                     satellite_desc=None,
                 )
+                gallery_features_batch = gallery_features_batch['img_features']
                 if config.normalize_features:
                     gallery_features_batch = F.normalize(gallery_features_batch, dim=-1)
 

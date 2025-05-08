@@ -86,15 +86,16 @@ class GTAMMDatasetTrain(Dataset):
             # Training with Positive-only data /or/ Positive+Semi-positive data
             pair_sate_img_list = pair_drone2sate[f'pair_{mode}_sate_img_list']
             pair_sate_weight_list = pair_drone2sate[f'pair_{mode}_sate_weight_list']
+            pair_sate_img_desc_list = pair_drone2sate[f'pair_{mode}_sate_img_desc_list']
             
             drone_img_file = os.path.join(data_root, drone_img_dir, drone_img_name)
             drone_lidar_file = os.path.join(data_root, drone_lidar_dir, drone_lidar_name)
             drone_depth_file = os.path.join(data_root, drone_depth_dir, drone_depth_name)
 
-            for pair_sate_img, pair_sate_weight in zip(pair_sate_img_list, pair_sate_weight_list):
+            for pair_sate_img, pair_sate_weight, sate_img_desc in zip(pair_sate_img_list, pair_sate_weight_list, pair_sate_img_desc_list):
                 sate_img_file = os.path.join(data_root, sate_img_dir, pair_sate_img)
                 self.pairs.append((drone_img_file, drone_lidar_file, drone_depth_file, drone_img_desc,
-                                    sate_img_file, pair_sate_weight))
+                                    sate_img_file, sate_img_desc, pair_sate_weight))
 
             # Build Graph with All Edges (drone, sate)
             pair_all_sate_img_list = pair_drone2sate['pair_pos_semipos_sate_img_list']
@@ -125,7 +126,7 @@ class GTAMMDatasetTrain(Dataset):
     def __getitem__(self, index):
         
         drone_img_path, drone_lidar_path, drone_depth_path, drone_img_desc, \
-            satellite_img_path, positive_weight = self.samples[index]
+            satellite_img_path, satellite_img_desc, positive_weight = self.samples[index]
         
         # for query there is only one file in folder
         drone_img = cv2.imread(drone_img_path)
@@ -203,16 +204,16 @@ class GTAMMDatasetTrain(Dataset):
                 [drone_img_desc],
                 padding="max_length",  # 短文本自动填充
                 truncation=True,       # 长文本自动截断
-                max_length=77, # 固定最大长度
+                max_length=300, # 固定最大长度
                 return_tensors="pt"    # 返回 PyTorch 张量
             )
         drone_img_desc = {k: v.squeeze() for k, v in drone_img_desc.items()}
 
         satellite_img_desc = self.tokenizer(
-                ["satellite image"],
+                [satellite_img_desc],
                 padding="max_length",  # 短文本自动填充
                 truncation=True,       # 长文本自动截断
-                max_length=77, # 固定最大长度
+                max_length=300, # 固定最大长度
                 return_tensors="pt"    # 返回 PyTorch 张量
             )
         satellite_img_desc = {k: v.squeeze() for k, v in satellite_img_desc.items()}
@@ -279,7 +280,7 @@ class GTAMMDatasetTrain(Dataset):
             if len(pair_pool) > 0:
                 pair = pair_pool.pop(0)
                 
-                drone_img, drone_lidar, drone_depth, drone_img_desc, sate_img, _ = pair
+                drone_img, drone_lidar, drone_depth, drone_img_desc, sate_img, sate_desc, _ = pair
                 drone_img_name = drone_img.split('/')[-1]
                 sate_img_name = sate_img.split('/')[-1]
                 # print(sate_img_name)
@@ -474,7 +475,7 @@ class GTAMMDatasetEval(Dataset):
             depth = (depth / 256).astype(np.uint8)
 
             depth = self.transforms_depth(image=depth)['image']
-
+            
             sample["drone_depth"] = depth
 
             ## Description text
@@ -483,7 +484,7 @@ class GTAMMDatasetEval(Dataset):
                 [drone_desc],
                 padding="max_length",  # 短文本自动填充
                 truncation=True,       # 长文本自动截断
-                max_length=77, # 固定最大长度
+                max_length=300, # 固定最大长度
                 return_tensors="pt"    # 返回 PyTorch 张量
             )
             sample["drone_desc"] = {k: v.squeeze() for k, v in drone_desc.items()}
@@ -498,15 +499,15 @@ class GTAMMDatasetEval(Dataset):
             sample["satellite_img"] = img
 
             ## Description text
-            sate_desc = ""
+            sate_desc = self.satellite_img_desc[index]
             sate_desc = self.tokenizer(
                 [sate_desc],
                 padding="max_length",  # 短文本自动填充
                 truncation=True,       # 长文本自动截断
-                max_length=77, # 固定最大长度
+                max_length=300, # 固定最大长度
                 return_tensors="pt"    # 返回 PyTorch 张量
             )
-            # sample["satellite_desc"] = {k: v.squeeze() for k, v in sate_desc.items()}
+            sample["satellite_desc"] = {k: v.squeeze() for k, v in sate_desc.items()}
 
         return sample
 
@@ -543,7 +544,8 @@ class GTAMMDatasetEvalUni(Dataset):
         with open(os.path.join(data_root, pairs_meta_file), 'r', encoding='utf-8') as f:
             pairs_meta_data = json.load(f)
         self.data_root = data_root
-        sate_img_dir = os.path.join(data_root, sate_img_dir)    
+        sate_img_dir = os.path.join(data_root, sate_img_dir)
+        sate_txt_file_path = f'/home/xmuairmud/jyx/daily_scripts/GTA-UAV-MM-satellite-description-qwen-vlplus.txt' 
 
         self.drone_img_paths = []
         self.drone_lidar_paths = []
@@ -554,7 +556,7 @@ class GTAMMDatasetEvalUni(Dataset):
         self.satellite_img_paths = []
         self.satellite_img_names = []
         self.satellite_loc_xys = []
-        
+        self.satellite_img_desc = []
 
         self.pairs_sate2drone_dict = {}
         self.pairs_drone2sate_dict = {}
@@ -664,6 +666,33 @@ class GTAMMDatasetEvalUni(Dataset):
                     offset = int(offset)
                     self.satellite_loc_xys.append(sate2loc(tile_zoom, offset, tile_x, tile_y))
 
+        elif view == 'sate_desc':
+            sate_descriptions = {}
+            with open(sate_txt_file_path, 'r') as txt_file:
+                for line in txt_file:
+                    parts = line.split(".png, ")
+                    # print(parts)
+                    if len(parts) == 2:
+                        # print(parts)
+                        image_name = parts[0].strip()
+                        description = parts[1].strip().rstrip("]\n").replace("'", "")
+                        sate_descriptions[image_name] = description
+
+            sate_img_dir_list, sate_img_list = get_sate_data(sate_img_dir)
+            for sate_img_dir, sate_img in zip(sate_img_dir_list, sate_img_list):
+                sate_img_name = sate_img.replace(".png", "")
+                self.satellite_img_desc.append(sate_descriptions.get(sate_img_name, ""))
+                self.satellite_img_paths.append(os.path.join(data_root, sate_img_dir, sate_img))
+                self.satellite_img_names.append(sate_img)
+
+                tile_zoom, offset, tile_x, tile_y = sate_img_name.split('_')
+                tile_zoom = int(tile_zoom)
+                tile_x = int(tile_x)
+                tile_y = int(tile_y)
+                offset = int(offset)
+                self.satellite_loc_xys.append(sate2loc(tile_zoom, offset, tile_x, tile_y))
+
+
         self.transforms = transforms
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
 
@@ -729,7 +758,7 @@ class GTAMMDatasetEvalUni(Dataset):
                 [drone_desc],
                 padding="max_length",  # 短文本自动填充
                 truncation=True,       # 长文本自动截断
-                max_length=77, # 固定最大长度
+                max_length=300, # 固定最大长度
                 return_tensors="pt"    # 返回 PyTorch 张量
             )
             sample = {
@@ -748,6 +777,19 @@ class GTAMMDatasetEvalUni(Dataset):
                 "satellite_img": img,
             }
 
+        elif self.view == 'sate_desc':
+            sate_desc = self.satellite_img_desc[index]
+            sate_desc = self.tokenizer(
+                [sate_desc],
+                padding="max_length",  # 短文本自动填充
+                truncation=True,       # 长文本自动截断
+                max_length=300, # 固定最大长度
+                return_tensors="pt"    # 返回 PyTorch 张量
+            )
+            sample = {
+                "satellite_desc": {k: v.squeeze() for k, v in sate_desc.items()}
+            }
+
         return sample
 
     def __len__(self):
@@ -760,6 +802,8 @@ class GTAMMDatasetEvalUni(Dataset):
         elif self.view == 'drone_desc':
             length = len(self.drone_img_names)
         elif self.view == 'sate_img':
+            length = len(self.satellite_img_names)
+        elif self.view == 'sate_desc':
             length = len(self.satellite_img_names)
         return length
     
@@ -817,6 +861,19 @@ class SpeckleNoise(A.ImageOnlyTransform):
         return np.clip(img, 0, 255).astype(np.uint8)  # 限制像素范围
 
 
+class Pixelization(A.ImageOnlyTransform):
+    def __init__(self, ratio=0.1, always_apply=False, p=1.0):
+        super().__init__(always_apply, p)
+        self.ratio = ratio  # 像素化比例（0.1 表示缩小到 10% 大小）
+
+    def apply(self, img, **params):
+        h, w = img.shape[:2]
+        new_h, new_w = int(h * self.ratio), int(w * self.ratio)  # 计算缩小尺寸
+        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR)  # 缩小
+        img = cv2.resize(img, (w, h), interpolation=cv2.INTER_NEAREST)  # 放大回去（像素化）
+        return img
+
+
 def get_transforms(img_size,
                    mean=[0.485, 0.456, 0.406],
                    std=[0.229, 0.224, 0.225],
@@ -835,15 +892,16 @@ def get_transforms(img_size,
     if eval_robust:
         val_drone_rgb_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
                                     A.OneOf([
-                                            #   A.GridDropout(ratio=0.8, p=1.0),
+                                            # A.GridDropout(ratio=0.8, p=1.0),
                                             # A.CoarseDropout(max_holes=1,
-                                            #                    max_height=int(0.6*img_size[0]),
-                                            #                    max_width=int(0.6*img_size[0]),
+                                            #                    max_height=int(0.7*img_size[0]),
+                                            #                    max_width=int(0.7*img_size[0]),
                                             #                    min_holes=1,
-                                            #                    min_height=int(0.6*img_size[0]),
-                                            #                    min_width=int(0.6*img_size[0]),
+                                            #                    min_height=int(0.7*img_size[0]),
+                                            #                    min_width=int(0.7*img_size[0]),
                                             #                    p=1.0),
                                             SaltAndPepperNoise(amount=0.02, p=1.0),
+                                            # Pixelization(ratio=0.2),
                                             ], p=1.0),
                                     A.Normalize(mean, std),
                                     ToTensorV2(),
@@ -882,7 +940,7 @@ def get_transforms(img_size,
                                       ])
 
     train_drone_geo_transforms = A.Compose([A.Resize(img_size[0], img_size[1], interpolation=cv2.INTER_LINEAR_EXACT, p=1.0),
-                                            # A.RandomRotate90(p=1.0),
+                                            A.RandomRotate90(p=1.0),
                                            ],
                                            is_check_shapes=False
                                           )
