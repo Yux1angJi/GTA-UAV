@@ -122,11 +122,11 @@ def evaluate(
     ):
 
     print("Extract Features and Compute Scores:")
+    model.eval()
     query_feature = predict(config, model, query_loader)
     # img_features_gallery = predict(config, model, gallery_loader)
 
     all_scores = []
-    model.eval()
     with torch.no_grad():
         for gallery_batch in gallery_loader:
             with autocast():

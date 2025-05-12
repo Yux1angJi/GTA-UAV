@@ -118,10 +118,10 @@ def evaluate(config,
                 plot_acc_threshold=False,
                 top10_log=False):
     print("Extract Features and Compute Scores:")
+    model.eval()
     features_query = predict(config, model, query_feature, query_loader)
 
     all_scores = []
-    model.eval()
     with torch.no_grad():
         for sample in gallery_loader:
             with autocast():
